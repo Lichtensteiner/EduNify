@@ -329,12 +329,12 @@ export default function DocumentGenerator() {
       doc.text(`PROF. PRINCIPAL :`, 35, rowY + spacing * 4);
       
       doc.setFont("helvetica", "normal");
-      doc.text(`${student.nom.toUpperCase()} ${student.prenom}`, 80, rowY);
-      doc.text(student.matricule || student.id.substring(0, 12), 80, rowY + spacing);
-      doc.text(`${student.dateNaissance || 'N/A'} à ${student.lieuNaissance || 'N/A'}`, 80, rowY + spacing * 2);
+      doc.text(`${String(student.nom || '').toUpperCase()} ${String(student.prenom || '')}`, 80, rowY);
+      doc.text(String(student.matricule || student.id.substring(0, 12)).toUpperCase(), 80, rowY + spacing);
+      doc.text(`${String(student.dateNaissance || 'N/A')} à ${String(student.lieuNaissance || 'N/A')}`, 80, rowY + spacing * 2);
       doc.text(student.gender === 'male' ? 'Masculin' : student.gender === 'female' ? 'Féminin' : 'N/A', 135, rowY + spacing * 2);
-      doc.text(config.className?.toUpperCase() || student.className?.toUpperCase() || 'NON DÉFINIE', 80, rowY + spacing * 3);
-      doc.text(config.mainTeacher?.toUpperCase() || student.mainTeacher?.toUpperCase() || 'NON ASSIGNÉ', 80, rowY + spacing * 4);
+      doc.text(String(config.className || student.className || 'NON DÉFINIE').toUpperCase(), 80, rowY + spacing * 3);
+      doc.text(String(config.mainTeacher || student.mainTeacher || 'NON ASSIGNÉ').toUpperCase(), 80, rowY + spacing * 4);
 
       doc.setFontSize(12);
       doc.text(`Année Académique : ${config.academicYear || "2026-2027"}`, 25, 190);
@@ -378,20 +378,30 @@ export default function DocumentGenerator() {
         return;
       }
 
-      const subjectAverages: { [key: string]: { total: number; count: number; totalCoef: number; weightedSum: number } } = {};
+      const subjectAverages: { [key: string]: { weightedSum: number, totalCoef: number, count: number } } = {};
       studentGrades.forEach((g: any) => {
-        if (!subjectAverages[g.subject]) {
-          subjectAverages[g.subject] = { total: 0, count: 0, totalCoef: 0, weightedSum: 0 };
+        const subject = g.subject || 'Inconnu';
+        if (!subjectAverages[subject]) {
+          subjectAverages[subject] = { weightedSum: 0, totalCoef: 0, count: 0 };
         }
-        const normalizedScore = (g.score / g.maxScore) * 20;
-        subjectAverages[g.subject].weightedSum += normalizedScore * (g.coefficient || 1);
-        subjectAverages[g.subject].totalCoef += (g.coefficient || 1);
-        subjectAverages[g.subject].count++;
+        
+        const score = parseFloat(g.score);
+        const maxScore = parseFloat(g.maxScore) || 20;
+        const coef = parseFloat(g.coefficient) || 1;
+        
+        if (!isNaN(score)) {
+          const normalizedScore = (score / maxScore) * 20;
+          subjectAverages[subject].weightedSum += normalizedScore * coef;
+          subjectAverages[subject].totalCoef += coef;
+          subjectAverages[subject].count++;
+        }
       });
 
-      const tableData = Object.entries(subjectAverages).map(([subject, stats]) => {
-        const average = stats.weightedSum / stats.totalCoef;
-        const percentage = (average / 20) * 100;
+      const tableData = Object.entries(subjectAverages)
+        .filter(([_, stats]) => stats.totalCoef > 0)
+        .map(([subject, stats]) => {
+          const average = stats.weightedSum / stats.totalCoef;
+          const percentage = (average / 20) * 100;
         
         let comment = "";
         if (average >= 16) {
@@ -441,18 +451,29 @@ export default function DocumentGenerator() {
       doc.setTextColor(30, 41, 59);
       doc.setFontSize(9);
       doc.setFont("helvetica", "bold");
-      doc.text(`ÉTUDIANT:`, 20, 63);
-      doc.text(`ID/MATRICULE:`, 20, 71);
-      doc.text(`NÉ(E) LE:`, 20, 79);
-      doc.text(`CLASSE:`, 110, 63);
-      doc.text(`PROF. PRINCIPAL:`, 110, 71);
+      
+      // Left Column
+      doc.text(`ÉTUDIANT :`, 20, 63);
+      doc.text(`ID / MATRICULE :`, 20, 70);
+      doc.text(`NÉ(E) LE :`, 20, 77);
+      doc.text(`À :`, 20, 84);
+      
+      // Right Column
+      doc.text(`CLASSE :`, 110, 63);
+      doc.text(`PROF. PRINCIPAL :`, 110, 70);
+      doc.text(`SEXE :`, 110, 77);
       
       doc.setFont("helvetica", "normal");
-      doc.text(`${student.nom.toUpperCase()} ${student.prenom}`, 45, 63);
-      doc.text(student.matricule || student.id.substring(0, 10), 50, 71);
-      doc.text(student.dateNaissance || 'N/A', 40, 79);
-      doc.text(config.className?.toUpperCase() || student.className?.toUpperCase() || '---', 125, 63);
-      doc.text(config.mainTeacher?.toUpperCase() || student.mainTeacher?.toUpperCase() || '---', 145, 71);
+      // Left Column Values
+      doc.text(`${String(student.nom || '').toUpperCase()} ${String(student.prenom || '')}`, 50, 63);
+      doc.text(String(student.matricule || student.id.substring(0, 10)).toUpperCase(), 50, 70);
+      doc.text(String(student.dateNaissance || 'N/A'), 50, 77);
+      doc.text(String(student.lieuNaissance || 'N/A').toUpperCase(), 50, 84);
+      
+      // Right Column Values
+      doc.text(String(config.className || student.className || 'NON DÉFINIE').toUpperCase(), 145, 63);
+      doc.text(String(config.mainTeacher || student.mainTeacher || 'NON ASSIGNÉ').toUpperCase(), 145, 70);
+      doc.text(student.gender === 'male' ? 'MASCULIN' : student.gender === 'female' ? 'FÉMININ' : 'N/A', 145, 77);
 
       autoTable(doc, {
         startY: 95,
@@ -473,8 +494,9 @@ export default function DocumentGenerator() {
       const finalY = (doc as any).lastAutoTable.finalY + 15;
       
       // General Average Calculation
-      const sumWeightedAvgs = Object.values(subjectAverages).reduce((acc, s) => acc + (s.weightedSum / s.totalCoef), 0);
-      const generalAvg = sumWeightedAvgs / Object.keys(subjectAverages).length;
+      const validSubjects = Object.values(subjectAverages).filter(s => s.totalCoef > 0);
+      const sumWeightedAvgs = validSubjects.reduce((acc, s) => acc + (s.weightedSum / s.totalCoef), 0);
+      const generalAvg = validSubjects.length > 0 ? sumWeightedAvgs / validSubjects.length : 0;
 
       doc.setFillColor(30, 41, 59);
       doc.rect(20, finalY, 170, 15, 'F');
@@ -493,10 +515,11 @@ export default function DocumentGenerator() {
       doc.rect(25, finalY + 45, 50, 20, 'D');
       doc.rect(135, finalY + 45, 50, 20, 'D');
 
-      doc.save(`Bulletin_${student.prenom}_${student.nom}.pdf`);
+      doc.save(`Bulletin_${String(student.prenom || 'Eleve').replace(/\s+/g, '_')}_${String(student.nom || '').replace(/\s+/g, '_')}.pdf`);
       console.log("Report saved successfully");
     } catch (err) {
       console.error("Error generating report card:", err);
+      alert("Une erreur est survenue lors de la génération du bulletin. Veuillez vérifier les données de l'élève.");
     } finally {
       setGenerating(null);
       setEditDoc(null);
