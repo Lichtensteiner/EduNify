@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
-import { db } from '../lib/firebase';
-import { collection, query, where, onSnapshot, orderBy, addDoc, serverTimestamp, deleteDoc, doc } from 'firebase/firestore';
+import { db, storage } from '../lib/firebase';
+import { collection, query, where, onSnapshot, orderBy, addDoc, serverTimestamp, deleteDoc, doc, updateDoc } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { 
   BookOpen, 
   Calendar, 
@@ -12,7 +13,11 @@ import {
   Clock, 
   FileText,
   Trash2,
-  AlertCircle
+  AlertCircle,
+  Download,
+  Paperclip,
+  X,
+  RefreshCw
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -27,6 +32,8 @@ interface HomeworkItem {
   teacherId: string;
   teacherName: string;
   completedBy: string[]; // Array of student UIDs
+  fileUrl?: string;
+  fileName?: string;
 }
 
 const Homework: React.FC = () => {
@@ -35,6 +42,9 @@ const Homework: React.FC = () => {
   const [homework, setHomework] = useState<HomeworkItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [newHomework, setNewHomework] = useState({
     subject: '',
     title: '',
@@ -102,9 +112,7 @@ const Homework: React.FC = () => {
     }
 
     try {
-      // In a real app, we'd use updateDoc, but let's assume we have it
-      // For now, just a placeholder for the logic
-      console.log("Toggling homework completion", homeworkId, newCompletedBy);
+      await updateDoc(homeworkRef, { completedBy: newCompletedBy });
     } catch (error) {
       console.error("Error updating homework status:", error);
     }
@@ -114,19 +122,79 @@ const Homework: React.FC = () => {
     e.preventDefault();
     if (!currentUser) return;
 
+    setUploading(true);
+    setUploadProgress(10);
     try {
+      let fileData = {};
+      
+      if (selectedFile) {
+        const fileRef = ref(storage, `homework/${Date.now()}_${selectedFile.name}`);
+        
+        // Optimization: Use uploadBytes for files < 5MB
+        if (selectedFile.size < 5 * 1024 * 1024) {
+          const progressInterval = setInterval(() => {
+            setUploadProgress(prev => (prev !== null && prev < 90) ? prev + 15 : prev);
+          }, 400);
+
+          try {
+            await uploadBytes(fileRef, selectedFile);
+            clearInterval(progressInterval);
+            setUploadProgress(95);
+            const url = await getDownloadURL(fileRef);
+            fileData = { fileUrl: url, fileName: selectedFile.name };
+          } catch (error) {
+            clearInterval(progressInterval);
+            throw error;
+          }
+        } else {
+          const { uploadBytesResumable } = await import('firebase/storage');
+          const uploadTask = uploadBytesResumable(fileRef, selectedFile);
+          
+          const url = await new Promise<string>((resolve, reject) => {
+            uploadTask.on('state_changed',
+              (snapshot) => {
+                const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 90;
+                setUploadProgress(10 + progress);
+              },
+              (error) => reject(error),
+              async () => {
+                const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+                resolve(downloadURL);
+              }
+            );
+          });
+
+          fileData = { fileUrl: url, fileName: selectedFile.name };
+        }
+      }
+
+      setUploadProgress(95);
+
       await addDoc(collection(db, 'homework'), {
         ...newHomework,
+        ...fileData,
         teacherId: currentUser.id,
         teacherName: `${currentUser.prenom} ${currentUser.nom}`,
         createdAt: serverTimestamp(),
         completedBy: [],
         dueDate: new Date(newHomework.dueDate)
       });
-      setShowAddModal(false);
-      setNewHomework({ subject: '', title: '', description: '', dueDate: '', classId: '' });
+      
+      setUploadProgress(100);
+      
+      setTimeout(() => {
+        setShowAddModal(false);
+        setNewHomework({ subject: '', title: '', description: '', dueDate: '', classId: '' });
+        setSelectedFile(null);
+        setUploadProgress(null);
+        setUploading(false);
+      }, 500);
     } catch (error) {
       console.error("Error adding homework:", error);
+      alert("Une erreur est survenue lors de l'ajout du devoir.");
+    } finally {
+      setUploading(false);
+      setUploadProgress(null);
     }
   };
 
@@ -239,6 +307,21 @@ const Homework: React.FC = () => {
                     <p className="text-gray-600 dark:text-gray-400 text-sm mb-4 whitespace-pre-wrap">
                       {item.description}
                     </p>
+
+                    {item.fileUrl && (
+                      <div className="mb-4">
+                        <a 
+                          href={item.fileUrl} 
+                          target="_blank" 
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-2 px-3 py-2 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 rounded-xl text-xs font-bold hover:bg-indigo-100 transition-colors"
+                        >
+                          <Paperclip size={14} />
+                          <span className="truncate max-w-[200px]">{item.fileName || "Voir le document"}</span>
+                          <Download size={14} className="ml-1" />
+                        </a>
+                      </div>
+                    )}
                     
                     <div className="flex items-center justify-between pt-4 border-t border-gray-100 dark:border-gray-700">
                       <div className="flex items-center gap-2">
@@ -331,19 +414,65 @@ const Homework: React.FC = () => {
                   />
                 </div>
                 
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Document joint (Optionnel)</label>
+                  <div className="relative">
+                    <input
+                      type="file"
+                      id="homework-file"
+                      className="hidden"
+                      onChange={(e) => setSelectedFile(e.target.files ? e.target.files[0] : null)}
+                      accept=".pdf,image/*"
+                    />
+                    <label 
+                      htmlFor="homework-file"
+                      className="flex items-center justify-between w-full px-4 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 transition-all"
+                    >
+                      <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+                        <Paperclip size={18} />
+                        <span>{selectedFile ? selectedFile.name : "Choisir un fichier (PDF ou Image)"}</span>
+                      </div>
+                      {selectedFile && (
+                        <button 
+                          type="button"
+                          onClick={(e) => { e.preventDefault(); setSelectedFile(null); }}
+                          className="p-1 hover:bg-gray-200 dark:hover:bg-gray-500 rounded-full"
+                        >
+                          <X size={14} />
+                        </button>
+                      )}
+                    </label>
+                  </div>
+                </div>
+                
                 <div className="flex gap-3 pt-4">
                   <button
                     type="button"
                     onClick={() => setShowAddModal(false)}
-                    className="flex-1 py-2 text-gray-700 dark:text-gray-300 font-medium hover:bg-gray-100 dark:hover:bg-gray-700 rounded-xl transition-colors"
+                    disabled={uploading}
+                    className="flex-1 py-2 text-gray-700 dark:text-gray-300 font-medium hover:bg-gray-100 dark:hover:bg-gray-700 rounded-xl transition-colors disabled:opacity-50"
                   >
                     Annuler
                   </button>
                   <button
                     type="submit"
-                    className="flex-1 py-2 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-500/20"
+                    disabled={uploading}
+                    className="flex-1 py-2 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-500/20 disabled:bg-indigo-400 flex items-center justify-center gap-2 relative overflow-hidden"
                   >
-                    Publier
+                    {uploading ? (
+                      <>
+                        <div className="relative z-10 flex items-center gap-2">
+                          <RefreshCw className="animate-spin" size={18} />
+                          <span>{uploadProgress !== null ? `${Math.round(uploadProgress)}%` : 'Envoi...'}</span>
+                        </div>
+                        {uploadProgress !== null && (
+                          <div 
+                            className="absolute inset-0 bg-white/20 transition-all duration-300"
+                            style={{ width: `${uploadProgress}%` }}
+                          />
+                        )}
+                      </>
+                    ) : 'Publier'}
                   </button>
                 </div>
               </form>

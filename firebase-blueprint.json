@@ -92,6 +92,53 @@
         "recordedBy": { "type": "string" },
         "date": { "type": "string", "format": "date-time" }
       }
+    },
+    "homework": {
+      "title": "Homework",
+      "description": "Assignments and lesson contents",
+      "type": "object",
+      "properties": {
+        "classId": { "type": "string" },
+        "subject": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "dueDate": { "type": "string", "format": "date-time" },
+        "teacherId": { "type": "string" },
+        "teacherName": { "type": "string" },
+        "completedBy": { "type": "array", "items": { "type": "string" } },
+        "fileUrl": { "type": "string" },
+        "fileName": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "preparations": {
+      "title": "Courses and Preparations",
+      "description": "Educational content and AI-generated lesson plans",
+      "type": "object",
+      "properties": {
+        "topic": { "type": "string" },
+        "subject": { "type": "string" },
+        "grade": { "type": "string" },
+        "content": { "type": "string" },
+        "type": { "type": "string", "enum": ["course", "exercise", "quiz"] },
+        "authorId": { "type": "string" },
+        "authorName": { "type": "string" },
+        "fileUrl": { "type": "string" },
+        "fileName": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "notifications": {
+      "title": "Notifications",
+      "description": "System and user notifications",
+      "type": "object",
+      "properties": {
+        "user_id": { "type": "string" },
+        "type": { "type": "string" },
+        "message": { "type": "string" },
+        "status": { "type": "string", "enum": ["sent", "read"] },
+        "timestamp": { "type": "string", "format": "date-time" }
+      }
     }
   },
   "firestore": {
@@ -100,6 +147,9 @@
     "/attendance_logs/{logId}": { "schema": "attendance_logs", "description": "Scans logs" },
     "/clubs/{clubId}": { "schema": "clubs", "description": "Club documents" },
     "/grades/{gradeId}": { "schema": "grades", "description": "Grade entries" },
-    "/sanctions/{sanctionId}": { "schema": "sanctions", "description": "Discipline entries" }
+    "/sanctions/{sanctionId}": { "schema": "sanctions", "description": "Discipline entries" },
+    "/homework/{homeworkId}": { "schema": "homework", "description": "Homework assignments" },
+    "/preparations/{prepId}": { "schema": "preparations", "description": "Lesson plans and courses" },
+    "/notifications/{notifId}": { "schema": "notifications", "description": "User notifications" }
   }
 }

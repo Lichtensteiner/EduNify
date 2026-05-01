@@ -240,14 +240,14 @@ export default function Classroom() {
     if (classesToPublish.length === 0) return;
 
     setActionLoading(true);
-    setUploadProgress(5); // Immediate feedback
+    setUploadProgress(10); // Immediate feedback
     try {
       let fileUrl = resourceData.url;
 
       if ((resourceData.type === 'document' || resourceData.type === 'image') && selectedFile) {
-        // Check file size (limit to 20MB for example)
-        if (selectedFile.size > 20 * 1024 * 1024) {
-          throw new Error("Le fichier est trop volumineux (max 20Mo)");
+        // Check file size (limit to 50MB)
+        if (selectedFile.size > 50 * 1024 * 1024) {
+          throw new Error("Le fichier est trop volumineux (max 50Mo)");
         }
 
         let fileToUpload: File | Blob = selectedFile;
@@ -262,24 +262,50 @@ export default function Classroom() {
         }
 
         const fileRef = ref(storage, `resources/${Date.now()}_${selectedFile.name}`);
-        const uploadTask = uploadBytesResumable(fileRef, fileToUpload);
+        
+        // Optimization: Use uploadBytes for files < 5MB for much faster initiation
+        if (fileToUpload.size < 5 * 1024 * 1024) { 
+          const { uploadBytes } = await import('firebase/storage');
+          
+          // Fake progress increments to avoid UI hanging
+          const progressInterval = setInterval(() => {
+            setUploadProgress(prev => {
+              if (prev === null) return 10;
+              if (prev >= 90) return prev;
+              return prev + 15;
+            });
+          }, 300);
 
-        fileUrl = await new Promise((resolve, reject) => {
-          uploadTask.on('state_changed', 
-            (snapshot) => {
-              const progress = 5 + (snapshot.bytesTransferred / snapshot.totalBytes) * 95;
-              setUploadProgress(progress);
-            }, 
-            (error) => {
-              console.error("Upload error:", error);
-              reject(error);
-            }, 
-            async () => {
-              const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
-              resolve(downloadURL);
-            }
-          );
-        });
+          try {
+            const uploadResult = await uploadBytes(fileRef, fileToUpload);
+            clearInterval(progressInterval);
+            setUploadProgress(95);
+            fileUrl = await getDownloadURL(uploadResult.ref);
+          } catch (error) {
+            clearInterval(progressInterval);
+            throw error;
+          }
+        } else {
+          const { uploadBytesResumable } = await import('firebase/storage');
+          const uploadTask = uploadBytesResumable(fileRef, fileToUpload);
+
+          fileUrl = await new Promise((resolve, reject) => {
+            uploadTask.on('state_changed', 
+              (snapshot) => {
+                const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 90;
+                setUploadProgress(10 + progress);
+              }, 
+              (error) => {
+                console.error("Upload error:", error);
+                reject(error);
+              }, 
+              async () => {
+                const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+                resolve(downloadURL);
+              }
+            );
+          });
+        }
       }
 
       if (!fileUrl && (resourceData.type === 'document' || resourceData.type === 'image')) {
@@ -290,29 +316,43 @@ export default function Classroom() {
         throw new Error("Veuillez entrer une URL");
       }
 
-      const uploadPromises = classesToPublish.map(cls => 
-        addDoc(collection(db, 'resources'), {
-          class_name: cls,
-          teacher_id: currentUser.id,
-          title: resourceData.title,
-          description: resourceData.description,
-          subject: resourceData.subject || (currentUser.matieres?.[0] || currentUser.matiere || ''),
-          url: fileUrl,
-          type: resourceData.type,
-          timestamp: new Date().toISOString()
-        })
-      );
-
-      await Promise.all(uploadPromises);
+      setUploadProgress(95);
       
-      setShowResourceModal(false);
-      setResourceData({ title: '', description: '', subject: '', url: '', type: 'document' });
-      setSelectedFile(null);
-      setSelectedPublishClasses([]);
-      setUploadProgress(null);
+      console.log("Finalizing publication with classes:", classesToPublish);
+      
+      const resourceEntry = {
+        class_name: '', // Will be set in map
+        teacher_id: currentUser.id,
+        title: resourceData.title,
+        description: resourceData.description,
+        subject: resourceData.subject || (currentUser.matieres?.[0] || currentUser.matiere || ''),
+        url: fileUrl,
+        type: resourceData.type,
+        timestamp: new Date().toISOString()
+      };
+
+      // Use a loop for more reliable tracking than Promise.all if one fails
+      for (const cls of classesToPublish) {
+        await addDoc(collection(db, 'resources'), {
+          ...resourceEntry,
+          class_name: cls
+        });
+      }
+      
+      setUploadProgress(100);
+      
+      // Short delay to show 100% success
+      setTimeout(() => {
+        setShowResourceModal(false);
+        setResourceData({ title: '', description: '', subject: '', url: '', type: 'document' });
+        setSelectedFile(null);
+        setSelectedPublishClasses([]);
+        setUploadProgress(null);
+        setActionLoading(false);
+      }, 500);
     } catch (error: any) {
-      const message = handleFirestoreError(error, 'add', 'resources');
-      alert(message);
+      console.error("Publication error detail:", error);
+      alert("Erreur lors de la publication: " + (error.message || "Erreur inconnue"));
     } finally {
       setActionLoading(false);
       setUploadProgress(null);

@@ -159,11 +159,11 @@ service cloud.firestore {
       allow update: if isAuthenticated() && request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participants;
     }
 
-    // Preparations Collection
+    // Preparations Collection (Courses)
     match /preparations/{prepId} {
-      allow read: if isAuthenticated() && (isOwner(resource.data.authorId) || isAdmin());
+      allow read: if isAuthenticated();
       allow create: if isAdmin() || isTeacher() || isStaff();
-      allow update, delete: if isAdmin() || (isAuthenticated() && isOwner(resource.data.authorId));
+      allow update, delete: if isAdmin() || (isAuthenticated() && request.auth.uid == resource.data.authorId);
     }
 
     // Resources Collection
@@ -188,6 +188,16 @@ service cloud.firestore {
       allow read: if isAuthenticated() && (isAdmin() || isTeacher() || isStaff() || isOwner(resource.data.student_id) || isChildOf(resource.data.student_id));
       allow create: if isAdmin() || isTeacher();
       allow update, delete: if isAdmin() || (isAuthenticated() && request.auth.uid == resource.data.teacher_id);
+    }
+
+    // Homework Collection
+    match /homework/{homeworkId} {
+      allow read: if isAuthenticated();
+      allow create: if isAdmin() || isTeacher();
+      allow update: if isAdmin() || 
+        (isTeacher() && request.auth.uid == resource.data.teacherId) ||
+        (isAuthenticated() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['completedBy']));
+      allow delete: if isAdmin() || (isTeacher() && request.auth.uid == resource.data.teacherId);
     }
   }
 }
