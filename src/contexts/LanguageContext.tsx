@@ -997,7 +997,7 @@ const translations: Translations = {
   'change_type': { fr: 'Changer type', en: 'Change type', es: 'Cambiar tipo', zh: '更改类型', ja: 'タイプ変更' },
   'personal_info': { fr: 'Informations Personnelles', en: 'Personal Information', es: 'Información Personal', zh: '个人信息', ja: '個人情報' },
   'birth_date': { fr: 'Date de Naissance', en: 'Birth Date', es: 'Fecha de Nacimiento', zh: '出生日期', ja: '生年月日' },
-  'birth_place': { fr: 'Lieu de Naissance', en: 'Birth Place', en: 'Birth Place', es: 'Lugar de Nacimiento', zh: '出生地', ja: '出生地' },
+  'birth_place': { fr: 'Lieu de Naissance', en: 'Birth Place', es: 'Lugar de Nacimiento', zh: '出生地', ja: '出生地' },
   'contact_prof': { fr: 'Contact & Professionnel', en: 'Contact & Professional', es: 'Contacto y Profesional', zh: '联系方式和专业信息', ja: '連絡先と専門職' },
   'role_assignment': { fr: 'Rôle & Affectation', en: 'Role & Assignment', es: 'Rol y Asignación', zh: '角色和分配', ja: '役割と割り当て' },
   'select_class': { fr: 'Sélectionner une classe', en: 'Select a class', es: 'Seleccionar una clase', zh: '选择班级', ja: 'クラスを選択' },
@@ -1028,8 +1028,6 @@ const translations: Translations = {
   'professional_email': { fr: 'Email professionnel', en: 'Professional Email', es: 'Correo profesional', zh: '专业电子邮件', ja: 'プロフェッショナルメール' },
   'average': { fr: 'Moyenne', en: 'Average', es: 'Promedio', zh: '平均分', ja: '平均' },
   'not_enough_data_chart': { fr: 'Pas assez de données pour générer le graphique', en: 'Not enough data to generate the chart', es: 'No hay suficientes datos para generar el gráfico', zh: '数据不足以生成图表', ja: 'チャートを生成するためのデータが不足しています' },
-  'loading_grades': { fr: 'Chargement des notes...', en: 'Loading grades...', es: 'Cargando notas...', zh: '正在加载成绩...', ja: '成績を読み込んでいます...' },
-  'no_grades_found': { fr: 'Aucune note trouvée.', en: 'No grades found.', es: 'No se encontraron notas.', zh: '未找到成绩。', ja: '成績が見つかりません。' },
   'new_message_in': { fr: 'Nouveau message dans', en: 'New message in', es: 'Nuevo mensaje en', zh: '新消息在', ja: '新しいメッセージ:' },
 };
 

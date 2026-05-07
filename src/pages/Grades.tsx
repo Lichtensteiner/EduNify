@@ -69,6 +69,7 @@ const Grades: React.FC = () => {
   const [editingGrade, setEditingGrade] = useState<Grade | null>(null);
   const [viewingGrade, setViewingGrade] = useState<Grade | null>(null);
   const [students, setStudents] = useState<any[]>([]);
+  const [classes, setClasses] = useState<any[]>([]);
   const [newGrade, setNewGrade] = useState({
     studentId: '',
     subject: '',
@@ -83,6 +84,14 @@ const Grades: React.FC = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [selectedStudentId, setSelectedStudentId] = useState<string>('');
   const [homework, setHomework] = useState<any[]>([]);
+
+  useEffect(() => {
+    const fetchClasses = async () => {
+      const snap = await getDocs(collection(db, 'classes'));
+      setClasses(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    };
+    fetchClasses();
+  }, []);
 
   useEffect(() => {
     if (!currentUser) return;
@@ -726,6 +735,28 @@ const Grades: React.FC = () => {
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div className="sm:col-span-2 text-left">
+                        <label className="block text-xs font-black text-gray-500 uppercase mb-1">{t('class')}</label>
+                        <select
+                          required
+                          value={newGrade.classId}
+                          onChange={(e) => {
+                            const newClassId = e.target.value;
+                            setNewGrade({
+                              ...newGrade,
+                              classId: newClassId,
+                              subject: '',
+                              studentId: '' // Reset student if class changes
+                            });
+                          }}
+                          className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all font-medium text-sm dark:text-white"
+                        >
+                          <option value="">{t('select_class')}</option>
+                          {classes.map(c => (
+                            <option key={c.id} value={c.nom}>{c.nom}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="sm:col-span-2 text-left">
                         <label className="block text-xs font-black text-gray-500 uppercase mb-1">{t('student')}</label>
                         <select
                           required
@@ -734,32 +765,26 @@ const Grades: React.FC = () => {
                           className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all font-medium text-sm dark:text-white"
                         >
                           <option value="">{t('select_student')}</option>
-                          {students.map(s => (
+                          {students
+                            .filter(s => !newGrade.classId || s.classe === newGrade.classId)
+                            .map(s => (
                             <option key={s.id} value={s.id}>{s.prenom} {s.nom} ({s.classe})</option>
                           ))}
                         </select>
                       </div>
-                      <div className="text-left">
+                      <div className="sm:col-span-2 text-left">
                         <label className="block text-xs font-black text-gray-500 uppercase mb-1">{t('subject')}</label>
-                        <input
-                          type="text"
+                        <select
                           required
                           value={newGrade.subject}
                           onChange={(e) => setNewGrade({...newGrade, subject: e.target.value})}
-                          className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-sm dark:text-white"
-                          placeholder="Ex: Mathématiques"
-                        />
-                      </div>
-                      <div className="text-left">
-                        <label className="block text-xs font-black text-gray-500 uppercase mb-1">{t('class')}</label>
-                        <input
-                          type="text"
-                          required
-                          value={newGrade.classId}
-                          onChange={(e) => setNewGrade({...newGrade, classId: e.target.value})}
-                          className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-sm dark:text-white"
-                          placeholder="Ex: 6ème A"
-                        />
+                          className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all font-medium text-sm dark:text-white"
+                        >
+                          <option value="">{t('select_subject') || 'Sélectionner une matière'}</option>
+                          {classes.find(c => c.nom === newGrade.classId)?.matieres?.map((m: string) => (
+                            <option key={m} value={m}>{m}</option>
+                          ))}
+                        </select>
                       </div>
                     </div>
                   </div>
