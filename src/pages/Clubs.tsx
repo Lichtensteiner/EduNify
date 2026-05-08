@@ -312,20 +312,18 @@ const Clubs: React.FC = () => {
                   <div className="flex items-center justify-between pt-2">
                     <button
                       onClick={() => setSelectedClubForMembers(club)}
-                      className="flex items-center gap-2 text-gray-500 hover:text-indigo-600 transition-colors"
+                      className="flex items-center gap-2 text-gray-500 hover:text-indigo-600 transition-colors group/members"
                     >
-                      <Users size={16} />
-                      <span className="text-sm font-medium underline decoration-dotted">{club.members?.length || 0} membres</span>
+                      <div className="p-2 bg-gray-50 dark:bg-gray-700/50 rounded-lg group-hover/members:bg-indigo-50 dark:group-hover/members:bg-indigo-900/30 transition-colors">
+                        <Users size={18} className="group-hover/members:text-indigo-600" />
+                      </div>
+                      <div className="flex flex-col items-start">
+                        <span className="text-xs text-gray-400 font-bold uppercase tracking-tighter">Membres</span>
+                        <span className="text-sm font-bold text-gray-700 dark:text-gray-300 group-hover/members:text-indigo-600">{club.members?.length || 0} inscrits</span>
+                      </div>
                     </button>
 
                     <div className="flex gap-2">
-                      <button
-                        onClick={() => setSelectedClubForMembers(club)}
-                        className="p-2 bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 rounded-lg hover:bg-gray-100 transition-colors"
-                        title="Voir la liste"
-                      >
-                        <Info size={18} />
-                      </button>
                       {isLeader ? (
                         <span className="px-4 py-2 bg-amber-50 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 rounded-xl text-sm font-bold flex items-center gap-2">
                           <Settings size={16} />
@@ -336,8 +334,8 @@ const Clubs: React.FC = () => {
                           onClick={() => handleJoinLeaveClub(club)}
                           className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all ${
                             isMember 
-                              ? 'bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 hover:bg-red-100' 
-                              : 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-300 hover:bg-indigo-100'
+                              ? 'bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 hover:bg-red-100 shadow-sm' 
+                              : 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-lg shadow-indigo-200 dark:shadow-none'
                           }`}
                         >
                           {isMember ? <UserMinus size={18} /> : <UserPlus size={18} />}
@@ -544,7 +542,7 @@ const Clubs: React.FC = () => {
             <div className="p-6 bg-gray-50 dark:bg-gray-900/50 border-t border-gray-100 dark:border-gray-700 flex justify-between items-center text-sm font-medium text-gray-500">
               <div className="flex gap-4">
                 <span className="flex items-center gap-2"><CalendarIcon size={14} /> Réunion hebdomadaire</span>
-                <span className="flex items-center gap-2"><Award size={14} /> Certifié Edu-Nify</span>
+                <span className="flex items-center gap-2"><Award size={14} /> Excellence Académique</span>
               </div>
               <button 
                 onClick={() => setSelectedClubForMembers(null)}
