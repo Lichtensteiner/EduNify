@@ -46,7 +46,7 @@ export default function StudentCard() {
         <div className="h-32 bg-gradient-to-br from-indigo-600 to-purple-700 relative">
           <div className="absolute inset-0 bg-white/10 pattern-grid-lg opacity-20"></div>
           <div className="absolute top-4 left-6 bg-white/90 backdrop-blur-sm px-2 py-1 rounded-lg">
-            <img src="/logo.png" alt="ShopUniversities" className="h-6 object-contain" />
+            <img src="/logo.png" alt="Edu-Nify" className="h-6 object-contain" />
           </div>
           <div className="absolute top-4 right-6">
             <span className="bg-white/20 text-white px-3 py-1 rounded-full text-xs font-bold backdrop-blur-sm">

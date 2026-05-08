@@ -28,7 +28,7 @@ export default function TermsAndConditions() {
             <h2 className="text-xl font-bold">Introduction</h2>
           </div>
           <p className="text-gray-600 dark:text-gray-400 leading-relaxed">
-            Bienvenue sur ShopUniversities. Les présentes conditions régissent votre utilisation de notre plateforme de gestion scolaire. 
+            Bienvenue sur Edu-Nify. Les présentes conditions régissent votre utilisation de notre plateforme de gestion scolaire. 
             En accédant à ce service, vous acceptez de vous conformer aux lois en vigueur au Gabon ainsi qu'aux standards universels de protection des données.
           </p>
         </section>
@@ -42,7 +42,7 @@ export default function TermsAndConditions() {
           <div className="space-y-2 text-gray-600 dark:text-gray-400">
             <p>
               Conformément à la **Loi n°001/2011 relative à la protection des données à caractère personnel** au Gabon, 
-              ShopUniversities s'engage à :
+              Edu-Nify s'engage à :
             </p>
             <ul className="list-disc list-inside space-y-2 ml-4">
               <li>Ne collecter que les données strictement nécessaires au fonctionnement du service (identifiants, présences, notes).</li>
@@ -84,7 +84,7 @@ export default function TermsAndConditions() {
             <h2 className="text-xl font-bold">Standards Universels</h2>
           </div>
           <p className="text-gray-600 dark:text-gray-400 leading-relaxed">
-            Bien que basée au Gabon, ShopUniversities s'aligne sur les principes du **RGPD (Règlement Général sur la Protection des Données)** pour offrir un niveau de sécurité optimal, 
+            Bien que basée au Gabon, Edu-Nify s'aligne sur les principes du **RGPD (Règlement Général sur la Protection des Données)** pour offrir un niveau de sécurité optimal, 
             incluant le "Privacy by Design" et la notification de violation de données.
           </p>
         </section>
@@ -92,7 +92,7 @@ export default function TermsAndConditions() {
       </div>
 
       <div className="text-center text-sm text-gray-500 pb-12">
-        Dernière mise à jour : {new Date().toLocaleDateString('fr-FR')} {new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })} | ShopUniversities by Ludo_Consulting
+        Dernière mise à jour : {new Date().toLocaleDateString('fr-FR')} {new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })} | Edu-Nify by Ludo_Consulting
       </div>
     </div>
   );

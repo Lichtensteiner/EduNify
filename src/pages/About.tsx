@@ -166,7 +166,7 @@ export default function About() {
       
       <div className="text-center pb-8">
         <p className="text-sm text-gray-500">
-          © 2026 ShopUniversities. Tous droits réservés. Développé par Dev Lichtensteiner.
+          © 2026 Edu-Nify. Tous droits réservés. Développé par Dev Lichtensteiner.
         </p>
       </div>
     </div>

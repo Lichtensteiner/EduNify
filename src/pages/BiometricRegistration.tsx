@@ -119,7 +119,7 @@ export default function BiometricRegistration() {
           publicKey: {
             challenge: challenge,
             rp: {
-              name: "ShopUniversities Pointage",
+              name: "Edu-Nify Pointage",
               id: window.location.hostname,
             },
             user: {

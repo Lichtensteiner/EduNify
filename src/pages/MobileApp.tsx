@@ -258,7 +258,7 @@ export default function MobileApp() {
           <div className="flex flex-col items-center justify-center h-full p-6 space-y-8 animate-in fade-in zoom-in duration-300 bg-white dark:bg-gray-900">
             <img src="/logo.png" alt="Logo" className="h-24 object-contain" />
             <div className="text-center space-y-2">
-              <h1 className="text-2xl font-bold text-gray-900 dark:text-white">ShopUniversities</h1>
+              <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Edu-Nify</h1>
               <p className="text-gray-500 dark:text-gray-400">Système de Présence Biométrique</p>
             </div>
             <div className="w-full space-y-4 mt-8">

@@ -17,8 +17,8 @@ export default defineConfig(({mode}) => {
           maximumFileSizeToCacheInBytes: 5000000
         },
         manifest: {
-          name: 'ShopUniversities',
-          short_name: 'ShopUniv',
+          name: 'Edu-Nify',
+          short_name: 'Edu-Nify',
           description: 'Application de gestion scolaire',
           theme_color: '#4f46e5',
           background_color: '#ffffff',

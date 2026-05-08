@@ -3,7 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { db } from '../lib/firebase';
 import { collection, query, where, getDocs, orderBy, Timestamp } from 'firebase/firestore';
-import { GoogleGenAI, Type } from '@google/genai';
+import { generateAIContent } from '../services/aiService';
 import { 
   Sparkles, 
   TrendingUp, 
@@ -109,8 +109,6 @@ const LudoAIPlus: React.FC = () => {
     setAnalyzing(true);
     setError(null);
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' });
-      
       const prompt = `
         En tant que tuteur pédagogique expert nommé Ludo AI+, analyse les notes suivantes d'un élève sur les 3 derniers mois :
         ${JSON.stringify(data.map(g => ({ 
@@ -161,9 +159,9 @@ const LudoAIPlus: React.FC = () => {
         }
       `;
 
-      const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: prompt,
+      const response = await generateAIContent({
+        model: "gemini-1.5-flash",
+        contents: { parts: [{ text: prompt }] },
         config: {
           responseMimeType: "application/json"
         }

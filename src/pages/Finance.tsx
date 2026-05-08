@@ -777,7 +777,7 @@ const Finance: React.FC = () => {
                   </div>
                   <div>
                     <h2 className="text-lg font-black text-gray-900 dark:text-white uppercase tracking-tight">{t('financial_situation_report')}</h2>
-                    <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">{t('certified_document')} • ShopUniversities ERP</p>
+                    <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">{t('certified_document')} • Edu-Nify ERP</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
@@ -805,9 +805,9 @@ const Finance: React.FC = () => {
                 <div className="flex flex-col sm:flex-row justify-between items-start gap-8 pb-8 border-b-2 border-gray-100 dark:border-gray-800">
                   <div className="space-y-3">
                     <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 bg-indigo-600 rounded-xl flex items-center justify-center text-white font-black text-2xl shadow-lg shadow-indigo-200 dark:shadow-none">SU</div>
+                      <div className="w-12 h-12 bg-indigo-600 rounded-xl flex items-center justify-center text-white font-black text-2xl shadow-lg shadow-indigo-200 dark:shadow-none">EN</div>
                       <div>
-                        <h3 className="text-xl font-black text-gray-900 dark:text-white tracking-tight">ShopUniversities</h3>
+                        <h3 className="text-xl font-black text-gray-900 dark:text-white tracking-tight">Edu-Nify</h3>
                         <p className="text-[9px] text-indigo-600 font-black uppercase tracking-[0.2em]">Excellence Académique</p>
                       </div>
                     </div>
@@ -818,8 +818,8 @@ const Finance: React.FC = () => {
                         <p>BP 12548 - Avenue de l'Innovation, Secteur 4</p>
                         <p className="flex items-center gap-2"><span>📍</span> Dakar, Sénégal • Place de l'Indépendance</p>
                         <p className="flex items-center gap-2"><span>📞</span> Support: +241 07 45 88 99 / +221 33 800 00 00</p>
-                        <p className="flex items-center gap-2"><span>✉️</span> Finance: finance@shopuniversities.com</p>
-                        <p className="flex items-center gap-2"><span>🌐</span> Web: www.shopuniversities.com</p>
+                        <p className="flex items-center gap-2"><span>✉️</span> Finance: finance@edu-nify.com</p>
+                        <p className="flex items-center gap-2"><span>🌐</span> Web: www.edu-nify.com</p>
                         <p className="font-bold text-[9px] mt-1 p-1 bg-gray-50 dark:bg-gray-800 rounded border border-gray-100 dark:border-gray-700">ID Fiscal: SN-DKR-2024-B-12345 • Autorisation Ministère N°992/2024</p>
                       </div>
                     </div>
@@ -958,7 +958,7 @@ const Finance: React.FC = () => {
                 </div>
 
                 <footer className="pt-8 text-center text-[8px] text-gray-400 font-bold uppercase tracking-[0.2em] leading-loose">
-                  Émis par ShopUniversities Cloud Infrastructure. Toute altération physique ou numérique rend ce document invalide.<br/>
+                  Émis par Edu-Nify Cloud Infrastructure. Toute altération physique ou numérique rend ce document invalide.<br/>
                   Certificat d'intégrité de données ID: SHA-256-{Math.random().toString(36).substring(7).toUpperCase()}
                 </footer>
 

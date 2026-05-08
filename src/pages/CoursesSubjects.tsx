@@ -23,6 +23,7 @@ import {
   Download, 
   RefreshCw 
 } from 'lucide-react';
+import { SCHOOL_CLASSES, SCHOOL_SUBJECTS } from '../constants';
 
 interface CoursesSubjectsProps {
   initialPrepId?: string;
@@ -33,6 +34,10 @@ export default function CoursesSubjects({ initialPrepId }: CoursesSubjectsProps)
   const { currentUser } = useAuth();
   const [classes, setClasses] = useState<any[]>([]);
   const [preparations, setPreparations] = useState<any[]>([]);
+  const [subjects, setSubjects] = useState<{id: string, name: string}[]>([]);
+  const [newSubjectName, setNewSubjectName] = useState('');
+  const [editingSubject, setEditingSubject] = useState<{id: string, name: string} | null>(null);
+  const [isAddingSubject, setIsAddingSubject] = useState(false);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedClassId, setSelectedClassId] = useState<string>('all');
@@ -105,11 +110,66 @@ export default function CoursesSubjects({ initialPrepId }: CoursesSubjectsProps)
       setLoading(false);
     });
 
+    // Fetch Subjects
+    const unsubscribeSubjects = onSnapshot(collection(db, 'subjects'), (snap) => {
+      if (snap.empty) {
+        // Initial population
+        SCHOOL_SUBJECTS.forEach(async (subj) => {
+          await addDoc(collection(db, 'subjects'), { name: subj, createdAt: serverTimestamp() });
+        });
+      } else {
+        const subjectsData = snap.docs.map(doc => ({ id: doc.id, name: doc.data().name as string }));
+        setSubjects(subjectsData.sort((a, b) => a.name.localeCompare(b.name)));
+      }
+    });
+
     return () => {
       unsubscribeClasses();
       unsubscribePreps();
+      unsubscribeSubjects();
     };
   }, [currentUser]);
+
+  const handleAddSubject = async () => {
+    if (!newSubjectName.trim()) return;
+    setIsAddingSubject(true);
+    try {
+      await addDoc(collection(db, 'subjects'), {
+        name: newSubjectName.trim(),
+        createdAt: serverTimestamp()
+      });
+      setNewSubjectName('');
+    } catch (error) {
+      console.error("Error adding subject:", error);
+      alert("Erreur lors de l'ajout de la matière");
+    } finally {
+      setIsAddingSubject(false);
+    }
+  };
+
+  const handleDeleteSubject = async (subjectId: string) => {
+    if (window.confirm('Êtes-vous sûr de vouloir supprimer cette matière ?')) {
+      try {
+        await deleteDoc(doc(db, 'subjects', subjectId));
+      } catch (error) {
+        console.error("Error deleting subject:", error);
+        alert("Erreur lors de la suppression");
+      }
+    }
+  };
+
+  const handleUpdateSubjectName = async () => {
+    if (!editingSubject || !editingSubject.name.trim()) return;
+    try {
+      await updateDoc(doc(db, 'subjects', editingSubject.id), {
+        name: editingSubject.name.trim()
+      });
+      setEditingSubject(null);
+    } catch (error) {
+      console.error("Error updating subject:", error);
+      alert("Erreur lors de la mise à jour");
+    }
+  };
 
   const handleCreateCourse = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -449,8 +509,72 @@ export default function CoursesSubjects({ initialPrepId }: CoursesSubjectsProps)
           )}
         </>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {classes.map(cls => (
+        <div className="space-y-6">
+          {/* Global Subjects Management */}
+          {currentUser?.role === 'admin' && (
+            <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm">
+              <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                <Plus className="text-indigo-600" size={20} />
+                Gestion des Matières Globales
+              </h3>
+              <div className="flex gap-4">
+                <input
+                  type="text"
+                  value={newSubjectName}
+                  onChange={(e) => setNewSubjectName(e.target.value)}
+                  placeholder="Nom de la nouvelle matière..."
+                  className="flex-1 px-4 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+                <button
+                  onClick={handleAddSubject}
+                  disabled={isAddingSubject || !newSubjectName.trim()}
+                  className="px-6 py-2 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 transition-colors disabled:bg-indigo-400"
+                >
+                  {isAddingSubject ? 'Ajout...' : 'Ajouter'}
+                </button>
+              </div>
+              <div className="mt-4 flex flex-wrap gap-2">
+                {subjects.map((subj) => (
+                  <div key={subj.id} className="flex items-center gap-2 px-3 py-1 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 text-xs font-medium rounded-full border border-gray-200 dark:border-gray-600 group">
+                    {editingSubject?.id === subj.id ? (
+                      <div className="flex items-center gap-1">
+                        <input
+                          autoFocus
+                          type="text"
+                          value={editingSubject.name}
+                          onChange={(e) => setEditingSubject({ ...editingSubject, name: e.target.value })}
+                          className="bg-white dark:bg-gray-800 border border-indigo-500 rounded px-1 outline-none w-24"
+                          onKeyDown={(e) => e.key === 'Enter' && handleUpdateSubjectName()}
+                          onBlur={() => setEditingSubject(null)}
+                        />
+                      </div>
+                    ) : (
+                      <span>{subj.name}</span>
+                    )}
+                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button 
+                        onClick={() => setEditingSubject(subj)}
+                        className="p-1 hover:text-indigo-600"
+                        title="Modifier"
+                      >
+                        <Edit size={12} />
+                      </button>
+                      <button 
+                        onClick={() => handleDeleteSubject(subj.id)}
+                        className="p-1 hover:text-red-500"
+                        title="Supprimer"
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {classes.map(cls => (
             <div key={cls.id} className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm overflow-hidden">
               <div className="p-6 border-b border-gray-100 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/50">
                 <h3 className="text-lg font-bold text-gray-900 dark:text-white">{cls.nom}</h3>
@@ -478,6 +602,7 @@ export default function CoursesSubjects({ initialPrepId }: CoursesSubjectsProps)
             </div>
           )}
         </div>
+      </div>
       )}
 
       {/* Detail Modal */}
@@ -616,25 +741,31 @@ export default function CoursesSubjects({ initialPrepId }: CoursesSubjectsProps)
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Matière</label>
-                  <input
-                    type="text"
+                  <select
                     required
                     value={newCourse.subject}
                     onChange={(e) => setNewCourse({ ...newCourse, subject: e.target.value })}
-                    placeholder="Ex: Mathématiques"
-                    className="w-full px-4 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500"
-                  />
+                    className="w-full px-4 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 appearance-none cursor-pointer"
+                  >
+                    <option value="">Sélectionner une matière</option>
+                    {(subjects.length > 0 ? subjects.map(s => s.name) : SCHOOL_SUBJECTS).map(subj => (
+                      <option key={subj} value={subj}>{subj}</option>
+                    ))}
+                  </select>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Classe / Niveau</label>
-                  <input
-                    type="text"
+                  <select
                     required
                     value={newCourse.grade}
                     onChange={(e) => setNewCourse({ ...newCourse, grade: e.target.value })}
-                    placeholder="Ex: 6ème A"
-                    className="w-full px-4 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500"
-                  />
+                    className="w-full px-4 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 appearance-none cursor-pointer"
+                  >
+                    <option value="">Sélectionner une classe</option>
+                    {SCHOOL_CLASSES.map(cls => (
+                      <option key={cls} value={cls}>{cls}</option>
+                    ))}
+                  </select>
                 </div>
               </div>
 

@@ -5,9 +5,8 @@ import { Sparkles, Upload, Send, CheckCircle, AlertCircle, Loader2, Image as Ima
 import { createNotification } from '../services/NotificationService';
 import { collection, query, getDocs, where, addDoc, serverTimestamp, onSnapshot, orderBy, deleteDoc, doc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
-import { GoogleGenAI } from "@google/genai";
-
-let aiInstance: GoogleGenAI | null = null;
+import { generateAIContent } from '../services/aiService';
+import { SCHOOL_CLASSES, SCHOOL_SUBJECTS } from '../constants';
 
 interface AIAssistantProps {
   onNavigate?: (tab: string, params?: any) => void;
@@ -17,17 +16,6 @@ export default function AIAssistant({ onNavigate }: AIAssistantProps) {
   const { t, language } = useLanguage();
   const { currentUser } = useAuth();
   const [activeTab, setActiveTab] = useState<'grading' | 'preparations' | 'prompts' | 'my_preps'>('grading');
-
-  const getAI = () => {
-    if (!aiInstance) {
-      const apiKey = process.env.GEMINI_API_KEY;
-      if (!apiKey) {
-        throw new Error(t('gemini_api_not_configured'));
-      }
-      aiInstance = new GoogleGenAI({ apiKey });
-    }
-    return aiInstance;
-  };
 
   // Grading State
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -43,6 +31,7 @@ export default function AIAssistant({ onNavigate }: AIAssistantProps) {
   const [prepTopic, setPrepTopic] = useState('');
   const [prepGrade, setPrepGrade] = useState('');
   const [prepSubject, setPrepSubject] = useState('');
+  const [subjects, setSubjects] = useState<{id: string, name: string}[]>([]);
   const [prepType, setPrepType] = useState('lesson_plan');
   const [isGeneratingPrep, setIsGeneratingPrep] = useState(false);
   const [generatedPrep, setGeneratedPrep] = useState<string | null>(null);
@@ -97,6 +86,17 @@ export default function AIAssistant({ onNavigate }: AIAssistantProps) {
     fetchStudents();
   }, []);
 
+  // Fetch Subjects
+  useEffect(() => {
+    const unsubscribe = onSnapshot(collection(db, 'subjects'), (snap) => {
+      if (!snap.empty) {
+        const subjectsData = snap.docs.map(doc => ({ id: doc.id, name: doc.data().name as string }));
+        setSubjects(subjectsData.sort((a, b) => a.name.localeCompare(b.name)));
+      }
+    });
+    return () => unsubscribe();
+  }, []);
+
   // Real-time listener for saved preparations
   useEffect(() => {
     if (!currentUser) return;
@@ -149,8 +149,8 @@ export default function AIAssistant({ onNavigate }: AIAssistantProps) {
         Respond in ${language === 'fr' ? 'French' : language === 'es' ? 'Spanish' : language === 'zh' ? 'Chinese' : language === 'ja' ? 'Japanese' : 'English'} in a structured way with clear titles.
       `;
 
-      const response = await getAI().models.generateContent({
-        model: "gemini-3-flash-preview",
+      const response = await generateAIContent({
+        model: "gemini-1.5-flash",
         contents: {
           parts: [
             { text: prompt },
@@ -197,8 +197,8 @@ export default function AIAssistant({ onNavigate }: AIAssistantProps) {
         Respond in ${language === 'fr' ? 'French' : language === 'es' ? 'Spanish' : language === 'zh' ? 'Chinese' : language === 'ja' ? 'Japanese' : 'English'}.
       `;
 
-      const response = await getAI().models.generateContent({
-        model: "gemini-3-flash-preview",
+      const response = await generateAIContent({
+        model: "gemini-1.5-flash",
         contents: { parts: [{ text: prompt }] }
       });
 
@@ -461,13 +461,16 @@ export default function AIAssistant({ onNavigate }: AIAssistantProps) {
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">{t('subject')}</label>
-                  <input
-                    type="text"
+                  <select
                     value={prepSubject}
                     onChange={(e) => setPrepSubject(e.target.value)}
-                    placeholder={t('subject_placeholder')}
-                    className="w-full p-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
-                  />
+                    className="w-full p-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none appearance-none cursor-pointer"
+                  >
+                    <option value="">{t('subject_placeholder')}</option>
+                    {(subjects.length > 0 ? subjects.map(s => s.name) : SCHOOL_SUBJECTS).map(subj => (
+                      <option key={subj} value={subj}>{subj}</option>
+                    ))}
+                  </select>
                 </div>
 
                 <div>
@@ -483,13 +486,16 @@ export default function AIAssistant({ onNavigate }: AIAssistantProps) {
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">{t('grade_level')}</label>
-                  <input
-                    type="text"
+                  <select
                     value={prepGrade}
                     onChange={(e) => setPrepGrade(e.target.value)}
-                    placeholder="Ex: CM1, 3ème, Terminale..."
-                    className="w-full p-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
-                  />
+                    className="w-full p-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none appearance-none cursor-pointer"
+                  >
+                    <option value="">{t('choose_class')}</option>
+                    {SCHOOL_CLASSES.map(cls => (
+                      <option key={cls} value={cls}>{cls}</option>
+                    ))}
+                  </select>
                 </div>
 
                 <div>

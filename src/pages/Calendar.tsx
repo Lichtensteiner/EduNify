@@ -189,7 +189,7 @@ export default function Calendar() {
 
   const handleSyncCalendar = () => {
     // Generate ICS file
-    let icsContent = "BEGIN:VCALENDAR\nVERSION:2.0\nPRODID:-//ShopUniversities//Calendar//EN\n";
+    let icsContent = "BEGIN:VCALENDAR\nVERSION:2.0\nPRODID:-//Edu-Nify//Calendar//EN\n";
     
     events.forEach(event => {
       const formatDate = (date: Date) => {
@@ -197,7 +197,7 @@ export default function Calendar() {
       };
       
       icsContent += "BEGIN:VEVENT\n";
-      icsContent += `UID:${event.id}@shopuniversities.com\n`;
+      icsContent += `UID:${event.id}@edu-nify.com\n`;
       icsContent += `DTSTAMP:${formatDate(new Date())}\n`;
       icsContent += `DTSTART:${formatDate(event.start)}\n`;
       icsContent += `DTEND:${formatDate(event.end)}\n`;

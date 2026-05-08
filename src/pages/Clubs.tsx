@@ -27,7 +27,9 @@ import {
   Info,
   Layers,
   Award,
-  X
+  X,
+  FileText,
+  Calendar as CalendarIcon
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -59,6 +61,37 @@ const Clubs: React.FC = () => {
     category: 'Culturel'
   });
   const [isSaving, setIsSaving] = useState(false);
+  const [selectedClubForMembers, setSelectedClubForMembers] = useState<Club | null>(null);
+  const [membersDetails, setMembersDetails] = useState<any[]>([]);
+  const [loadingMembers, setLoadingMembers] = useState(false);
+
+  // Fetch members details when a club is selected
+  useEffect(() => {
+    const fetchMembersDetails = async () => {
+      if (!selectedClubForMembers || !selectedClubForMembers.members || selectedClubForMembers.members.length === 0) {
+        setMembersDetails([]);
+        return;
+      }
+
+      setLoadingMembers(true);
+      try {
+        const membersData: any[] = [];
+        // Firestore doesn't support 'in' queries with more than 30 elements easily, 
+        // but for school clubs this should be sufficient for now.
+        // If more, we'd need to chunk the requests.
+        const q = query(collection(db, 'users'), where('id', 'in', selectedClubForMembers.members.slice(0, 30)));
+        const snap = await getDocs(q);
+        snap.forEach(doc => membersData.push({ id: doc.id, ...doc.data() }));
+        setMembersDetails(membersData);
+      } catch (error) {
+        console.error("Error fetching members details:", error);
+      } finally {
+        setLoadingMembers(false);
+      }
+    };
+
+    fetchMembersDetails();
+  }, [selectedClubForMembers]);
 
   useEffect(() => {
     const unsubscribe = onSnapshot(collection(db, 'clubs'), (snapshot) => {
@@ -277,29 +310,41 @@ const Clubs: React.FC = () => {
                   </div>
 
                   <div className="flex items-center justify-between pt-2">
-                    <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400">
+                    <button
+                      onClick={() => setSelectedClubForMembers(club)}
+                      className="flex items-center gap-2 text-gray-500 hover:text-indigo-600 transition-colors"
+                    >
                       <Users size={16} />
-                      <span className="text-sm font-medium">{club.members?.length || 0} membres</span>
-                    </div>
+                      <span className="text-sm font-medium underline decoration-dotted">{club.members?.length || 0} membres</span>
+                    </button>
 
-                    {isLeader ? (
-                      <span className="px-4 py-2 bg-amber-50 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 rounded-xl text-sm font-bold flex items-center gap-2">
-                        <Settings size={16} />
-                        Gérant
-                      </span>
-                    ) : (
+                    <div className="flex gap-2">
                       <button
-                        onClick={() => handleJoinLeaveClub(club)}
-                        className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all ${
-                          isMember 
-                            ? 'bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 hover:bg-red-100' 
-                            : 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-300 hover:bg-indigo-100'
-                        }`}
+                        onClick={() => setSelectedClubForMembers(club)}
+                        className="p-2 bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 rounded-lg hover:bg-gray-100 transition-colors"
+                        title="Voir la liste"
                       >
-                        {isMember ? <UserMinus size={18} /> : <UserPlus size={18} />}
-                        {isMember ? 'Quitter' : 'Rejoindre'}
+                        <Info size={18} />
                       </button>
-                    )}
+                      {isLeader ? (
+                        <span className="px-4 py-2 bg-amber-50 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 rounded-xl text-sm font-bold flex items-center gap-2">
+                          <Settings size={16} />
+                          Gérant
+                        </span>
+                      ) : (
+                        <button
+                          onClick={() => handleJoinLeaveClub(club)}
+                          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all ${
+                            isMember 
+                              ? 'bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 hover:bg-red-100' 
+                              : 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-300 hover:bg-indigo-100'
+                          }`}
+                        >
+                          {isMember ? <UserMinus size={18} /> : <UserPlus size={18} />}
+                          {isMember ? 'Quitter' : 'Rejoindre'}
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
               </motion.div>
@@ -394,6 +439,120 @@ const Clubs: React.FC = () => {
                 </button>
               </div>
             </form>
+          </motion.div>
+        </div>
+      )}
+
+      {/* View Members Modal */}
+      {selectedClubForMembers && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <motion.div
+            initial={{ opacity: 0, y: 50, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            className="bg-white dark:bg-gray-800 rounded-3xl shadow-2xl w-full max-w-4xl overflow-hidden"
+          >
+            <div className="p-6 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between bg-indigo-600">
+              <div className="flex items-center gap-4 text-white">
+                <div className="p-3 bg-white/20 rounded-2xl">
+                  <Users size={24} />
+                </div>
+                <div>
+                  <h2 className="text-xl font-bold">Membres du Club</h2>
+                  <p className="text-indigo-100 text-sm">{selectedClubForMembers.name}</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setSelectedClubForMembers(null)} 
+                className="p-2 hover:bg-white/10 rounded-full transition-colors"
+              >
+                <X size={24} className="text-white" />
+              </button>
+            </div>
+
+            <div className="p-6 max-h-[70vh] overflow-y-auto">
+              {loadingMembers ? (
+                <div className="flex flex-col items-center justify-center py-20 gap-4">
+                  <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-indigo-600"></div>
+                  <p className="text-gray-500 font-medium">Chargement des membres...</p>
+                </div>
+              ) : membersDetails.length > 0 ? (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-separate border-spacing-y-2">
+                    <thead>
+                      <tr className="text-gray-400 text-xs font-bold uppercase tracking-widest">
+                        <th className="px-6 py-3">Élève</th>
+                        <th className="px-6 py-3">Classe / Niveau</th>
+                        <th className="px-6 py-3">Rôle</th>
+                        <th className="px-6 py-3">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="space-y-2">
+                      {membersDetails.map((member) => (
+                        <tr key={member.id} className="bg-gray-50 dark:bg-gray-900/50 hover:bg-gray-100 dark:hover:bg-gray-900 transition-colors group">
+                          <td className="px-6 py-4 rounded-l-2xl">
+                            <div className="flex items-center gap-3">
+                              {member.photoURL ? (
+                                <img src={member.photoURL} alt="" className="w-10 h-10 rounded-xl object-cover ring-2 ring-white dark:ring-gray-800" />
+                              ) : (
+                                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white font-bold">
+                                  {member.prenom?.[0]}{member.nom?.[0]}
+                                </div>
+                              )}
+                              <div>
+                                <p className="font-bold text-gray-900 dark:text-white capitalize leading-none">{member.prenom} {member.nom}</p>
+                                <p className="text-[10px] text-gray-500 dark:text-gray-400 mt-1 uppercase tracking-tighter">Matricule: {member.id.substring(0, 8).toUpperCase()}</p>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4">
+                            <span className="px-3 py-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs font-bold text-gray-600 dark:text-gray-400">
+                              {member.classe || member.grade || 'N/A'}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4">
+                            <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${
+                              member.role === 'admin' ? 'bg-amber-100 text-amber-600' : 'bg-blue-100 text-blue-600'
+                            }`}>
+                              {member.role === 'enseignant' ? 'Référent' : 'Membre'}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 rounded-r-2xl">
+                            <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <button className="p-2 bg-white dark:bg-gray-800 text-gray-400 hover:text-indigo-600 rounded-lg border border-gray-100 dark:border-gray-700 shadow-sm transition-all">
+                                <FileText size={16} />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="text-center py-20 space-y-4">
+                  <div className="w-20 h-20 bg-gray-50 dark:bg-gray-700/50 rounded-full flex items-center justify-center mx-auto text-gray-300">
+                    <Users size={40} />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-bold text-gray-900 dark:text-white">Aucun membre pour le moment</h3>
+                    <p className="text-gray-500">Encouragez les élèves à rejoindre ce club !</p>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="p-6 bg-gray-50 dark:bg-gray-900/50 border-t border-gray-100 dark:border-gray-700 flex justify-between items-center text-sm font-medium text-gray-500">
+              <div className="flex gap-4">
+                <span className="flex items-center gap-2"><CalendarIcon size={14} /> Réunion hebdomadaire</span>
+                <span className="flex items-center gap-2"><Award size={14} /> Certifié Edu-Nify</span>
+              </div>
+              <button 
+                onClick={() => setSelectedClubForMembers(null)}
+                className="px-6 py-2 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-200 dark:shadow-none"
+              >
+                Fermer
+              </button>
+            </div>
           </motion.div>
         </div>
       )}

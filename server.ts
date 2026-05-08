@@ -16,6 +16,31 @@ async function startServer() {
 
   app.use(express.json({ limit: '50mb' }));
 
+  // AI endpoint
+  app.post("/api/ai/generate", async (req, res) => {
+    const { model, contents, config } = req.body;
+    
+    if (!process.env.GEMINI_API_KEY) {
+      console.error("GEMINI_API_KEY not found in environment");
+      return res.status(500).json({ error: "La clé API Gemini n'est pas configurée sur le serveur." });
+    }
+
+    try {
+      const genAI = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+      
+      const result = await genAI.models.generateContent({
+        model: model || "gemini-3-flash-preview",
+        contents,
+        config
+      });
+      
+      res.json({ text: result.text });
+    } catch (error: any) {
+      console.error("AI Generation Error:", error);
+      res.status(500).json({ error: error.message || "Erreur lors de la génération par l'IA" });
+    }
+  });
+
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({

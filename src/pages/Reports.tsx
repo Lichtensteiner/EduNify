@@ -219,7 +219,7 @@ Voici le résumé de votre présence pour la ${selectedReport.semaine} :
 Analyse : ${selectedReport.analyse}
 
 Cordialement,
-L'équipe ShopUniversities`);
+L'équipe Edu-Nify`);
     
     window.location.href = `mailto:${selectedReport.user_email || ''}?subject=${subject}&body=${body}`;
   };
@@ -318,10 +318,10 @@ L'équipe ShopUniversities`);
               <div className="border-b-2 border-indigo-600 pb-6 mb-8 flex flex-col md:flex-row justify-between items-center md:items-start text-center md:text-left gap-4">
                 <div className="flex flex-col items-center md:items-start">
                   <div className="flex items-center gap-3 mb-2">
-                    <img src="/logo.png" alt="ShopUniversities" className="h-16 object-contain" />
+                    <img src="/logo.png" alt="Edu-Nify" className="h-16 object-contain" />
                   </div>
                   <div className="text-[10px] text-gray-500 space-y-0.5">
-                    <p className="font-bold text-gray-800 text-xs">Ecole Internationale Du Centre Pédagogique ShopUniversities</p>
+                    <p className="font-bold text-gray-800 text-xs">Ecole Internationale Du Centre Pédagogique Edu-Nify</p>
                     <p>529 Avenue Félix HOUPHOUËT-BOIGNY, Trois Quartier, Libreville GABON</p>
                     <p>Contact: +241 011 44 9292 / 062 24 8425 / 077022307 / 062641120</p>
                     <p>Email: ludo.consulting3@gmail.com</p>
@@ -396,7 +396,7 @@ L'équipe ShopUniversities`);
               </div>
               
               <div className="mt-12 text-center text-xs text-gray-400">
-                Document généré automatiquement par le système ShopUniversities le {new Date().toLocaleDateString('fr-FR')} à {new Date().toLocaleTimeString('fr-FR')}
+                Document généré automatiquement par le système Edu-Nify le {new Date().toLocaleDateString('fr-FR')} à {new Date().toLocaleTimeString('fr-FR')}
               </div>
             </div>
           ) : (

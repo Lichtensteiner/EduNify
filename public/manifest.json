@@ -1,6 +1,6 @@
 {
-  "name": "ShopUniversities",
-  "short_name": "ShopUni",
+  "name": "Edu-Nify",
+  "short_name": "Edu-Nify",
   "description": "Application de gestion scolaire complète",
   "start_url": "/",
   "display": "standalone",
