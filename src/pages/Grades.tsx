@@ -230,6 +230,18 @@ const Grades: React.FC = () => {
   const { evolutionData, hwData, subjectAverages } = getAnalyticsData();
 
   const handleDeleteGrade = async (id: string) => {
+    const grade = grades.find(g => g.id === id);
+    if (!grade) return;
+
+    // Permissions check
+    const canManage = currentUser?.role === 'admin' || 
+                    (currentUser?.role === 'enseignant' && (grade.teacherId === currentUser.id || currentUser.matieres?.includes(grade.subject) || currentUser.matiere === grade.subject));
+    
+    if (!canManage) {
+      alert(t('insufficient_permissions') || "Vous n'avez pas l'autorisation de supprimer cette note.");
+      return;
+    }
+
     if (!window.confirm(t('confirm_delete_grade') || 'Êtes-vous sûr de vouloir supprimer cette note ?')) return;
     try {
       await deleteDoc(doc(db, 'grades', id));
@@ -239,6 +251,15 @@ const Grades: React.FC = () => {
   };
 
   const handleEditGrade = (grade: Grade) => {
+    // Permissions check
+    const canManage = currentUser?.role === 'admin' || 
+                    (currentUser?.role === 'enseignant' && (grade.teacherId === currentUser.id || currentUser.matieres?.includes(grade.subject) || currentUser.matiere === grade.subject));
+    
+    if (!canManage) {
+      alert(t('insufficient_permissions') || "Vous n'avez pas l'autorisation de modifier cette note.");
+      return;
+    }
+
     setEditingGrade(grade);
     setNewGrade({
       studentId: grade.studentId,
@@ -664,7 +685,7 @@ const Grades: React.FC = () => {
                         >
                           <Eye size={18} />
                         </button>
-                        {(currentUser?.role === 'enseignant' || currentUser?.role === 'admin') && (
+                        {(currentUser?.role === 'admin' || (currentUser?.role === 'enseignant' && (grade.teacherId === currentUser.id || currentUser.matieres?.includes(grade.subject) || currentUser.matiere === grade.subject))) && (
                           <>
                             <button 
                               onClick={() => handleEditGrade(grade)}
@@ -781,9 +802,17 @@ const Grades: React.FC = () => {
                           className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all font-medium text-sm dark:text-white"
                         >
                           <option value="">{t('select_subject') || 'Sélectionner une matière'}</option>
-                          {classes.find(c => c.nom === newGrade.classId)?.matieres?.map((m: string) => (
-                            <option key={m} value={m}>{m}</option>
-                          ))}
+                          {classes.find(c => c.nom === newGrade.classId)?.matieres
+                            ?.filter((m: string) => {
+                              if (currentUser?.role === 'admin') return true;
+                              if (currentUser?.role === 'enseignant') {
+                                return currentUser.matieres?.includes(m) || currentUser.matiere === m;
+                              }
+                              return false;
+                            })
+                            ?.map((m: string) => (
+                              <option key={m} value={m}>{m}</option>
+                            ))}
                         </select>
                       </div>
                     </div>

@@ -37,6 +37,24 @@ service cloud.firestore {
       return isParent() && ('children_ids' in getUserData()) && (childId in getUserData().children_ids);
     }
 
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function canManageBySubject(subject) {
+      let user = get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+      return isAdmin() || (
+        isTeacher() && (
+          (user.get('matiere', '') == subject) || 
+          (user.get('matieres', []).hasAny([subject]))
+        )
+      );
+    }
+
     // ===============================================================
     // Collections
     // ===============================================================
@@ -86,8 +104,30 @@ service cloud.firestore {
 
     // Grades Collection
     match /grades/{gradeId} {
+      function isValidGrade(data) {
+        return data.keys().hasAll(['studentId', 'subject', 'score', 'maxScore', 'title', 'teacherId']) &&
+               data.studentId is string && 
+               data.subject is string &&
+               data.score is number &&
+               data.maxScore is number &&
+               data.title is string && data.title.size() <= 200 &&
+               data.teacherId == request.auth.uid;
+      }
+
       allow read: if isAuthenticated() && (isAdmin() || isTeacher() || isOwner(resource.data.studentId) || isChildOf(resource.data.studentId));
-      allow write: if isAdmin() || isTeacher();
+      
+      allow create: if isAuthenticated() && isValidGrade(incoming()) && canManageBySubject(incoming().subject);
+      
+      allow update: if isAuthenticated() && isValidGrade(incoming()) && canManageBySubject(existing().subject) && (
+        isAdmin() || (
+          incoming().diff(existing()).affectedKeys().hasOnly(['score', 'maxScore', 'coefficient', 'title', 'comment', 'type', 'updatedAt']) &&
+          incoming().subject == existing().subject &&
+          incoming().studentId == existing().studentId &&
+          incoming().teacherId == existing().teacherId
+        )
+      );
+      
+      allow delete: if isAuthenticated() && canManageBySubject(existing().subject);
     }
 
     // Sanctions Collection
@@ -162,15 +202,15 @@ service cloud.firestore {
     // Preparations Collection (Courses)
     match /preparations/{prepId} {
       allow read: if isAuthenticated();
-      allow create: if isAdmin() || isTeacher() || isStaff();
-      allow update, delete: if isAdmin() || (isAuthenticated() && request.auth.uid == resource.data.authorId);
+      allow create: if isAuthenticated() && canManageBySubject(incoming().subject);
+      allow update, delete: if isAdmin() || (request.auth.uid == existing().authorId && canManageBySubject(existing().subject));
     }
 
     // Resources Collection
     match /resources/{resourceId} {
       allow read: if isAuthenticated();
-      allow create: if isAdmin() || isTeacher();
-      allow update, delete: if isAdmin() || (isAuthenticated() && request.auth.uid == resource.data.teacher_id);
+      allow create: if isAuthenticated() && canManageBySubject(incoming().subject);
+      allow update, delete: if isAdmin() || (isAuthenticated() && request.auth.uid == existing().teacher_id && canManageBySubject(existing().subject));
     }
 
     // Clubs Collection
@@ -193,11 +233,13 @@ service cloud.firestore {
     // Homework Collection
     match /homework/{homeworkId} {
       allow read: if isAuthenticated();
-      allow create: if isAdmin() || isTeacher();
-      allow update: if isAdmin() || 
-        (isTeacher() && request.auth.uid == resource.data.teacherId) ||
-        (isAuthenticated() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['completedBy']));
-      allow delete: if isAdmin() || (isTeacher() && request.auth.uid == resource.data.teacherId);
+      allow create: if isAuthenticated() && canManageBySubject(incoming().subject);
+      allow update: if isAuthenticated() && (
+        isAdmin() || 
+        (isTeacher() && request.auth.uid == existing().teacherId && canManageBySubject(existing().subject)) ||
+        (incoming().diff(existing()).affectedKeys().hasOnly(['completedBy']))
+      );
+      allow delete: if isAdmin() || (isTeacher() && request.auth.uid == existing().teacherId && canManageBySubject(existing().subject));
     }
   }
 }

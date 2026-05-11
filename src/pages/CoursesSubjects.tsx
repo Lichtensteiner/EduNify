@@ -509,33 +509,46 @@ export default function CoursesSubjects({ initialPrepId }: CoursesSubjectsProps)
           )}
         </>
       ) : (
-        <div className="space-y-6">
-          {/* Global Subjects Management */}
-          {currentUser?.role === 'admin' && (
-            <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm">
-              <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                <Plus className="text-indigo-600" size={20} />
-                Gestion des Matières Globales
-              </h3>
-              <div className="flex gap-4">
-                <input
-                  type="text"
-                  value={newSubjectName}
-                  onChange={(e) => setNewSubjectName(e.target.value)}
-                  placeholder="Nom de la nouvelle matière..."
-                  className="flex-1 px-4 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500"
-                />
-                <button
-                  onClick={handleAddSubject}
-                  disabled={isAddingSubject || !newSubjectName.trim()}
-                  className="px-6 py-2 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 transition-colors disabled:bg-indigo-400"
-                >
-                  {isAddingSubject ? 'Ajout...' : 'Ajouter'}
-                </button>
+        <div className="space-y-8 animate-in fade-in duration-500">
+          {/* Global Subjects Repertoire */}
+          <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+              <div>
+                <h3 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                  <BookOpen className="text-indigo-600" size={24} />
+                  Répertoire des Matières
+                </h3>
+                <p className="text-xs text-gray-500 mt-1">Liste exhaustive de toutes les disciplines enseignées dans l'établissement</p>
               </div>
-              <div className="mt-4 flex flex-wrap gap-2">
+              
+              {currentUser?.role === 'admin' && (
+                <div className="flex gap-2 w-full md:w-auto">
+                  <input
+                    type="text"
+                    value={newSubjectName}
+                    onChange={(e) => setNewSubjectName(e.target.value)}
+                    placeholder="Nouvelle matière..."
+                    className="flex-1 md:w-64 px-4 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
+                  />
+                  <button
+                    onClick={handleAddSubject}
+                    disabled={isAddingSubject || !newSubjectName.trim()}
+                    className="px-4 py-2 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 transition-colors disabled:bg-indigo-400 flex items-center gap-2 whitespace-nowrap text-sm"
+                  >
+                    <Plus size={18} />
+                    {isAddingSubject ? '...' : 'Ajouter'}
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {subjects.length > 0 ? (
+              <div className="flex flex-wrap gap-2">
                 {subjects.map((subj) => (
-                  <div key={subj.id} className="flex items-center gap-2 px-3 py-1 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 text-xs font-medium rounded-full border border-gray-200 dark:border-gray-600 group">
+                  <div 
+                    key={subj.id} 
+                    className="flex items-center gap-2 px-4 py-2 bg-gray-50 dark:bg-gray-900/50 text-gray-700 dark:text-gray-300 text-sm font-bold rounded-xl border border-gray-100 dark:border-gray-700 group hover:border-indigo-200 dark:hover:border-indigo-900 transition-all hover:bg-white dark:hover:bg-gray-800"
+                  >
                     {editingSubject?.id === subj.id ? (
                       <div className="flex items-center gap-1">
                         <input
@@ -543,7 +556,7 @@ export default function CoursesSubjects({ initialPrepId }: CoursesSubjectsProps)
                           type="text"
                           value={editingSubject.name}
                           onChange={(e) => setEditingSubject({ ...editingSubject, name: e.target.value })}
-                          className="bg-white dark:bg-gray-800 border border-indigo-500 rounded px-1 outline-none w-24"
+                          className="bg-white dark:bg-gray-800 border border-indigo-500 rounded px-2 py-0.5 outline-none w-32"
                           onKeyDown={(e) => e.key === 'Enter' && handleUpdateSubjectName()}
                           onBlur={() => setEditingSubject(null)}
                         />
@@ -551,58 +564,87 @@ export default function CoursesSubjects({ initialPrepId }: CoursesSubjectsProps)
                     ) : (
                       <span>{subj.name}</span>
                     )}
-                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button 
-                        onClick={() => setEditingSubject(subj)}
-                        className="p-1 hover:text-indigo-600"
-                        title="Modifier"
-                      >
-                        <Edit size={12} />
-                      </button>
-                      <button 
-                        onClick={() => handleDeleteSubject(subj.id)}
-                        className="p-1 hover:text-red-500"
-                        title="Supprimer"
-                      >
-                        <Trash2 size={12} />
-                      </button>
-                    </div>
+                    
+                    {currentUser?.role === 'admin' && (
+                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity ml-2 border-l border-gray-200 dark:border-gray-700 pl-2">
+                        <button 
+                          onClick={() => setEditingSubject(subj)}
+                          className="p-1 hover:text-indigo-600 transition-colors"
+                          title="Modifier"
+                        >
+                          <Edit size={14} />
+                        </button>
+                        <button 
+                          onClick={() => handleDeleteSubject(subj.id)}
+                          className="p-1 hover:text-red-500 transition-colors"
+                          title="Supprimer"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
-            </div>
-          )}
+            ) : (
+              <div className="text-center py-8 bg-gray-50 dark:bg-gray-900/50 rounded-2xl border border-dashed border-gray-200 dark:border-gray-700">
+                <RefreshCw size={24} className="mx-auto text-gray-300 animate-spin mb-2" />
+                <p className="text-sm text-gray-500 italic">Chargement du répertoire...</p>
+              </div>
+            )}
+          </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {classes.map(cls => (
-            <div key={cls.id} className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm overflow-hidden">
-              <div className="p-6 border-b border-gray-100 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/50">
-                <h3 className="text-lg font-bold text-gray-900 dark:text-white">{cls.nom}</h3>
-                <p className="text-xs text-gray-500 dark:text-gray-400">{cls.niveau}</p>
-              </div>
-              <div className="p-6 space-y-3">
-                <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Matières enseignées</h4>
-                {cls.matieres && cls.matieres.length > 0 ? (
-                  <div className="flex flex-wrap gap-2">
-                    {cls.matieres.map((m: string, idx: number) => (
-                      <span key={idx} className="px-3 py-1.5 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400 text-sm font-medium rounded-xl border border-indigo-100 dark:border-indigo-800">
-                        {m}
-                      </span>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-sm text-gray-400 italic">Aucune matière définie pour cette classe.</p>
-                )}
-              </div>
+          <div className="space-y-4">
+            <div className="flex items-center gap-2 px-2">
+              <div className="w-2 h-6 bg-amber-500 rounded-full"></div>
+              <h3 className="text-lg font-bold text-gray-900 dark:text-white uppercase tracking-wider">Répartition par Classe</h3>
             </div>
-          ))}
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {classes.map(cls => (
+                <div key={cls.id} className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm overflow-hidden group hover:shadow-md transition-all">
+                  <div className="p-6 border-b border-gray-100 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/50 flex justify-between items-start">
+                    <div>
+                      <h3 className="text-lg font-bold text-gray-900 dark:text-white group-hover:text-indigo-600 transition-colors">{cls.nom}</h3>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 font-medium uppercase tracking-tighter">{cls.niveau}</p>
+                    </div>
+                    <div className="w-10 h-10 bg-indigo-50 dark:bg-indigo-900/30 rounded-xl flex items-center justify-center text-indigo-600">
+                      <GraduationCap size={20} />
+                    </div>
+                  </div>
+                  <div className="p-6 space-y-4">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Matières Active</h4>
+                      <span className="text-[10px] font-bold bg-indigo-100 dark:bg-indigo-900 text-indigo-600 px-2 py-0.5 rounded-full">
+                        {cls.matieres?.length || 0}
+                      </span>
+                    </div>
+                    {cls.matieres && cls.matieres.length > 0 ? (
+                      <div className="flex flex-wrap gap-2">
+                        {cls.matieres.sort().map((m: string, idx: number) => (
+                          <span key={idx} className="px-3 py-1.5 bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-300 text-xs font-bold rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm">
+                            {m}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="py-4 text-center bg-gray-50 dark:bg-gray-900/30 rounded-xl border border-dashed border-gray-200 dark:border-gray-700">
+                        <p className="text-xs text-gray-400 italic">Aucune matière définie</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+          
           {classes.length === 0 && (
             <div className="col-span-full bg-white dark:bg-gray-800 rounded-2xl border border-dashed border-gray-200 dark:border-gray-700 p-12 text-center">
-              <p className="text-gray-500 dark:text-gray-400">Aucune classe trouvée.</p>
+              <RefreshCw size={32} className="mx-auto text-gray-300 animate-spin mb-4" />
+              <p className="text-gray-500 dark:text-gray-400 font-medium tracking-tight">Récupération des données en temps réel...</p>
             </div>
           )}
         </div>
-      </div>
       )}
 
       {/* Detail Modal */}
