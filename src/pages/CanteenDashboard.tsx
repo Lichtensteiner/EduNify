@@ -14,19 +14,25 @@ import {
   TrendingUp,
   Beef,
   Apple,
-  Coffee
+  Coffee,
+  Trash2,
+  Edit2,
+  Package,
+  ArrowRight,
+  Filter
 } from 'lucide-react';
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
   PieChart, Pie, Cell 
 } from 'recharts';
 import { db } from '../lib/firebase';
-import { collection, query, onSnapshot, addDoc, serverTimestamp, orderBy, limit } from 'firebase/firestore';
+import { collection, query, onSnapshot, addDoc, serverTimestamp, orderBy, limit, deleteDoc, doc, updateDoc, where } from 'firebase/firestore';
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
+import { recordAuditLog } from '../services/auditService';
 
-const COLORS = ['#4f46e5', '#10b981', '#f59e0b', '#ef4444'];
+const COLORS = ['#4f46e5', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
 
 export default function CanteenDashboard() {
   const { currentUser } = useAuth();
@@ -35,6 +41,9 @@ export default function CanteenDashboard() {
   const [stock, setStock] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddMenu, setShowAddMenu] = useState(false);
+  const [showAddStock, setShowAddStock] = useState(false);
+  const [editingMeal, setEditingMeal] = useState<any>(null);
+  
   const [newMeal, setNewMeal] = useState({
     title: '',
     description: '',
@@ -43,10 +52,18 @@ export default function CanteenDashboard() {
     calories: ''
   });
 
+  const [newStockItem, setNewStockItem] = useState({
+    name: '',
+    quantity: '',
+    unit: 'kg',
+    category: 'Epicerie',
+    minThreshold: '5'
+  });
+
   useEffect(() => {
     // Listen to meals/menus
     const unsubMeals = onSnapshot(
-      query(collection(db, 'canteen_menus'), orderBy('targetDate', 'desc'), limit(10)),
+      query(collection(db, 'canteen_menus'), orderBy('targetDate', 'desc'), limit(20)),
       (snapshot) => {
         setMeals(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
         setLoading(false);
@@ -67,374 +84,575 @@ export default function CanteenDashboard() {
   const handleAddMeal = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await addDoc(collection(db, 'canteen_menus'), {
-        ...newMeal,
-        createdAt: serverTimestamp(),
-        createdBy: currentUser?.id,
-        chefName: `${currentUser?.prenom} ${currentUser?.nom}`
-      });
+      if (editingMeal) {
+        await updateDoc(doc(db, 'canteen_menus', editingMeal.id), {
+          ...newMeal,
+          updatedAt: serverTimestamp()
+        });
+        await recordAuditLog({
+          userId: currentUser?.id || 'chef',
+          userName: `${currentUser?.prenom} ${currentUser?.nom}`,
+          userRole: currentUser?.role || 'cuisinier',
+          action: "Mise à jour de menu",
+          details: `Menu mis à jour: ${newMeal.title}`,
+          category: 'canteen'
+        });
+      } else {
+        await addDoc(collection(db, 'canteen_menus'), {
+          ...newMeal,
+          createdAt: serverTimestamp(),
+          createdBy: currentUser?.id,
+          chefName: `${currentUser?.prenom} ${currentUser?.nom}`
+        });
+        await recordAuditLog({
+          userId: currentUser?.id || 'chef',
+          userName: `${currentUser?.prenom} ${currentUser?.nom}`,
+          userRole: currentUser?.role || 'cuisinier',
+          action: "Création de menu",
+          details: `Nouveau menu: ${newMeal.title} pour le ${newMeal.targetDate}`,
+          category: 'canteen'
+        });
+      }
       setShowAddMenu(false);
+      setEditingMeal(null);
       setNewMeal({ title: '', description: '', type: 'déjeuner', targetDate: new Date().toISOString().split('T')[0], calories: '' });
     } catch (error) {
-      console.error("Error adding meal:", error);
+      console.error("Error saving meal:", error);
     }
   };
 
-  const stockStats = [
-    { name: 'Fruits/Légumes', value: 45 },
-    { name: 'Viandes/Poissons', value: 25 },
-    { name: 'Produits Laitiers', value: 20 },
-    { name: 'Epicerie', value: 10 },
-  ];
+  const handleAddStock = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await addDoc(collection(db, 'canteen_stock'), {
+        ...newStockItem,
+        quantity: parseFloat(newStockItem.quantity),
+        minThreshold: parseFloat(newStockItem.minThreshold),
+        updatedAt: serverTimestamp()
+      });
+      await recordAuditLog({
+        userId: currentUser?.id || 'chef',
+        userName: `${currentUser?.prenom} ${currentUser?.nom}`,
+        userRole: currentUser?.role || 'cuisinier',
+        action: "Ajout de stock",
+        details: `Article ajouté: ${newStockItem.name} (${newStockItem.quantity}${newStockItem.unit})`,
+        category: 'canteen'
+      });
+      setShowAddStock(false);
+      setNewStockItem({ name: '', quantity: '', unit: 'kg', category: 'Epicerie', minThreshold: '5' });
+    } catch (error) {
+      console.error("Error adding stock:", error);
+    }
+  };
+
+  const deleteMeal = async (id: string, title: string) => {
+    if (!window.confirm("Supprimer ce menu ?")) return;
+    try {
+      await deleteDoc(doc(db, 'canteen_menus', id));
+      await recordAuditLog({
+        userId: currentUser?.id || 'chef',
+        userName: `${currentUser?.prenom} ${currentUser?.nom}`,
+        userRole: currentUser?.role || 'cuisinier',
+        action: "Suppression de menu",
+        details: `Menu supprimé: ${title}`,
+        category: 'canteen'
+      });
+    } catch (error) {
+      console.error("Error deleting meal:", error);
+    }
+  };
+
+  const deleteStock = async (id: string, name: string) => {
+    if (!window.confirm("Supprimer cet article du stock ?")) return;
+    try {
+      await deleteDoc(doc(db, 'canteen_stock', id));
+    } catch (error) {
+      console.error("Error deleting stock:", error);
+    }
+  };
+
+  // Derive stats
+  const alertCount = stock.filter(item => (item.quantity || 0) <= (item.minThreshold || 0)).length;
+  const categories = Array.from(new Set(stock.map(s => s.category || 'Inconnu')));
+  const stockStats = categories.map(cat => ({
+    name: cat,
+    value: stock.filter(s => s.category === cat).length
+  }));
+
+  const menuForToday = meals.find(m => m.targetDate === new Date().toISOString().split('T')[0]);
 
   return (
-    <div className="space-y-6">
+    <div className="max-w-7xl mx-auto space-y-8 pb-12 animate-in fade-in duration-700">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Tableau de Bord Cuisine</h1>
-          <p className="text-sm text-gray-500 mt-1">Gérez les repas, le stock et les menus de l'établissement.</p>
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
+        <div className="space-y-1">
+          <div className="flex items-center gap-3 mb-2">
+            <div className="p-3 bg-rose-600 outline outline-offset-4 outline-rose-100 rounded-2xl shadow-xl shadow-rose-200">
+              <Utensils size={28} className="text-white" />
+            </div>
+            <h1 className="text-3xl font-black text-gray-900 dark:text-white tracking-tight italic">
+              Gestion Cantine
+            </h1>
+          </div>
+          <p className="text-gray-500 dark:text-gray-400 font-medium max-w-xl">
+            Coordonnez la chaîne de restauration, suivez les stocks en temps réel et planifiez les apports nutritionnels.
+          </p>
         </div>
-        <button 
-          onClick={() => setShowAddMenu(true)}
-          className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl flex items-center gap-2 text-sm font-medium transition-all shadow-lg shadow-indigo-500/20"
-        >
-          <Plus size={18} />
-          Préparer un Menu
-        </button>
+        
+        <div className="flex flex-wrap gap-4">
+          <button 
+            onClick={() => {
+              setEditingMeal(null);
+              setNewMeal({ title: '', description: '', type: 'déjeuner', targetDate: new Date().toISOString().split('T')[0], calories: '' });
+              setShowAddMenu(true);
+            }}
+            className="flex-1 sm:flex-none flex items-center justify-center gap-2 bg-rose-600 hover:bg-rose-700 text-white px-6 py-3.5 rounded-2xl font-black transition-all shadow-xl shadow-rose-100 hover:scale-[1.02] active:scale-95 group"
+          >
+            <Plus size={20} className="group-hover:rotate-90 transition-transform" />
+            Nouveau Menu
+          </button>
+          <button 
+            onClick={() => setShowAddStock(true)}
+            className="flex-1 sm:flex-none flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-3.5 rounded-2xl font-black transition-all shadow-xl shadow-emerald-100 hover:scale-[1.02] active:scale-95"
+          >
+            <ShoppingCart size={20} />
+            Ajouter au Stock
+          </button>
+        </div>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <motion.div 
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm flex items-center gap-4"
-        >
-          <div className="w-12 h-12 bg-orange-50 text-orange-600 rounded-xl flex items-center justify-center">
-            <Utensils size={24} />
-          </div>
-          <div>
-            <p className="text-sm font-medium text-gray-500">Repas du jour</p>
-            <h3 className="text-2xl font-bold text-gray-900">450</h3>
-          </div>
-        </motion.div>
-
-        <motion.div 
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-          className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm flex items-center gap-4"
-        >
-          <div className="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center">
-            <CheckCircle2 size={24} />
-          </div>
-          <div>
-            <p className="text-sm font-medium text-gray-500">Qualité Service</p>
-            <h3 className="text-2xl font-bold text-gray-900">98%</h3>
-          </div>
-        </motion.div>
-
-        <motion.div 
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-          className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm flex items-center gap-4"
-        >
-          <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center">
-            <ShoppingCart size={24} />
-          </div>
-          <div>
-            <p className="text-sm font-medium text-gray-500">Commandes en cours</p>
-            <h3 className="text-2xl font-bold text-gray-900">12</h3>
-          </div>
-        </motion.div>
-
-        <motion.div 
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3 }}
-          className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm flex items-center gap-4"
-        >
-          <div className="w-12 h-12 bg-red-50 text-red-600 rounded-xl flex items-center justify-center">
-            <AlertCircle size={24} />
-          </div>
-          <div>
-            <p className="text-sm font-medium text-gray-500">Alertes Stock</p>
-            <h3 className="text-2xl font-bold text-gray-900">3</h3>
-          </div>
-        </motion.div>
+      {/* Dynamic Summary Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        {[
+          { label: 'Menu du jour', val: menuForToday?.title || 'Non défini', icon: Utensils, color: 'rose', trend: menuForToday?.calories + ' kcal' },
+          { label: 'Alertes Stock', val: alertCount, icon: AlertCircle, color: 'amber', trend: alertCount > 0 ? 'Réapprovisionnement nécessaire' : 'Stock optimal', warning: alertCount > 0 },
+          { label: 'Articles suivis', val: stock.length, icon: Package, color: 'indigo', trend: categories.length + ' catégories' },
+          { label: 'Participation', val: '450', icon: Users, color: 'sky', trend: '+12% vs hier' },
+        ].map((stat, i) => (
+          <motion.div
+            key={i}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: i * 0.1 }}
+            className={`p-6 rounded-[2rem] border bg-white dark:bg-gray-800 flex flex-col justify-between h-40 ${
+              stat.warning ? 'border-amber-200 bg-amber-50/30' : 'border-gray-50 dark:border-gray-700 shadow-sm'
+            }`}
+          >
+            <div className="flex justify-between items-start">
+              <div className={`p-2.5 rounded-xl bg-${stat.color}-50 text-${stat.color}-600 dark:bg-${stat.color}-900/30 dark:text-${stat.color}-400`}>
+                <stat.icon size={22} />
+              </div>
+              <span className={`text-[10px] font-black uppercase tracking-widest ${stat.warning ? 'text-amber-600' : 'text-gray-400'}`}>
+                {stat.label}
+              </span>
+            </div>
+            <div>
+              <h3 className="text-2xl font-black text-gray-900 dark:text-white truncate">{stat.val}</h3>
+              <p className={`text-[10px] font-bold ${stat.warning ? 'text-amber-600' : 'text-gray-400'} mt-1 truncate`}>
+                {stat.trend}
+              </p>
+            </div>
+          </motion.div>
+        ))}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Prochains Menus */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {/* Real-time Menu Manager */}
         <div className="lg:col-span-2 space-y-6">
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-                <Calendar size={20} className="text-indigo-600" />
-                Planning des Repas
-              </h3>
-              <div className="flex bg-gray-100 p-1 rounded-lg">
-                <button className="px-3 py-1 text-xs font-bold bg-white text-indigo-600 rounded-md shadow-sm">Hebdomadaire</button>
-                <button className="px-3 py-1 text-xs font-bold text-gray-500">Mensuel</button>
+          <div className="bg-white dark:bg-gray-800 rounded-[3rem] border border-gray-100 dark:border-gray-700 p-8 shadow-sm">
+            <div className="flex items-center justify-between mb-8">
+              <div>
+                <h3 className="text-xl font-black text-gray-900 dark:text-white flex items-center gap-3">
+                  <Calendar className="text-rose-600" size={24} />
+                  Planning Pédagogique Nutritionnel
+                </h3>
+                <p className="text-xs text-gray-400 font-medium mt-1">Les 20 prochains repas configurés</p>
+              </div>
+              <div className="hidden sm:flex bg-gray-50 dark:bg-gray-900/50 p-1.5 rounded-2xl border border-gray-100 dark:border-gray-700">
+                <button className="px-5 py-2 text-[10px] font-black uppercase tracking-widest bg-white dark:bg-gray-800 shadow-sm rounded-xl text-rose-600">Hebdomadaire</button>
+                <button className="px-5 py-2 text-[10px] font-black uppercase tracking-widest text-gray-400 hover:text-gray-600 transition-colors">Mensuel</button>
               </div>
             </div>
 
-            <div className="space-y-4">
-              {meals.length > 0 ? (
-                meals.map((meal) => (
-                  <div key={meal.id} className="flex items-center gap-4 p-4 rounded-xl border border-gray-50 hover:bg-gray-50 transition-colors group">
-                    <div className="w-16 h-16 rounded-xl bg-indigo-50 flex flex-col items-center justify-center text-indigo-600 shrink-0">
-                      <span className="text-[10px] font-bold uppercase tracking-tighter">{new Date(meal.targetDate).toLocaleDateString('fr-FR', { weekday: 'short' })}</span>
-                      <span className="text-xl font-black">{new Date(meal.targetDate).getDate()}</span>
+            <div className="grid gap-4">
+              <AnimatePresence mode="popLayout">
+                {meals.map((meal) => (
+                  <motion.div
+                    key={meal.id}
+                    layout
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: 20 }}
+                    className="group relative flex items-center gap-6 p-5 rounded-3xl border border-gray-50 dark:border-gray-700/50 hover:border-rose-200 dark:hover:border-rose-900/30 hover:bg-rose-50/10 dark:hover:bg-rose-900/5 transition-all"
+                  >
+                    <div className="w-20 h-20 rounded-2xl bg-rose-50 dark:bg-rose-900/20 flex flex-col items-center justify-center text-rose-600 shrink-0 border border-rose-100 dark:border-rose-900/30">
+                      <span className="text-[10px] font-black uppercase tracking-widest mb-1">{new Date(meal.targetDate).toLocaleDateString('fr-FR', { weekday: 'short' })}</span>
+                      <span className="text-2xl font-black tracking-tighter">{new Date(meal.targetDate).getDate()}</span>
                     </div>
+                    
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className={`text-[10px] uppercase font-black px-2 py-0.5 rounded-full ${
+                      <div className="flex flex-wrap items-center gap-3 mb-2">
+                        <span className={`px-4 py-1 rounded-xl text-[10px] font-black uppercase tracking-widest ${
                           meal.type === 'petit-déjeuner' ? 'bg-amber-100 text-amber-700' :
-                          meal.type === 'déjeuner' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'
+                          meal.type === 'déjeuner' ? 'bg-rose-100 text-rose-700' : 'bg-indigo-100 text-indigo-700'
                         }`}>
                           {meal.type}
                         </span>
-                        <h4 className="text-sm font-bold text-gray-900 truncate">{meal.title}</h4>
+                        {meal.targetDate === new Date().toISOString().split('T')[0] && (
+                          <span className="text-[10px] font-bold text-emerald-500 uppercase flex items-center gap-1">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                            Aujourd'hui
+                          </span>
+                        )}
                       </div>
-                      <p className="text-xs text-gray-500 line-clamp-1">{meal.description}</p>
+                      <h4 className="text-lg font-black text-gray-900 dark:text-white truncate italic tracking-tight">{meal.title}</h4>
+                      <p className="text-sm text-gray-500 line-clamp-1 font-medium">{meal.description}</p>
                     </div>
-                    <div className="flex items-center gap-3">
-                      <div className="text-right hidden sm:block">
-                        <p className="text-xs font-bold text-gray-900">{meal.calories} kcal</p>
-                        <p className="text-[10px] text-gray-400">Valeur nutr.</p>
+
+                    <div className="flex items-center gap-2">
+                      <div className="text-right hidden md:block mr-4">
+                        <p className="text-sm font-black text-gray-900 dark:text-white">{meal.calories || '0'} kcal</p>
+                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Énergie</p>
                       </div>
-                      <button className="p-2 text-gray-400 hover:text-indigo-600 transition-colors">
-                        <ChevronRight size={20} />
-                      </button>
+                      <div className="flex flex-col gap-1">
+                        <button 
+                          onClick={() => {
+                            setEditingMeal(meal);
+                            setNewMeal({
+                              title: meal.title,
+                              description: meal.description,
+                              type: meal.type,
+                              targetDate: meal.targetDate,
+                              calories: meal.calories || ''
+                            });
+                            setShowAddMenu(true);
+                          }}
+                          className="p-2 text-gray-400 hover:text-rose-600 transition-colors"
+                        >
+                          <Edit2 size={18} />
+                        </button>
+                        <button 
+                          onClick={() => deleteMeal(meal.id, meal.title)}
+                          className="p-2 text-gray-400 hover:text-red-600 transition-colors"
+                        >
+                          <Trash2 size={18} />
+                        </button>
+                      </div>
                     </div>
+                  </motion.div>
+                ))}
+              </AnimatePresence>
+
+              {meals.length === 0 && !loading && (
+                <div className="py-20 flex flex-col items-center justify-center text-center opacity-50">
+                  <div className="p-6 bg-gray-50 dark:bg-gray-900 rounded-full mb-4">
+                    <Utensils size={40} className="text-gray-300" />
                   </div>
-                ))
-              ) : (
-                <div className="text-center py-12 text-gray-500 bg-gray-50 rounded-2xl border-2 border-dashed border-gray-200">
-                  <Utensils size={40} className="mx-auto mb-3 opacity-20" />
-                  <p className="font-bold">Aucun menu planifié</p>
-                  <button onClick={() => setShowAddMenu(true)} className="text-sm text-indigo-600 font-bold mt-2">Cliquez pour ajouter le premier</button>
+                  <h4 className="text-lg font-black italic tracking-tight">Aucun menu planifié</h4>
+                  <p className="text-sm font-medium">Commencez par planifier vos apports nutritionnels.</p>
                 </div>
               )}
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Consomation Hebdo */}
-            <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
-              <h3 className="text-sm font-bold text-gray-900 mb-6 flex items-center gap-2">
-                <TrendingUp size={18} className="text-emerald-500" />
-                Participation des élèves
-              </h3>
-              <div className="h-48 w-full">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            {/* Dynamic Charts Integration */}
+            <div className="bg-white dark:bg-gray-800 p-8 rounded-[3rem] border border-gray-100 dark:border-gray-700 shadow-sm">
+              <div className="flex justify-between items-center mb-8">
+                <h3 className="text-lg font-black text-gray-900 dark:text-white italic tracking-tight">Analyse de Charge</h3>
+                <TrendingUp size={20} className="text-emerald-500" />
+              </div>
+              <div className="h-56 w-full">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={[
-                    { day: 'Lun', count: 420 },
-                    { day: 'Mar', count: 445 },
-                    { day: 'Mer', count: 310 },
-                    { day: 'Jeu', count: 430 },
-                    { day: 'Ven', count: 390 },
+                    { day: 'Lun', qty: 420 },
+                    { day: 'Mar', qty: 445 },
+                    { day: 'Mer', qty: 310 },
+                    { day: 'Jeu', qty: 430 },
+                    { day: 'Ven', qty: 395 },
                   ]}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
-                    <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{ fontSize: 10 }} />
-                    <Tooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
-                    <Bar dataKey="count" fill="#4f46e5" radius={[4, 4, 0, 0]} />
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} strokeOpacity={0.1} />
+                    <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 'bold' }} />
+                    <Tooltip cursor={{ fill: '#fef2f2' }} contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)' }} />
+                    <Bar dataKey="qty" fill="#e11d48" radius={[6, 6, 0, 0]} barSize={24} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
             </div>
 
-            {/* Ingrédients clés */}
-            <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
-              <h3 className="text-sm font-bold text-gray-900 mb-6 flex items-center gap-2">
-                <ShoppingCart size={18} className="text-blue-500" />
-                Ravitaillement Prioritaire
-              </h3>
+            {/* Critical Stock List */}
+            <div className="bg-white dark:bg-gray-800 p-8 rounded-[3rem] border border-gray-100 dark:border-gray-700 shadow-sm">
+              <div className="flex justify-between items-center mb-6">
+                <h3 className="text-lg font-black text-gray-900 dark:text-white italic tracking-tight">Stocks Critiques</h3>
+                <AlertCircle size={20} className="text-amber-500" />
+              </div>
               <div className="space-y-4">
-                {[
-                  { name: 'Riz Long Grain', qty: '50kg', status: 'low' },
-                  { name: 'Poisson Bar', qty: '12kg', status: 'critical' },
-                  { name: 'Huile Végétale', qty: '20L', status: 'ok' },
-                ].map((item) => (
-                  <div key={item.name} className="flex items-center justify-between">
+                {stock.filter(s => s.quantity <= s.minThreshold).slice(0, 4).map((item) => (
+                  <div key={item.id} className="flex items-center justify-between p-3 bg-amber-50/50 dark:bg-amber-900/10 rounded-2xl border border-amber-50 dark:border-amber-900/20">
                     <div className="flex items-center gap-3">
-                      <div className={`w-2 h-2 rounded-full ${
-                        item.status === 'critical' ? 'bg-red-500' : 
-                        item.status === 'low' ? 'bg-orange-500' : 'bg-emerald-500'
-                      }`} />
-                      <span className="text-xs font-bold text-gray-800">{item.name}</span>
+                      <div className="w-8 h-8 rounded-full bg-amber-100 dark:bg-amber-900/40 flex items-center justify-center text-amber-600">
+                        <Package size={14} />
+                      </div>
+                      <span className="text-sm font-bold text-gray-800 dark:text-gray-200">{item.name}</span>
                     </div>
-                    <span className="text-xs text-gray-500">{item.qty}</span>
+                    <div className="text-right">
+                      <p className="text-xs font-black text-red-500">{item.quantity} {item.unit}</p>
+                      <p className="text-[10px] font-bold text-gray-400">Restant</p>
+                    </div>
                   </div>
                 ))}
+                {alertCount === 0 && (
+                  <div className="py-8 text-center text-gray-400 text-xs font-medium">
+                    <CheckCircle2 size={32} className="mx-auto mb-2 text-emerald-100" />
+                    Pas d'alertes critiques pour le moment.
+                  </div>
+                )}
               </div>
             </div>
           </div>
         </div>
 
-        {/* Sidebar Cuistot */}
-        <div className="space-y-6">
-          <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
-            <h3 className="text-sm font-bold text-gray-900 mb-6 flex items-center gap-2">
-              <Beef size={18} className="text-rose-500" />
-              Répartition du Stock
-            </h3>
-            <div className="h-48 w-full">
+        {/* Real Inventory Sidebar */}
+        <div className="space-y-8">
+          <div className="bg-white dark:bg-gray-800 p-8 rounded-[3rem] border border-gray-100 dark:border-gray-700 shadow-sm">
+            <h3 className="text-lg font-black text-gray-900 dark:text-white italic tracking-tight mb-8">Catégories de Stock</h3>
+            <div className="h-56 w-full">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
-                    data={stockStats}
-                    innerRadius={40}
-                    outerRadius={60}
-                    paddingAngle={5}
+                    data={stockStats.length > 0 ? stockStats : [{name: 'Vide', value: 1}]}
+                    innerRadius={60}
+                    outerRadius={80}
+                    paddingAngle={8}
                     dataKey="value"
                   >
-                    {stockStats.map((entry, index) => (
+                    {stockStats.map((_, index) => (
                       <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                     ))}
+                    {stockStats.length === 0 && <Cell fill="#f3f4f6" />}
                   </Pie>
-                  <Tooltip contentStyle={{ borderRadius: '12px', border: 'none' }} />
+                  <Tooltip contentStyle={{ borderRadius: '16px', border: 'none' }} />
                 </PieChart>
               </ResponsiveContainer>
             </div>
-            <div className="mt-4 space-y-2">
+            <div className="mt-8 space-y-3">
               {stockStats.map((stat, idx) => (
-                <div key={stat.name} className="flex items-center justify-between text-[10px]">
-                  <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full" style={{ backgroundColor: COLORS[idx % COLORS.length] }} />
-                    <span className="text-gray-600 font-bold">{stat.name}</span>
+                <div key={stat.name} className="flex items-center justify-between p-2 hover:bg-gray-50 dark:hover:bg-gray-700/30 rounded-xl transition-colors">
+                  <div className="flex items-center gap-3">
+                    <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: COLORS[idx % COLORS.length] }} />
+                    <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">{stat.name}</span>
                   </div>
-                  <span className="text-gray-900 font-black">{stat.value}%</span>
+                  <span className="text-xs font-black text-gray-900 dark:text-white">{stat.value} articles</span>
                 </div>
               ))}
             </div>
           </div>
 
-          <div className="bg-gradient-to-br from-indigo-600 to-indigo-800 rounded-2xl p-6 text-white shadow-lg shadow-indigo-200">
-            <h3 className="font-black text-lg mb-4">Note du Chef</h3>
-            <div className="space-y-4">
-              <div className="bg-white/10 p-3 rounded-xl backdrop-blur-md">
-                <p className="text-xs leading-relaxed opacity-90 italic">
-                  "Penser à vérifier les arrivages de légumes demain matin à 6h. La fête de l'école approche."
-                </p>
-              </div>
-              <button className="w-full py-2 bg-white/20 hover:bg-white/30 rounded-xl text-xs font-bold transition-all">
-                Modifier mes notes
-              </button>
-            </div>
+          {/* Full Stock List Quick Access */}
+          <div className="bg-white dark:bg-gray-800 p-8 rounded-[3rem] border border-gray-100 dark:border-gray-700 shadow-sm">
+             <div className="flex justify-between items-center mb-6">
+                <h3 className="text-lg font-black text-gray-900 dark:text-white italic tracking-tight">Répertoire Complet</h3>
+                <div className="p-2 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 rounded-xl"><Filter size={16} /></div>
+             </div>
+             <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+                {stock.length > 0 ? stock.map(item => (
+                  <div key={item.id} className="group relative p-4 bg-gray-50 dark:bg-gray-900/30 rounded-2xl border border-gray-100 dark:border-gray-800 hover:border-indigo-100 transition-all">
+                    <div className="flex justify-between items-start mb-2">
+                       <span className="text-[10px] font-black text-indigo-500 dark:text-indigo-400 uppercase tracking-widest">{item.category}</span>
+                       <button onClick={() => deleteStock(item.id, item.name)} className="opacity-0 group-hover:opacity-100 p-1 text-gray-400 hover:text-red-500 transition-all">
+                          <Trash2 size={12} />
+                       </button>
+                    </div>
+                    <h5 className="text-sm font-black text-gray-900 dark:text-white mb-1">{item.name}</h5>
+                    <div className="flex justify-between items-end">
+                       <p className="text-xs font-bold text-gray-400">{item.quantity} {item.unit}</p>
+                       <div className="h-1 w-12 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
+                          <div className={`h-full ${item.quantity <= item.minThreshold ? 'bg-red-500' : 'bg-indigo-500'}`} style={{ width: `${Math.min(100, (item.quantity / (item.minThreshold * 3)) * 100)}%` }} />
+                       </div>
+                    </div>
+                  </div>
+                )) : (
+                  <div className="text-center py-12 text-gray-400 text-[10px] font-black uppercase tracking-widest bg-gray-50 dark:bg-gray-900/50 rounded-2xl border border-dashed border-gray-100">
+                    Aucun article en stock
+                  </div>
+                )}
+             </div>
           </div>
         </div>
       </div>
 
-      {/* Add Menu Modal */}
-      {showAddMenu && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <motion.div 
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden"
-          >
-            <div className="p-6 border-b border-gray-100 flex justify-between items-center">
-              <h3 className="text-xl font-bold text-gray-900">Préparer un nouveau repas</h3>
-              <button onClick={() => setShowAddMenu(false)} className="text-gray-400 hover:text-gray-600">
-                <AlertCircle size={24} className="rotate-45" />
-              </button>
-            </div>
-            <form onSubmit={handleAddMeal} className="p-6 space-y-4">
-              <div>
-                <label className="block text-xs font-black text-gray-500 uppercase mb-1">Nom du Plat</label>
+      {/* Meals Modal */}
+      <AnimatePresence>
+        {showAddMenu && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => { setShowAddMenu(false); setEditingMeal(null); }}
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9, y: 40 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 40 }}
+              className="bg-white dark:bg-gray-800 rounded-[3rem] shadow-2xl max-w-lg w-full p-10 border border-white/20 relative z-10"
+            >
+              <h2 className="text-3xl font-black text-gray-900 dark:text-white tracking-tight italic mb-8">
+                {editingMeal ? 'Ajuster le Menu' : 'Nouveau Menu'}
+              </h2>
+              <form onSubmit={handleAddMeal} className="space-y-6">
                 <div className="relative">
-                  <Utensils className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 block ml-1">Désignation du Plat</label>
                   <input 
-                    type="text" 
-                    required
-                    value={newMeal.title}
+                    type="text" required value={newMeal.title}
                     onChange={(e) => setNewMeal({...newMeal, title: e.target.value})}
-                    className="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
-                    placeholder="ex: Poulet DG & Riz"
+                    className="w-full bg-gray-50 dark:bg-gray-900 border-none rounded-2xl px-6 py-4 font-bold focus:ring-4 focus:ring-rose-500/20 outline-none"
+                    placeholder="ex: Riz à la Sauce Graine et Banane Plantain"
                   />
                 </div>
-              </div>
 
-              <div>
-                <label className="block text-xs font-black text-gray-500 uppercase mb-1">Type de repas</label>
-                <div className="grid grid-cols-3 gap-2">
-                  {[
-                    { val: 'petit-déjeuner', icon: <Coffee size={14} />, label: 'Matin' },
-                    { val: 'déjeuner', icon: <Beef size={14} />, label: 'Midi' },
-                    { val: 'dîner', icon: <Utensils size={14} />, label: 'Soir' },
-                  ].map(type => (
+                <div className="grid grid-cols-3 gap-3">
+                  {['petit-déjeuner', 'déjeuner', 'dîner'].map(type => (
                     <button
-                      key={type.val}
-                      type="button"
-                      onClick={() => setNewMeal({...newMeal, type: type.val})}
-                      className={`flex flex-col items-center gap-1 p-2 rounded-xl border-2 transition-all ${
-                        newMeal.type === type.val ? 'border-indigo-600 bg-indigo-50 text-indigo-700' : 'border-gray-100 text-gray-400 hover:bg-gray-50'
+                      key={type} type="button"
+                      onClick={() => setNewMeal({...newMeal, type})}
+                      className={`p-4 rounded-2xl border-2 flex flex-col items-center gap-2 transition-all ${
+                        newMeal.type === type ? 'border-rose-600 bg-rose-50 dark:bg-rose-900/30 text-rose-700' : 'border-gray-50 text-gray-400'
                       }`}
                     >
-                      {type.icon}
-                      <span className="text-[10px] font-bold">{type.label}</span>
+                      {type === 'petit-déjeuner' ? <Coffee size={20} /> : type === 'déjeuner' ? <Beef size={20} /> : <Utensils size={20} />}
+                      <span className="text-[8px] font-black uppercase tracking-widest">{type}</span>
                     </button>
                   ))}
                 </div>
-              </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-black text-gray-500 uppercase mb-1">Date</label>
-                  <input 
-                    type="date" 
-                    required
-                    value={newMeal.targetDate}
-                    onChange={(e) => setNewMeal({...newMeal, targetDate: e.target.value})}
-                    className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-sm"
-                  />
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 block ml-1">Date</label>
+                    <input 
+                      type="date" required value={newMeal.targetDate}
+                      onChange={(e) => setNewMeal({...newMeal, targetDate: e.target.value})}
+                      className="w-full bg-gray-50 dark:bg-gray-900 border-none rounded-2xl px-6 py-4 font-bold text-sm focus:ring-4 focus:ring-rose-500/20 outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 block ml-1">Calories (estimé)</label>
+                    <input 
+                      type="number" value={newMeal.calories}
+                      onChange={(e) => setNewMeal({...newMeal, calories: e.target.value})}
+                      className="w-full bg-gray-50 dark:bg-gray-900 border-none rounded-2xl px-6 py-4 font-bold text-sm focus:ring-4 focus:ring-rose-500/20 outline-none"
+                      placeholder="kcal"
+                    />
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-xs font-black text-gray-500 uppercase mb-1">Calories</label>
-                  <input 
-                    type="number" 
-                    value={newMeal.calories}
-                    onChange={(e) => setNewMeal({...newMeal, calories: e.target.value})}
-                    className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-sm"
-                    placeholder="kcal"
-                  />
-                </div>
-              </div>
 
-              <div>
-                <label className="block text-xs font-black text-gray-500 uppercase mb-1">Description / Ingrédients</label>
                 <textarea 
-                  rows={3}
-                  value={newMeal.description}
+                  rows={3} value={newMeal.description}
                   onChange={(e) => setNewMeal({...newMeal, description: e.target.value})}
-                  className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-sm resize-none"
-                  placeholder="Liste d'allergènes ou descriptif..."
+                  className="w-full bg-gray-50 dark:bg-gray-900 border-none rounded-2xl px-6 py-4 font-medium text-sm focus:ring-4 focus:ring-rose-500/20 outline-none resize-none"
+                  placeholder="Notes culinaires ou allergènes..."
                 />
-              </div>
 
-              <div className="pt-4 flex gap-3">
-                <button 
-                  type="button" 
-                  onClick={() => setShowAddMenu(false)}
-                  className="flex-1 px-4 py-2 border border-gray-200 rounded-xl text-sm font-bold text-gray-700 hover:bg-gray-50 transition-colors"
-                >
-                  Annuler
-                </button>
                 <button 
                   type="submit"
-                  className="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-xl text-sm font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-500/20"
+                  className="w-full py-5 bg-rose-600 text-white rounded-[2rem] font-black shadow-xl shadow-rose-200 dark:shadow-none hover:scale-[1.02] active:scale-[0.98] transition-all text-xl"
                 >
-                  Publier Menu
+                  {editingMeal ? 'Enregistrer les modifications' : 'Lancer le Menu'}
                 </button>
-              </div>
-            </form>
-          </motion.div>
-        </div>
-      )}
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Stock Modal */}
+      <AnimatePresence>
+        {showAddStock && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowAddStock(false)}
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9, y: 40 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 40 }}
+              className="bg-white dark:bg-gray-800 rounded-[3rem] shadow-2xl max-w-lg w-full p-10 border border-white/20 relative z-10"
+            >
+              <h2 className="text-3xl font-black text-gray-900 dark:text-white tracking-tight italic mb-8">Nouveau Ravitaillement</h2>
+              <form onSubmit={handleAddStock} className="space-y-6">
+                <div>
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 block ml-1">Nom de l'ingrédient</label>
+                  <input 
+                    type="text" required value={newStockItem.name}
+                    onChange={(e) => setNewStockItem({...newStockItem, name: e.target.value})}
+                    className="w-full bg-gray-50 dark:bg-gray-900 border-none rounded-2xl px-6 py-4 font-bold focus:ring-4 focus:ring-emerald-500/20 outline-none"
+                    placeholder="ex: Huile Végétale"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 block ml-1">Quantité Initiale</label>
+                    <div className="flex gap-2">
+                       <input 
+                        type="number" required value={newStockItem.quantity}
+                        onChange={(e) => setNewStockItem({...newStockItem, quantity: e.target.value})}
+                        className="flex-1 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl px-6 py-4 font-bold focus:ring-4 focus:ring-emerald-500/20 outline-none"
+                      />
+                      <select 
+                        value={newStockItem.unit}
+                        onChange={(e) => setNewStockItem({...newStockItem, unit: e.target.value})}
+                        className="w-20 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 font-black rounded-2xl px-2 outline-none border-none text-xs"
+                      >
+                        <option value="kg">kg</option>
+                        <option value="L">L</option>
+                        <option value="pcs">pcs</option>
+                        <option value="sac">sac</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 block ml-1">Seuil Alerte</label>
+                    <input 
+                      type="number" value={newStockItem.minThreshold}
+                      onChange={(e) => setNewStockItem({...newStockItem, minThreshold: e.target.value})}
+                      className="w-full bg-gray-50 dark:bg-gray-900 border-none rounded-2xl px-6 py-4 font-bold focus:ring-4 focus:ring-emerald-500/20 outline-none"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 block ml-1">Catégorie</label>
+                  <select 
+                    value={newStockItem.category}
+                    onChange={(e) => setNewStockItem({...newStockItem, category: e.target.value})}
+                    className="w-full bg-gray-50 dark:bg-gray-900 border-none rounded-2xl px-6 py-4 font-bold focus:ring-4 focus:ring-emerald-500/20 outline-none"
+                  >
+                    <option value="Fruits/Légumes">Fruits & Légumes</option>
+                    <option value="Viandes/Poissons">Viandes & Poissons</option>
+                    <option value="Produits Laitiers">Produits Laitiers</option>
+                    <option value="Epicerie">Epicerie Sèche</option>
+                    <option value="Boissons">Boissons</option>
+                    <option value="Autres">Autres</option>
+                  </select>
+                </div>
+
+                <button 
+                  type="submit"
+                  className="w-full py-5 bg-emerald-600 text-white rounded-[2rem] font-black shadow-xl shadow-emerald-200 dark:shadow-none hover:scale-[1.02] active:scale-[0.98] transition-all text-xl"
+                >
+                  Entrer en Stock
+                </button>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

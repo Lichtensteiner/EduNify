@@ -141,33 +141,33 @@ function AppContent() {
     
     switch (activeTab) {
       case 'kiosk':
-        return role === 'admin' ? <KioskMode onExit={() => setActiveTab('users')} /> : <Dashboard />;
+        return role === 'admin' ? <KioskMode onExit={() => setActiveTab('users')} /> : <Dashboard onNavigate={handleNavigate} />;
       case 'dashboard': 
         if (role === 'parent') return <ParentDashboard />;
         if (role === 'cuisinier') return <CanteenDashboard />;
-        return ['admin', 'enseignant', 'personnel administratif'].includes(role) ? <Dashboard /> : <StudentDashboard />;
+        return ['admin', 'enseignant', 'personnel administratif'].includes(role) ? <Dashboard onNavigate={handleNavigate} /> : <StudentDashboard />;
       case 'student_dashboard': 
-        return role === 'élève' ? <StudentDashboard /> : <Dashboard />;
+        return role === 'élève' ? <StudentDashboard /> : <Dashboard onNavigate={handleNavigate} />;
       case 'parent_dashboard':
-        return role === 'parent' ? <ParentDashboard /> : <Dashboard />;
+        return role === 'parent' ? <ParentDashboard /> : <Dashboard onNavigate={handleNavigate} />;
       case 'student_card': 
-        return role === 'élève' ? <StudentCard /> : <Dashboard />;
+        return role === 'élève' ? <StudentCard /> : <Dashboard onNavigate={handleNavigate} />;
       case 'users': 
-        return role === 'admin' ? <Users /> : <Dashboard />;
+        return role === 'admin' ? <Users /> : <Dashboard onNavigate={handleNavigate} />;
       case 'attendance': 
         return ['admin', 'enseignant', 'personnel administratif'].includes(role) ? <Attendance /> : <StudentDashboard />;
       case 'reports': 
         return ['admin', 'enseignant', 'personnel administratif'].includes(role) ? <Reports /> : <StudentDashboard />;
       case 'classes': 
-        return role === 'admin' ? <Classes /> : <Dashboard />;
+        return role === 'admin' ? <Classes /> : <Dashboard onNavigate={handleNavigate} />;
       case 'settings': 
-        return role === 'admin' ? <Settings /> : <Dashboard />;
+        return role === 'admin' ? <Settings /> : <Dashboard onNavigate={handleNavigate} />;
       case 'scanner': 
-        return role === 'admin' ? <Scanner /> : <Dashboard />;
+        return role === 'admin' ? <Scanner /> : <Dashboard onNavigate={handleNavigate} />;
       case 'mobile_app': 
-        return role === 'admin' ? <MobileApp /> : <Dashboard />;
+        return role === 'admin' ? <MobileApp /> : <Dashboard onNavigate={handleNavigate} />;
       case 'integration': 
-        return role === 'admin' ? <IntegrationCode /> : <Dashboard />;
+        return role === 'admin' ? <IntegrationCode /> : <Dashboard onNavigate={handleNavigate} />;
       case 'leaderboard': return <Leaderboard />;
       case 'houses': return <Houses />;
       case 'classroom': 
@@ -186,25 +186,25 @@ function AppContent() {
       case 'homework': return <Homework />;
       case 'ludo_ai_plus': return <LudoAIPlus />;
       case 'clubs': return <Clubs />;
-      case 'finance': return role === 'admin' ? <Finance /> : <Dashboard />;
-      case 'discipline': return ['admin', 'enseignant', 'personnel administratif'].includes(role) ? <Discipline /> : <Dashboard />;
-      case 'audit_logs': return role === 'admin' ? <AuditLogs /> : <Dashboard />;
+      case 'finance': return role === 'admin' ? <Finance /> : <Dashboard onNavigate={handleNavigate} />;
+      case 'discipline': return ['admin', 'enseignant', 'personnel administratif'].includes(role) ? <Discipline /> : <Dashboard onNavigate={handleNavigate} />;
+      case 'audit_logs': return role === 'admin' ? <AuditLogs /> : <Dashboard onNavigate={handleNavigate} />;
       case 'recent_connections': 
-        return role === 'admin' ? <RecentConnections /> : <Dashboard />;
+        return role === 'admin' ? <RecentConnections /> : <Dashboard onNavigate={handleNavigate} />;
       case 'staff':
-        return ['admin', 'personnel administratif'].includes(role) ? <Staff /> : <Dashboard />;
+        return ['admin', 'personnel administratif'].includes(role) ? <Staff /> : <Dashboard onNavigate={handleNavigate} />;
       case 'library':
         return <Library />;
       case 'canteen':
-        return ['admin', 'élève', 'parent', 'cuisinier', 'personnel administratif'].includes(role) ? <Canteen /> : <Dashboard />;
+        return ['admin', 'élève', 'parent', 'cuisinier', 'personnel administratif'].includes(role) ? <Canteen /> : <Dashboard onNavigate={handleNavigate} />;
       case 'surveys':
         return <Surveys />;
       case 'document_generator':
-        return ['admin', 'personnel administratif'].includes(role) ? <DocumentGenerator /> : <Dashboard />;
+        return ['admin', 'personnel administratif'].includes(role) ? <DocumentGenerator /> : <Dashboard onNavigate={handleNavigate} />;
       case 'profile': return <Profile />;
       case 'about': return <About />;
       case 'terms': return <TermsAndConditions />;
-      default: return role === 'élève' ? <StudentDashboard /> : <Dashboard />;
+      default: return role === 'élève' ? <StudentDashboard /> : <Dashboard onNavigate={handleNavigate} />;
     }
   };
 

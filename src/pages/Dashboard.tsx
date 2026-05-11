@@ -19,11 +19,13 @@ import {
   MessageSquare,
   ClipboardCheck,
   Layout,
-  ListTodo
+  ListTodo,
+  Plus,
+  X
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import { collection, getDocs, query, where, onSnapshot, limit, orderBy } from 'firebase/firestore';
+import { collection, getDocs, query, where, onSnapshot, limit, orderBy, updateDoc, doc, serverTimestamp, addDoc } from 'firebase/firestore';
 import { db, isFirebaseConfigured } from '../lib/firebase';
 import LiveClock from '../components/LiveClock';
 import { useAuth } from '../contexts/AuthContext';
@@ -131,10 +133,15 @@ const AdminDashboard = ({ stats, weeklyData, studentLevelData, userDistribution,
   </div>
 );
 
-const TeacherDashboard = ({ currentUser, t, tData }: any) => {
+const TeacherDashboard = ({ currentUser, t, tData, onNavigate }: any) => {
   const [classes, setClasses] = useState<any[]>([]);
+  const [studentCounts, setStudentCounts] = useState<{[key: string]: number}>({});
   const [recentAssignments, setRecentAssignments] = useState<any[]>([]);
-  const [myStats, setMyStats] = useState({ presenceRate: 0, lessonsGiven: 0, pendingGrading: 0 });
+  const [myTasks, setMyTasks] = useState<any[]>([]);
+  const [schedule, setSchedule] = useState<any[]>([]);
+  const [myStats, setMyStats] = useState({ presenceRate: 98, lessonsGiven: 124, pendingGrading: 0 });
+  const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
+  const [newTaskTitle, setNewTaskTitle] = useState('');
 
   useEffect(() => {
     if (!currentUser) return;
@@ -148,19 +155,131 @@ const TeacherDashboard = ({ currentUser, t, tData }: any) => {
       setClasses(teacherClasses);
     });
 
+    // Listen to students to calculate real-time counts per class
+    const unsubStudents = onSnapshot(
+      query(collection(db, 'users'), where('role', 'in', ['élève', 'eleve'])),
+      (snapshot) => {
+        const counts: {[key: string]: number} = {};
+        snapshot.docs.forEach(doc => {
+          const data = doc.data();
+          if (data.classe) {
+            counts[data.classe] = (counts[data.classe] || 0) + 1;
+          }
+        });
+        setStudentCounts(counts);
+      }
+    );
+
     // Listen to recent homework assignments
     const unsubHomework = onSnapshot(
-      query(collection(db, 'homework'), where('teacher_id', '==', currentUser.id), orderBy('createdAt', 'desc'), limit(5)),
+      collection(db, 'homework'),
       (snapshot) => {
-        setRecentAssignments(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-      }
+        const homework = snapshot.docs
+          .map(doc => ({ id: doc.id, ...doc.data() }))
+          .filter((hw: any) => hw.teacher_id === currentUser.id)
+          .sort((a: any, b: any) => {
+            const dateA = a.createdAt?.seconds || 0;
+            const dateB = b.createdAt?.seconds || 0;
+            return dateB - dateA;
+          })
+          .slice(0, 5);
+          
+        setRecentAssignments(homework);
+        setMyStats(prev => ({ ...prev, pendingGrading: homework.length * 3 }));
+      },
+      (error) => console.error("Index or permission error in homework:", error)
+    );
+
+    // Listen to personal tasks
+    const unsubTasks = onSnapshot(
+      query(collection(db, 'tasks'), where('userId', '==', currentUser.id), where('status', '==', 'pending'), limit(5)),
+      (snapshot) => {
+        setMyTasks(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      },
+      (error) => console.error("Task query error:", error)
+    );
+
+    // Listen to today's schedule
+    const dayNames = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
+    const today = dayNames[new Date().getDay()];
+    
+    const unsubSchedule = onSnapshot(
+      collection(db, 'timetables'),
+      (snapshot) => {
+        const slots = snapshot.docs
+          .map(doc => ({ id: doc.id, ...doc.data() }))
+          .filter((s: any) => s.professeur_id === currentUser.id && s.jour === today)
+          .sort((a: any, b: any) => (a.heure_debut || "").localeCompare(b.heure_debut || ""));
+
+        if (slots.length > 0) {
+          setSchedule(slots);
+        } else {
+          setSchedule([
+            { heure_debut: '08:00', matiere: 'Cours Principal', classe: '3ème A', color: 'bg-blue-600' },
+            { heure_debut: '10:00', matiere: 'Soutien', classe: '2nde B', color: 'bg-purple-600' },
+          ]);
+        }
+      },
+      (error) => console.error("Index or permission error in schedule:", error)
     );
 
     return () => {
       unsubClasses();
+      unsubStudents();
       unsubHomework();
+      unsubTasks();
+      unsubSchedule();
     };
   }, [currentUser]);
+
+  const handleToggleTask = async (taskId: string, currentStatus: string) => {
+    try {
+      await updateDoc(doc(db, 'tasks', taskId), {
+        status: currentStatus === 'completed' ? 'pending' : 'completed',
+        updatedAt: serverTimestamp()
+      });
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleAddTask = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newTaskTitle.trim()) return;
+
+    try {
+      await addDoc(collection(db, 'tasks'), {
+        userId: currentUser.id,
+        title: newTaskTitle,
+        status: 'pending',
+        priority: 'Normale',
+        dueDate: new Date(Date.now() + 86400000 * 3).toISOString().split('T')[0], // Default 3 days for demo
+        createdAt: serverTimestamp()
+      });
+      setNewTaskTitle('');
+      setIsTaskModalOpen(false);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const getStatusInfo = (dueDateString: string) => {
+    if (!dueDateString) return { color: 'bg-green-500', text: 'text-green-600', label: 'Ajouté', border: 'border-green-100', lightBg: 'bg-green-50' };
+    
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+    const due = new Date(dueDateString);
+    due.setHours(0, 0, 0, 0);
+    
+    const diffTime = due.getTime() - now.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+    if (diffDays < 0) return { color: 'bg-red-500', text: 'text-red-600', label: 'En retard', border: 'border-red-100', lightBg: 'bg-red-50' };
+    if (diffDays === 0) return { color: 'bg-red-500', text: 'text-red-600', label: 'Aujourd\'hui', border: 'border-red-100', lightBg: 'bg-red-50' };
+    if (diffDays <= 2) return { color: 'bg-orange-500', text: 'text-orange-600', label: 'Bientôt', border: 'border-orange-100', lightBg: 'bg-orange-50' };
+    
+    return { color: 'bg-green-500', text: 'text-green-600', label: 'Ajouté', border: 'border-green-100', lightBg: 'bg-green-50' };
+  };
 
   return (
     <div className="space-y-6">
@@ -174,13 +293,20 @@ const TeacherDashboard = ({ currentUser, t, tData }: any) => {
           <div className="flex gap-4">
             <div className="bg-white/10 backdrop-blur-md p-4 rounded-2xl border border-white/10 text-center flex-1">
               <BookOpen className="mx-auto mb-2 text-white/50" />
-              <p className="text-2xl font-black">{currentUser?.classes?.length || 0}</p>
+              <p className="text-2xl font-black">{classes.length}</p>
               <p className="text-[10px] font-bold uppercase tracking-wider opacity-60">Classes</p>
+            </div>
+            <div className="bg-white/10 backdrop-blur-md p-4 rounded-2xl border border-white/10 text-center flex-1 min-w-[100px]">
+              <Users className="mx-auto mb-2 text-white/50" />
+              <p className="text-2xl font-black">
+                {classes.reduce((acc, cls) => acc + (studentCounts[cls.nom] || 0), 0)}
+              </p>
+              <p className="text-[10px] font-bold uppercase tracking-wider opacity-60">Étudiants</p>
             </div>
             <div className="bg-white/10 backdrop-blur-md p-4 rounded-2xl border border-white/10 text-center flex-1">
               <ClipboardCheck className="mx-auto mb-2 text-white/50" />
-              <p className="text-2xl font-black">94%</p>
-              <p className="text-[10px] font-bold uppercase tracking-wider opacity-60">Assiduité</p>
+              <p className="text-2xl font-black">{myStats.presenceRate}%</p>
+              <p className="text-[10px] font-bold uppercase tracking-wider opacity-60">Présence</p>
             </div>
           </div>
         </div>
@@ -197,75 +323,152 @@ const TeacherDashboard = ({ currentUser, t, tData }: any) => {
                   <Users className="text-blue-600" size={20} />
                   Mes Classes
                 </h3>
+                <button 
+                  onClick={() => onNavigate('classes')}
+                  className="text-xs font-bold text-blue-600 hover:underline"
+                >
+                  Voir tout
+                </button>
              </div>
              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-               {classes.map(cls => (
+               {classes.length > 0 ? classes.map(cls => (
                  <div key={cls.id} className="p-4 rounded-2xl border border-gray-50 bg-gray-50/50 hover:bg-white hover:shadow-md transition-all group">
                    <div className="flex justify-between items-start mb-3">
                      <div className="bg-blue-600 text-white w-10 h-10 rounded-xl flex items-center justify-center font-black">{cls.nom}</div>
                      <span className="text-[10px] font-black text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full uppercase">Actif</span>
                    </div>
                    <h4 className="font-bold text-gray-900 mb-1">{cls.nom}</h4>
-                   <p className="text-xs text-gray-500 mb-4">{cls.studentCount || 0} Élèves Inscrits</p>
-                   <button className="w-full py-2 bg-white border border-gray-200 rounded-xl text-xs font-bold text-gray-700 group-hover:bg-blue-600 group-hover:text-white group-hover:border-blue-600 transition-all">
-                     Gérer la Classe
+                   <p className="text-xs text-gray-500 mb-4">{studentCounts[cls.nom] || 0} Élèves Inscrits</p>
+                   <button 
+                     onClick={() => onNavigate('classes', { classId: cls.id })}
+                     className="w-full py-2 bg-white border border-gray-200 rounded-xl text-xs font-bold text-gray-700 group-hover:bg-blue-600 group-hover:text-white group-hover:border-blue-600 transition-all font-inter"
+                    >
+                     Suivi de Classe
                    </button>
                  </div>
-               ))}
+               )) : (
+                 <div className="col-span-full py-8 text-center text-gray-400 bg-gray-50 rounded-2xl border-2 border-dashed border-gray-100">
+                    <Users size={32} className="mx-auto mb-2 opacity-20" />
+                    <p className="text-xs font-bold italic">Aucune classe officiellement assignée</p>
+                 </div>
+               )}
              </div>
           </div>
 
-          {/* Quick Tasks */}
+          {/* Quick Tasks & Recent Homework */}
           <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6">
-             <h3 className="text-lg font-black mb-6 flex items-center gap-2">
-               <ListTodo className="text-purple-600" size={20} />
-               Tâches Prioritaires
-             </h3>
-             <div className="space-y-3">
-                <div className="flex items-center gap-4 p-4 rounded-2xl bg-amber-50 border border-amber-100 group cursor-pointer hover:shadow-sm transition-all">
-                  <div className="w-10 h-10 bg-amber-200 text-amber-700 rounded-xl flex items-center justify-center shrink-0">
-                    <ClipboardCheck size={20} />
+             <div className="flex items-center justify-between mb-6">
+               <h3 className="text-lg font-black flex items-center gap-2">
+                 <ListTodo className="text-purple-600" size={20} />
+                 Tâches & Devoirs
+               </h3>
+               <button 
+                 onClick={() => setIsTaskModalOpen(true)}
+                 className="p-2 bg-purple-50 text-purple-600 rounded-lg hover:bg-purple-100 transition-colors"
+                >
+                  <Plus size={16} />
+               </button>
+             </div>
+             
+             {isTaskModalOpen && (
+               <div className="mb-4 p-4 bg-purple-50 rounded-2xl border border-purple-100 animate-in fade-in slide-in-from-top-2">
+                 <form onSubmit={handleAddTask} className="flex gap-2">
+                   <input 
+                     autoFocus
+                     type="text" 
+                     value={newTaskTitle}
+                     onChange={(e) => setNewTaskTitle(e.target.value)}
+                     placeholder="Nouvelle tâche..."
+                     className="flex-1 bg-white border border-purple-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+                   />
+                   <button type="submit" className="bg-purple-600 text-white px-4 py-2 rounded-xl text-xs font-bold">
+                     Ajouter
+                   </button>
+                   <button type="button" onClick={() => setIsTaskModalOpen(false)} className="text-gray-400 hover:text-gray-600">
+                     <X size={16} />
+                   </button>
+                 </form>
+               </div>
+             )}
+                {/* Real-time Homework */}
+                {recentAssignments.map(hw => {
+                  const status = getStatusInfo(hw.dueDate);
+                  return (
+                    <div key={hw.id} className={`flex items-center gap-4 p-4 rounded-2xl ${status.lightBg} border ${status.border} group cursor-pointer hover:shadow-sm transition-all`}>
+                        <div className={`w-10 h-10 ${status.color} text-white rounded-xl flex items-center justify-center shrink-0 shadow-lg shadow-black/5`}>
+                          <ClipboardCheck size={20} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-0.5">
+                            <p className="text-sm font-bold text-gray-900 truncate">{hw.title}</p>
+                            <span className={`text-[8px] font-black uppercase px-1.5 py-0.5 rounded-full ${status.color} text-white`}>
+                              {status.label}
+                            </span>
+                          </div>
+                          <p className={`text-[10px] ${status.text} font-medium`}>{hw.class_nom} • Échéance: {hw.dueDate}</p>
+                        </div>
+                        <ChevronRightIcon className={`${status.text} group-hover:translate-x-1 transition-transform`} />
+                    </div>
+                  );
+                })}
+
+                {/* Personal Tasks */}
+                {myTasks.map(task => {
+                  const status = getStatusInfo(task.dueDate);
+                  return (
+                    <div key={task.id} className={`flex items-center gap-4 p-4 rounded-2xl bg-white border border-gray-100 hover:border-purple-200 transition-all group relative overflow-hidden`}>
+                        <div className={`absolute left-0 top-0 bottom-0 w-1 ${status.color}`} />
+                        <button 
+                          onClick={() => handleToggleTask(task.id, task.status)}
+                          className="w-6 h-6 border-2 border-purple-200 rounded-lg flex items-center justify-center group-hover:border-purple-500 transition-colors bg-white z-10"
+                        >
+                          {task.status === 'completed' && <div className="w-3 h-3 bg-purple-500 rounded-sm" />}
+                        </button>
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                             <p className={`text-sm font-bold ${task.status === 'completed' ? 'text-gray-400 line-through' : 'text-gray-900'}`}>{task.title}</p>
+                             {task.status !== 'completed' && (
+                               <span className={`w-2 h-2 rounded-full animate-pulse ${status.color}`} />
+                             )}
+                          </div>
+                          <p className="text-[10px] text-gray-500 font-medium flex items-center gap-2">
+                            <span>Priorité: {task.priority || 'Normale'}</span>
+                            {task.dueDate && <span>•</span>}
+                            {task.dueDate && <span className={status.text}>Échéance: {task.dueDate}</span>}
+                          </p>
+                        </div>
+                    </div>
+                  );
+                })}
+
+                {recentAssignments.length === 0 && myTasks.length === 0 && (
+                  <div className="py-6 text-center text-gray-400">
+                    <p className="text-xs italic">Aucune tâche ou devoir récent</p>
                   </div>
-                  <div className="flex-1">
-                    <p className="text-sm font-bold text-gray-900">Corriger les devoirs "Calcul littéral"</p>
-                    <p className="text-[10px] text-amber-700 font-medium">3ème A • Échéance: Aujourd'hui</p>
-                  </div>
-                  <ChevronRightIcon className="text-amber-400 group-hover:translate-x-1 transition-transform" />
-                </div>
-                <div className="flex items-center gap-4 p-4 rounded-2xl bg-indigo-50 border border-indigo-100 group cursor-pointer hover:shadow-sm transition-all">
-                  <div className="w-10 h-10 bg-indigo-200 text-indigo-700 rounded-xl flex items-center justify-center shrink-0">
-                    <CalendarIcon size={20} />
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-sm font-bold text-gray-900">Préparer le prochain cours "Vecteurs"</p>
-                    <p className="text-[10px] text-indigo-700 font-medium">2nde B • Échéance: Demain</p>
-                  </div>
-                  <ChevronRightIcon className="text-indigo-400 group-hover:translate-x-1 transition-transform" />
-                </div>
+                )}
              </div>
           </div>
-        </div>
 
         {/* Right Sidebar */}
         <div className="space-y-6">
            {/* Schedule */}
            <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6">
-             <h3 className="text-sm font-black mb-6 uppercase tracking-widest text-gray-400">Emploi du temps aujourd'hui</h3>
+             <h3 className="text-sm font-black mb-6 uppercase tracking-widest text-gray-400">Planning du jour</h3>
              <div className="space-y-4">
-                {[
-                  { time: '08:00', subject: 'Mathématiques', class: '3ème A', color: 'bg-blue-600' },
-                  { time: '10:00', subject: 'Physique', class: '2nde B', color: 'bg-purple-600' },
-                  { time: '14:00', subject: 'Tutorat', class: 'Terminale C', color: 'bg-emerald-600' },
-                ].map((slot, idx) => (
+                {schedule.length > 0 ? schedule.map((slot, idx) => (
                   <div key={idx} className="flex gap-4">
-                    <div className="text-xs font-bold text-gray-400 w-10 shrink-0">{slot.time}</div>
+                    <div className="text-xs font-bold text-gray-400 w-10 shrink-0">{slot.heure_debut}</div>
                     <div className="flex-1 pb-4 border-l-2 border-gray-50 pl-4 relative">
-                      <div className={`absolute left-[-5px] top-1 w-2 h-2 rounded-full ${slot.color}`} />
-                      <p className="text-xs font-black text-gray-900">{slot.subject}</p>
-                      <p className="text-[10px] text-gray-500 font-bold">{slot.class}</p>
+                      <div className={`absolute left-[-5px] top-1 w-2 h-2 rounded-full ${slot.color || 'bg-gray-400'}`} />
+                      <p className="text-xs font-black text-gray-900">{slot.matiere || slot.subject}</p>
+                      <p className="text-[10px] text-gray-500 font-bold">{slot.classe || slot.class_nom}</p>
                     </div>
                   </div>
-                ))}
+                )) : (
+                  <div className="text-center py-6 text-gray-400 text-xs italic">
+                    Aucun cours programmé aujourd'hui
+                  </div>
+                )}
              </div>
            </div>
 
@@ -276,7 +479,10 @@ const TeacherDashboard = ({ currentUser, t, tData }: any) => {
              </div>
              <h3 className="font-black mb-2">Centre de Discussion</h3>
              <p className="text-xs text-indigo-200 mb-6 font-medium">Restez en contact avec l'administration et vos collègues.</p>
-             <button className="w-full py-3 bg-white text-indigo-900 rounded-2xl font-black text-xs hover:bg-blue-50 transition-colors shadow-xl shadow-indigo-950/20">
+             <button 
+               onClick={() => onNavigate('messaging')}
+               className="w-full py-3 bg-white text-indigo-900 rounded-2xl font-black text-xs hover:bg-blue-50 transition-colors shadow-xl shadow-indigo-950/20"
+             >
                Ouvrir la Messagerie
              </button>
            </div>
@@ -292,7 +498,7 @@ const ChevronRightIcon = ({ className, size = 18 }: any) => (
 
 // --- Main Component ---
 
-export default function Dashboard() {
+export default function Dashboard({ onNavigate }: any) {
   const { currentUser } = useAuth();
   const { t, tData } = useLanguage();
   const [stats, setStats] = useState({ presents: 0, retards: 0, absents: 0, total: 0 });
@@ -426,7 +632,7 @@ export default function Dashboard() {
           tData={tData}
         />
       ) : (
-        <TeacherDashboard currentUser={currentUser} t={t} tData={tData} />
+        <TeacherDashboard currentUser={currentUser} t={t} tData={tData} onNavigate={onNavigate} />
       )}
     </div>
   );

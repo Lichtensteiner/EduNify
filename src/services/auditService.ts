@@ -8,7 +8,7 @@ export interface AuditLog {
   userRole: string;
   action: string;
   details: string;
-  category: 'attendance' | 'grades' | 'homework' | 'discipline' | 'management' | 'security' | 'finance';
+  category: 'attendance' | 'grades' | 'homework' | 'discipline' | 'management' | 'security' | 'finance' | 'canteen';
   timestamp: any;
 }
 
