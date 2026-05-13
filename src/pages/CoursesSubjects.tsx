@@ -51,6 +51,11 @@ export default function CoursesSubjects({ initialPrepId }: CoursesSubjectsProps)
   const [activeTab, setActiveTab] = useState<'courses' | 'subjects'>('courses');
   const [addingSubjectToClass, setAddingSubjectToClass] = useState<string | null>(null);
   
+  // Publish state
+  const [showPublishSelect, setShowPublishSelect] = useState(false);
+  const [classesToPublish, setClassesToPublish] = useState<string[]>([]);
+  const [publishing, setPublishing] = useState(false);
+  
   // Add modal state
   const [showAddModal, setShowAddModal] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -417,6 +422,47 @@ export default function CoursesSubjects({ initialPrepId }: CoursesSubjectsProps)
     } finally {
       setUploading(false);
       setUploadProgress(null);
+    }
+  };
+  
+  const handlePublishCourse = async () => {
+    if (!selectedPrep || classesToPublish.length === 0 || !currentUser) return;
+    
+    setPublishing(true);
+    try {
+      // Create entries in 'resources' collection for each selected class
+      const promises = classesToPublish.map(className => 
+        addDoc(collection(db, 'resources'), {
+          title: selectedPrep.topic,
+          description: selectedPrep.content || "Contenu du cours",
+          subject: selectedPrep.subject,
+          class_name: className,
+          teacher_id: currentUser.id,
+          url: selectedPrep.fileUrl || '',
+          type: selectedPrep.fileUrl ? (selectedPrep.fileName?.match(/\.(jpg|jpeg|png|gif|webp)$/i) ? 'image' : 'document') : 'document',
+          timestamp: new Date().toISOString()
+        })
+      );
+      
+      await Promise.all(promises);
+      
+      await recordAuditLog({
+        userId: currentUser.id,
+        userName: `${currentUser.prenom} ${currentUser.nom}`,
+        userRole: currentUser.role,
+        action: "Publication de cours à la classe",
+        details: `Cours: ${selectedPrep.topic}, Classes: ${classesToPublish.join(', ')}`,
+        category: 'homework'
+      });
+      
+      alert(`Cours publié avec succès aux classes : ${classesToPublish.join(', ')}`);
+      setShowPublishSelect(false);
+      setClassesToPublish([]);
+    } catch (error) {
+      console.error("Error publishing course:", error);
+      alert("Erreur lors de la publication du cours.");
+    } finally {
+      setPublishing(false);
     }
   };
 
@@ -1094,12 +1140,46 @@ export default function CoursesSubjects({ initialPrepId }: CoursesSubjectsProps)
                   >
                     {t('close')}
                   </button>
-                  <button
-                    className="px-6 py-2 bg-indigo-600 text-white font-medium rounded-xl hover:bg-indigo-700 transition-colors flex items-center gap-2"
-                  >
-                    <Send size={18} />
-                    {t('publish_to_class')}
-                  </button>
+                  <div className="relative">
+                    {showPublishSelect && (
+                      <div className="absolute bottom-full right-0 mb-2 w-64 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl shadow-xl p-4 animate-in slide-in-from-bottom-2 duration-200 z-10">
+                        <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-3">Publier à :</h4>
+                        <div className="space-y-2 max-h-48 overflow-y-auto custom-scrollbar mb-4">
+                          {classes.map(cls => (
+                            <label key={cls.id} className="flex items-center gap-3 p-2 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg cursor-pointer transition-colors">
+                              <input 
+                                type="checkbox"
+                                checked={classesToPublish.includes(cls.nom)}
+                                onChange={(e) => {
+                                  if (e.target.checked) setClassesToPublish([...classesToPublish, cls.nom]);
+                                  else setClassesToPublish(classesToPublish.filter(c => c !== cls.nom));
+                                }}
+                                className="w-4 h-4 rounded text-indigo-600 border-gray-300 focus:ring-indigo-500"
+                              />
+                              <span className="text-sm font-bold text-gray-700 dark:text-gray-300">{cls.nom}</span>
+                            </label>
+                          ))}
+                        </div>
+                        <button
+                          disabled={classesToPublish.length === 0 || publishing}
+                          onClick={handlePublishCourse}
+                          className="w-full py-2 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 disabled:opacity-50 transition-all flex items-center justify-center gap-2"
+                        >
+                          {publishing ? <RefreshCw className="animate-spin" size={16} /> : <Send size={16} />}
+                          Confirmer la publication
+                        </button>
+                      </div>
+                    )}
+                    <button
+                      onClick={() => setShowPublishSelect(!showPublishSelect)}
+                      className={`px-6 py-2 rounded-xl font-medium transition-all flex items-center gap-2 ${
+                        showPublishSelect ? 'bg-amber-100 text-amber-700 border border-amber-200 shadow-inner' : 'bg-indigo-600 text-white hover:bg-indigo-700'
+                      }`}
+                    >
+                      <Send size={18} />
+                      {showPublishSelect ? 'Annuler' : t('publish_to_class')}
+                    </button>
+                  </div>
                 </>
               )}
             </div>

@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { recordAuditLog } from '../services/auditService';
-import { Search, Filter, Plus, Fingerprint, RefreshCw, Eye, EyeOff, Edit2, Trash2, X, AlertCircle, BellRing, Key, Phone, MapPin, User2, Calendar, GraduationCap, History as HistoryIcon, Mail, Lock, Briefcase, User, Hash, Ban, ShieldOff } from 'lucide-react';
+import { Search, Filter, Plus, Fingerprint, RefreshCw, Eye, EyeOff, Edit2, Trash2, X, AlertCircle, BellRing, Key, Phone, MapPin, User2, Calendar, GraduationCap, History as HistoryIcon, Mail, Lock, Briefcase, User, Hash, Ban, ShieldOff, Camera } from 'lucide-react';
 import { collection, getDocs, doc, updateDoc, deleteDoc, setDoc, addDoc, onSnapshot, query, where } from 'firebase/firestore';
 import { initializeApp, getApp, getApps, deleteApp } from 'firebase/app';
 import { getAuth, createUserWithEmailAndPassword, signOut } from 'firebase/auth';
-import { db, isFirebaseConfigured, firebaseConfig } from '../lib/firebase';
+import { db, isFirebaseConfigured, firebaseConfig, storage } from '../lib/firebase';
 import { useLanguage } from '../contexts/LanguageContext';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { resizeImage } from '../lib/imageUtils';
 import SuccessModal from '../components/SuccessModal';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -51,9 +53,12 @@ export default function Users() {
     diploma: '',
     experience_years: '',
     age: '',
-    house_id: ''
+    house_id: '',
+    photo: '',
+    cover: ''
   });
   const [actionLoading, setActionLoading] = useState(false);
+  const [uploadingImage, setUploadingImage] = useState<{type: 'photo' | 'cover', id: string | 'new'} | null>(null);
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -142,6 +147,39 @@ export default function Users() {
     setShowPassword(true);
   };
 
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>, type: 'photo' | 'cover', target: 'new' | 'edit') => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploadingImage({ type, id: target === 'new' ? 'new' : editUser.id });
+    setError('');
+
+    try {
+      const maxWidth = type === 'photo' ? 400 : 1200;
+      const maxHeight = type === 'photo' ? 400 : 600;
+      const resizedBlob = await resizeImage(file, maxWidth, maxHeight);
+
+      const path = target === 'new' 
+        ? `temp_uploads/${Date.now()}_${type}` 
+        : `users/${editUser.id}/${type}_${Date.now()}`;
+      
+      const storageRef = ref(storage, path);
+      await uploadBytes(storageRef, resizedBlob);
+      const downloadURL = await getDownloadURL(storageRef);
+
+      if (target === 'new') {
+        setNewUser({ ...newUser, [type]: downloadURL });
+      } else {
+        setEditUser({ ...editUser, [type]: downloadURL });
+      }
+    } catch (err) {
+      console.error("Error uploading image:", err);
+      setError(t('upload_error'));
+    } finally {
+      setUploadingImage(null);
+    }
+  };
+
   const handleAddUser = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newUser.password || newUser.password.length < 6) {
@@ -185,6 +223,8 @@ export default function Users() {
         experience_years: newUser.experience_years ? parseInt(newUser.experience_years as string) : null,
         age: newUser.age ? parseInt(newUser.age as string) : null,
         house_id: newUser.role === 'élève' && newUser.house_id ? newUser.house_id : null,
+        photo: newUser.photo || null,
+        cover: newUser.cover || null,
         date_creation: new Date().toISOString()
       }, { merge: true });
       
@@ -200,7 +240,29 @@ export default function Users() {
       });
 
       setShowAddUserModal(false);
-      setNewUser({ nom: '', prenom: '', email: '', password: '', role: 'élève', classe: '', classes: [], matiere: '', matieres: [], matricule: '', contact: '', address: '', gender: 'not_specified', dateNaissance: '', lieuNaissance: '', diploma: '', experience_years: '', age: '', house_id: '' });
+      setNewUser({ 
+        nom: '', 
+        prenom: '', 
+        email: '', 
+        password: '', 
+        role: 'élève', 
+        classe: '', 
+        classes: [], 
+        matiere: '', 
+        matieres: [], 
+        matricule: '', 
+        contact: '', 
+        address: '', 
+        gender: 'not_specified', 
+        dateNaissance: '', 
+        lieuNaissance: '', 
+        diploma: '', 
+        experience_years: '', 
+        age: '', 
+        house_id: '',
+        photo: '',
+        cover: ''
+      });
       setSuccessInfo({
         title: t('account_created'),
         message: t('user_profile_generated_success').replace('{{name}}', `${newUser.prenom} ${newUser.nom}`)
@@ -251,6 +313,8 @@ export default function Users() {
         diploma: editUser.diploma || null,
         experience_years: editUser.experience_years ? parseInt(editUser.experience_years.toString()) : null,
         age: editUser.age ? parseInt(editUser.age.toString()) : null,
+        photo: editUser.photo || null,
+        cover: editUser.cover || null,
         house_id: editUser.role === 'élève' && editUser.house_id ? editUser.house_id : null
       });
 
@@ -667,30 +731,43 @@ export default function Users() {
             <div className="p-6 space-y-6 max-h-[70vh] overflow-y-auto custom-scrollbar">
               {viewTab === 'profile' ? (
                 <>
-                  <div className="flex flex-col md:flex-row items-center gap-6 p-6 bg-indigo-50/50 dark:bg-indigo-900/10 rounded-2xl border border-indigo-100 dark:border-indigo-900/30">
-                    {viewUser.photo ? (
-                      <img src={viewUser.photo} alt="" className="w-24 h-24 rounded-2xl object-cover shadow-lg border-4 border-white dark:border-gray-800" referrerPolicy="no-referrer" />
-                    ) : (
-                      <div className="w-24 h-24 rounded-2xl bg-indigo-600 text-white flex items-center justify-center font-bold text-3xl uppercase shadow-lg border-4 border-white dark:border-gray-800">
-                        {viewUser.prenom?.[0]}{viewUser.nom?.[0]}
-                      </div>
-                    )}
-                    <div className="text-center md:text-left">
-                      <h4 className="text-2xl font-bold text-gray-900 dark:text-white">{viewUser.prenom} {viewUser.nom}</h4>
-                      <div className="flex flex-wrap justify-center md:justify-start gap-2 mt-2">
-                        <span className="px-3 py-1 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-full text-xs font-bold uppercase tracking-wider">
-                          {tData(viewUser.role)}
-                        </span>
-                        {viewUser.matricule && (
-                          <span className="px-3 py-1 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 rounded-full text-xs font-mono">
-                            #{viewUser.matricule}
-                          </span>
+                  <div className="relative group overflow-hidden rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm mb-6">
+                    {/* Cover Image in View */}
+                    <div className="h-24 bg-indigo-600 relative">
+                      {viewUser.cover ? (
+                        <img src={viewUser.cover} alt="Cover" className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="w-full h-full bg-gradient-to-r from-indigo-500 to-purple-600"></div>
+                      )}
+                    </div>
+                    
+                    <div className="flex flex-col md:flex-row items-center gap-6 p-6 bg-white dark:bg-gray-800 pt-10 relative">
+                      <div className="absolute -top-12 left-1/2 -translate-x-1/2 md:left-6 md:translate-x-0">
+                        {viewUser.photo ? (
+                          <img src={viewUser.photo} alt="" className="w-24 h-24 rounded-2xl object-cover shadow-lg border-4 border-white dark:border-gray-800 bg-white" referrerPolicy="no-referrer" />
+                        ) : (
+                          <div className="w-24 h-24 rounded-2xl bg-indigo-600 text-white flex items-center justify-center font-bold text-3xl uppercase shadow-lg border-4 border-white dark:border-gray-800">
+                            {viewUser.prenom?.[0]}{viewUser.nom?.[0]}
+                          </div>
                         )}
                       </div>
-                      <p className="text-gray-500 dark:text-gray-400 mt-3 flex items-center justify-center md:justify-start gap-2 text-sm">
-                        <Mail size={14} />
-                        {viewUser.email}
-                      </p>
+                      <div className="text-center md:text-left mt-8 md:mt-0 md:pl-28">
+                        <h4 className="text-2xl font-bold text-gray-900 dark:text-white">{viewUser.prenom} {viewUser.nom}</h4>
+                        <div className="flex flex-wrap justify-center md:justify-start gap-2 mt-2">
+                          <span className="px-3 py-1 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-full text-xs font-bold uppercase tracking-wider">
+                            {tData(viewUser.role)}
+                          </span>
+                          {viewUser.matricule && (
+                            <span className="px-3 py-1 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 rounded-full text-xs font-mono">
+                              #{viewUser.matricule}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-gray-500 dark:text-gray-400 mt-3 flex items-center justify-center md:justify-start gap-2 text-sm">
+                          <Mail size={14} />
+                          {viewUser.email}
+                        </p>
+                      </div>
                     </div>
                   </div>
                   
@@ -958,6 +1035,63 @@ export default function Users() {
                     {error}
                   </div>
                 )}
+
+                {/* Profile & Cover Selection */}
+                <div className="space-y-4">
+                  <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center gap-2">
+                    <Camera size={14} />
+                    {t('profile_cover_photos')}
+                  </h4>
+                  <div className="flex flex-col gap-4">
+                    {/* Cover Preview & Upload */}
+                    <div className="relative h-32 rounded-2xl overflow-hidden bg-gray-100 dark:bg-gray-700 border border-gray-200 dark:border-gray-600">
+                      {editUser.cover ? (
+                        <img src={editUser.cover} alt="Cover" className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-gray-400 text-xs italic">
+                          {t('no_cover_image')}
+                        </div>
+                      )}
+                      <label className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity cursor-pointer">
+                        <input 
+                          type="file" 
+                          accept="image/*" 
+                          className="hidden" 
+                          onChange={(e) => handleImageUpload(e, 'cover', 'edit')}
+                          disabled={uploadingImage !== null}
+                        />
+                        {uploadingImage?.type === 'cover' && uploadingImage.id === editUser.id ? <RefreshCw className="text-white animate-spin" /> : <div className="flex items-center gap-2 text-white font-bold text-xs"><Camera size={16} /> {t('change_cover')}</div>}
+                      </label>
+                    </div>
+
+                    {/* Profile Photo Preview & Upload */}
+                    <div className="flex items-center gap-6">
+                      <div className="relative group">
+                        {editUser.photo ? (
+                          <img src={editUser.photo} alt="Profile" className="w-20 h-20 rounded-2xl object-cover border-4 border-white dark:border-gray-800 shadow-sm" />
+                        ) : (
+                          <div className="w-20 h-20 rounded-2xl bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-bold text-2xl uppercase border-4 border-white dark:border-gray-800 shadow-sm">
+                            {editUser.prenom?.[0] || editUser.email?.[0] || 'U'}
+                          </div>
+                        )}
+                        <label className="absolute inset-0 bg-black/40 rounded-2xl flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
+                          <input 
+                            type="file" 
+                            accept="image/*" 
+                            className="hidden" 
+                            onChange={(e) => handleImageUpload(e, 'photo', 'edit')}
+                            disabled={uploadingImage !== null}
+                          />
+                          {uploadingImage?.type === 'photo' && uploadingImage.id === editUser.id ? <RefreshCw className="text-white animate-spin" /> : <Camera className="text-white" size={20} />}
+                        </label>
+                      </div>
+                      <div>
+                        <p className="text-sm font-bold text-gray-900 dark:text-white">{t('profile_photo_label')}</p>
+                        <p className="text-xs text-gray-500">{t('click_to_edit_img')}</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   {/* Personal Info */}
@@ -1371,6 +1505,75 @@ export default function Users() {
                     {error}
                   </div>
                 )}
+
+                {/* Profile & Cover Selection */}
+                <div className="space-y-4">
+                  <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center gap-2">
+                    <Camera size={14} />
+                    {t('profile_cover_photos')} {t('optional')}
+                  </h4>
+                  <div className="flex flex-col gap-4">
+                    <div className="relative h-28 rounded-2xl overflow-hidden bg-gray-50 dark:bg-gray-900 border border-dashed border-gray-300 dark:border-gray-700">
+                      {newUser.photo || newUser.cover ? (
+                         newUser.cover && <img src={newUser.cover} alt="Cover" className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-gray-400 text-xs italic">
+                          {t('no_cover_selected')}
+                        </div>
+                      )}
+                      <label className="absolute inset-0 bg-black/5 hover:bg-black/20 flex items-center justify-center transition-all cursor-pointer">
+                        <input 
+                          type="file" 
+                          accept="image/*" 
+                          className="hidden" 
+                          onChange={(e) => handleImageUpload(e, 'cover', 'new')}
+                          disabled={uploadingImage !== null}
+                        />
+                        {uploadingImage?.type === 'cover' && uploadingImage.id === 'new' ? <RefreshCw className="text-gray-600 animate-spin" /> : <div className="flex items-center gap-2 text-gray-600 bg-white/80 px-3 py-1.5 rounded-lg text-xs font-bold shadow-sm border border-gray-200"><Camera size={14} /> {t('add_cover')}</div>}
+                      </label>
+                    </div>
+
+                    <div className="flex items-center gap-4">
+                      <div className="relative group">
+                        {newUser.photo ? (
+                          <img src={newUser.photo} alt="Profile" className="w-16 h-16 rounded-2xl object-cover border-2 border-white dark:border-gray-800 shadow-sm" />
+                        ) : (
+                          <div className="w-16 h-16 rounded-2xl bg-gray-100 dark:bg-gray-800 text-gray-400 flex items-center justify-center border-2 border-dashed border-gray-300 dark:border-gray-700">
+                            <User size={24} />
+                          </div>
+                        )}
+                        <label className="absolute inset-0 bg-black/0 hover:bg-black/20 rounded-2xl flex items-center justify-center transition-all cursor-pointer">
+                          <input 
+                            type="file" 
+                            accept="image/*" 
+                            className="hidden" 
+                            onChange={(e) => handleImageUpload(e, 'photo', 'new')}
+                            disabled={uploadingImage !== null}
+                          />
+                          {uploadingImage?.type === 'photo' && uploadingImage.id === 'new' ? <RefreshCw className="text-gray-600 animate-spin" /> : null}
+                        </label>
+                      </div>
+                      <div>
+                        <p className="text-sm font-bold text-gray-900 dark:text-white">{t('profile_photo_label')}</p>
+                        <button 
+                          type="button"
+                          className="text-[10px] bg-indigo-50 text-indigo-600 px-2 py-1 rounded-md mt-1 hover:bg-indigo-100 font-bold uppercase transition-colors"
+                          onClick={() => document.getElementById('photo-upload-new')?.click()}
+                        >
+                          {t('choose_photo')}
+                        </button>
+                        <input 
+                          id="photo-upload-new"
+                          type="file" 
+                          accept="image/*" 
+                          className="hidden" 
+                          onChange={(e) => handleImageUpload(e, 'photo', 'new')}
+                          disabled={uploadingImage !== null}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   {/* Account Info */}

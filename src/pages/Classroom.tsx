@@ -4,7 +4,8 @@ import { useLanguage } from '../contexts/LanguageContext';
 import { collection, query, where, getDocs, addDoc, deleteDoc, doc, onSnapshot, orderBy } from 'firebase/firestore';
 import { ref, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebase/storage';
 import { db, storage, isFirebaseConfigured } from '../lib/firebase';
-import { Award, BookOpen, Link as LinkIcon, FileText, Video, Plus, ThumbsUp, ThumbsDown, Trash2, ExternalLink, X, Image as ImageIcon } from 'lucide-react';
+import { Award, BookOpen, Link as LinkIcon, FileText, Video, Plus, ThumbsUp, ThumbsDown, Trash2, ExternalLink, X, Image as ImageIcon, Activity } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
 
 interface Student {
   id: string;
@@ -28,6 +29,8 @@ interface Resource {
   id: string;
   class_name: string;
   teacher_id: string;
+  prof_name?: string;
+  prof_photo?: string;
   title: string;
   description: string;
   subject?: string;
@@ -321,8 +324,10 @@ export default function Classroom() {
       console.log("Finalizing publication with classes:", classesToPublish);
       
       const resourceEntry = {
-        class_name: '', // Will be set in map
+        class_name: '', // Will be set in loop
         teacher_id: currentUser.id,
+        prof_name: `${currentUser.prenom} ${currentUser.nom}`,
+        prof_photo: currentUser.photo || '',
         title: resourceData.title,
         description: resourceData.description,
         subject: resourceData.subject || (currentUser.matieres?.[0] || currentUser.matiere || ''),
@@ -566,58 +571,80 @@ export default function Classroom() {
                   </div>
                 ) : (
                   <div className="space-y-4">
-                    {resources.map(resource => (
-                        <div className="block p-4 rounded-xl border border-gray-100 hover:border-indigo-200 hover:shadow-md transition-all group relative">
-                          <a 
-                            href={resource.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="flex items-start gap-3"
+                    <AnimatePresence mode="popLayout">
+                      {resources.map((resource, index) => (
+                          <motion.div 
+                            key={resource.id}
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 0.95 }}
+                            transition={{ delay: index * 0.05 }}
+                            className="block p-4 rounded-xl border border-gray-100 hover:border-indigo-200 hover:shadow-md transition-all group relative bg-white"
                           >
-                            <div className="p-2 bg-gray-50 rounded-lg group-hover:bg-indigo-50 transition-colors">
-                              {getResourceIcon(resource.type)}
-                            </div>
-                            <div className="flex-1 pr-8">
-                              <div className="flex items-center gap-2 mb-1">
-                                <h3 className="font-medium text-gray-900 group-hover:text-indigo-600 transition-colors flex items-center gap-1">
-                                  {resource.title}
-                                  <ExternalLink size={12} className="opacity-0 group-hover:opacity-100 transition-opacity" />
-                                </h3>
-                                <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-indigo-100 text-indigo-800">
-                                  {resource.class_name}
-                                </span>
-                                {resource.subject && (
-                                  <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-purple-100 text-purple-800">
-                                    {resource.subject}
+                           <a 
+                              href={resource.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex items-start gap-3"
+                            >
+                              <div className="p-2 bg-gray-50 rounded-lg group-hover:bg-indigo-50 transition-colors">
+                                {getResourceIcon(resource.type)}
+                              </div>
+                              <div className="flex-1 pr-8">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <h3 className="font-medium text-gray-900 group-hover:text-indigo-600 transition-colors flex items-center gap-1">
+                                    {resource.title}
+                                    <ExternalLink size={12} className="opacity-0 group-hover:opacity-100 transition-opacity" />
+                                  </h3>
+                                  <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-indigo-100 text-indigo-800">
+                                    {resource.class_name}
                                   </span>
+                                  {resource.subject && (
+                                    <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-purple-100 text-purple-800">
+                                      {resource.subject}
+                                    </span>
+                                  )}
+                                </div>
+                                {resource.description && (
+                                  <p className="text-sm text-gray-500 mt-1 line-clamp-2">{resource.description}</p>
+                                )}
+                                
+                                <div className="flex items-center gap-2 mt-3">
+                                   {resource.prof_photo ? (
+                                     <img src={resource.prof_photo} alt="" className="w-5 h-5 rounded-full object-cover" referrerPolicy="no-referrer" />
+                                   ) : (
+                                     <div className="w-5 h-5 rounded-full bg-gray-100 flex items-center justify-center text-[8px] font-bold text-gray-400 uppercase">
+                                       {resource.prof_name?.[0] || 'P'}
+                                     </div>
+                                   )}
+                                   <span className="text-[10px] text-gray-500 font-medium">Par {resource.prof_name || 'Enseignant'}</span>
+                                   <span className="text-[10px] text-gray-300">•</span>
+                                   <span className="text-[10px] text-gray-400">
+                                     {new Date(resource.timestamp).toLocaleDateString()}
+                                   </span>
+                                </div>
+
+                                {resource.type === 'image' && (
+                                  <div className="mt-3 rounded-lg overflow-hidden border border-gray-100">
+                                    <img src={resource.url} alt={resource.title} className="w-full max-h-64 object-cover" />
+                                  </div>
                                 )}
                               </div>
-                              {resource.description && (
-                                <p className="text-sm text-gray-500 mt-1 line-clamp-2">{resource.description}</p>
-                              )}
-                              {resource.type === 'image' && (
-                                <div className="mt-3 rounded-lg overflow-hidden border border-gray-100">
-                                  <img src={resource.url} alt={resource.title} className="w-full max-h-64 object-cover" />
-                                </div>
-                              )}
-                              <p className="text-xs text-gray-400 mt-2">
-                                {new Date(resource.timestamp).toLocaleDateString()}
-                              </p>
-                            </div>
-                          </a>
-                          {currentUser?.role === 'enseignant' && (
-                            <button 
-                              onClick={(e) => {
-                                e.preventDefault();
-                                handleDeleteResource(resource.id, resource.url, resource.type);
-                              }}
-                              className="absolute top-4 right-4 p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg opacity-0 group-hover:opacity-100 transition-all"
-                            >
-                              <Trash2 size={16} />
-                            </button>
-                          )}
-                        </div>
-                    ))}
+                            </a>
+                            {currentUser?.role === 'enseignant' && (
+                              <button 
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  handleDeleteResource(resource.id, resource.url, resource.type);
+                                }}
+                                className="absolute top-4 right-4 p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg opacity-0 group-hover:opacity-100 transition-all"
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            )}
+                          </motion.div>
+                      ))}
+                    </AnimatePresence>
                   </div>
                 )}
               </div>

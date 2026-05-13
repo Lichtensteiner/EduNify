@@ -28,6 +28,7 @@ export interface User {
   age?: number;
   photo?: string;
   cover?: string;
+  cover_photo?: string;
   date_creation?: string;
   face_id?: string | null;
   fingerprint_id?: string | null;

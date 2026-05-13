@@ -52,15 +52,33 @@ const COLORS = ['#4f46e5', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'
 
 // --- Sub-components for better organization ---
 
-const MiniSparkline = ({ data, color }: { data: any[], color: string }) => (
-  <div className="h-10 w-24">
-    <ResponsiveContainer width="100%" height="100%">
-      <AreaChart data={data}>
-        <Area type="monotone" dataKey="value" stroke={color} fill={color} fillOpacity={0.1} strokeWidth={2} />
-      </AreaChart>
-    </ResponsiveContainer>
-  </div>
-);
+const MiniSparkline = ({ data, color }: { data: any[], color: string }) => {
+  const { theme } = useTheme();
+  const isDark = theme === 'dark';
+
+  const safeData = data.map(d => ({
+    ...d,
+    value: isNaN(Number(d.value)) ? 0 : Number(d.value)
+  }));
+
+  return (
+    <div className="h-10 w-24">
+      <ResponsiveContainer width="100%" height="100%">
+        <AreaChart data={safeData}>
+          <Area 
+            type="monotone" 
+            dataKey="value" 
+            stroke={color} 
+            fill={color} 
+            fillOpacity={isDark ? 0.2 : 0.1} 
+            strokeWidth={2} 
+            animationDuration={2000}
+          />
+        </AreaChart>
+      </ResponsiveContainer>
+    </div>
+  );
+};
 
 const AdminDashboard = ({ stats, weeklyData, studentLevelData, userDistribution, classData, recommendation, houses, alerts, ecoStats, mood, handleMoodSelect, t, tData }: any) => {
   const { theme } = useTheme();
@@ -71,27 +89,33 @@ const AdminDashboard = ({ stats, weeklyData, studentLevelData, userDistribution,
       {/* Top Indicators with Curves */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {[
-          { icon: Users, label: 'Effectif Total', value: Number(stats.total) || 0, color: '#4f46e5', bg: 'bg-indigo-50 dark:bg-indigo-900/30', text: 'text-indigo-600 dark:text-indigo-400', sparkData: [{value: 30}, {value: 40}, {value: 35}, {value: 50}, {value: Number(stats.total) || 0}] },
-          { icon: UserCheck, label: 'Taux de Présence', value: `${(Number(stats.total) || 0) > 0 ? Math.round(((Number(stats.presents) || 0) / (Number(stats.total) || 0)) * 100) : 0}%`, color: '#10b981', bg: 'bg-emerald-50 dark:bg-emerald-900/30', text: 'text-emerald-600 dark:text-emerald-400', sparkData: [{value: 70}, {value: 85}, {value: 80}, {value: 90}, {value: 92}] },
-          { icon: Clock, label: 'Moyenne Retards', value: Number(stats.retards) || 0, color: '#f59e0b', bg: 'bg-amber-50 dark:bg-amber-900/30', text: 'text-amber-600 dark:text-amber-400', sparkData: [{value: 5}, {value: 8}, {value: 4}, {value: 7}, {value: Number(stats.retards) || 0}] },
-          { icon: Award, label: 'Points Maisons', value: houses.reduce((acc: number, h: any) => acc + (Number(h.points) || 0), 0), color: '#8b5cf6', bg: 'bg-purple-50 dark:bg-purple-900/30', text: 'text-purple-600 dark:text-purple-400', sparkData: [{value: 1000}, {value: 1200}, {value: 1500}, {value: 1800}, {value: 2000}] }
+          { icon: Users, label: 'Effectif Total', value: Number(stats.total) || 0, color: '#4f46e5', bg: 'bg-indigo-50 dark:bg-indigo-900/30', text: 'text-indigo-600 dark:text-indigo-400' },
+          { icon: UserCheck, label: 'Taux de Présence', value: `${(Number(stats.total) || 0) > 0 ? Math.round(((Number(stats.presents) || 0) / (Number(stats.total) || 0)) * 100) : 0}%`, color: '#10b981', bg: 'bg-emerald-50 dark:bg-emerald-900/30', text: 'text-emerald-600 dark:text-emerald-400' },
+          { icon: Clock, label: 'Moyenne Retards', value: Number(stats.retards) || 0, color: '#f59e0b', bg: 'bg-amber-50 dark:bg-amber-900/30', text: 'text-amber-600 dark:text-amber-400' },
+          { icon: Award, label: 'Points Maisons', value: houses.reduce((acc: number, h: any) => acc + (Number(h.points) || 0), 0), color: '#8b5cf6', bg: 'bg-purple-50 dark:bg-purple-900/30', text: 'text-purple-600 dark:text-purple-400' }
         ].map((item, i) => {
-          const sparkHistory = item.label === 'Effectif Total' 
-            ? [{value: item.value * 0.95}, {value: item.value * 1.02}, {value: item.value * 0.98}, {value: item.value * 1.01}, {value: item.value}]
-            : item.label === 'Taux de Présence'
-              ? weeklyData.map(d => ({ value: (stats.total > 0 ? (d.presents / stats.total) * 100 : 0) }))
-              : item.label === 'Moyenne Retards'
-                ? weeklyData.map(d => ({ value: d.retards }))
-                : [{value: 50}, {value: 70}, {value: 65}, {value: 80}, {value: item.value}];
+          let sparkHistory = [];
+          if (item.label === 'Effectif Total') {
+            sparkHistory = [{value: Math.max(0, item.value * 0.9)}, {value: Math.max(0, item.value * 0.95)}, {value: Math.max(0, item.value * 0.98)}, {value: Math.max(0, item.value * 1.02)}, {value: item.value}];
+          } else if (item.label === 'Taux de Présence' && weeklyData.length > 0) {
+            sparkHistory = weeklyData.map(d => ({ value: (stats.total > 0 ? (d.presents / stats.total) * 100 : 0) }));
+          } else if (item.label === 'Moyenne Retards' && weeklyData.length > 0) {
+            sparkHistory = weeklyData.map(d => ({ value: Number(d.retards) || 0 }));
+          } else {
+            sparkHistory = [{value: 50}, {value: 70}, {value: 65}, {value: 80}, {value: item.value}];
+          }
+
+          // Ensure sparkHistory has at least 2 points for AreaChart to render correctly
+          if (sparkHistory.length < 2) sparkHistory = [{value: 0}, {value: Number(item.value) || 0}];
 
           return (
             <div key={i} className="bg-white dark:bg-gray-800 p-6 rounded-3xl border border-gray-100 dark:border-gray-700 shadow-sm flex flex-col gap-4">
               <div className="flex justify-between items-center">
                 <div className={`w-12 h-12 ${item.bg} ${item.text} rounded-2xl flex items-center justify-center`}><item.icon size={24} /></div>
-                <MiniSparkline data={sparkHistory.length > 0 ? sparkHistory : item.sparkData} color={item.color} />
+                <MiniSparkline data={sparkHistory} color={item.color} />
               </div>
               <div>
-                <p className="text-xs font-black text-gray-400 uppercase tracking-widest">{item.label}</p>
+                <p className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">{item.label}</p>
                 <h3 className="text-3xl font-black text-gray-900 dark:text-white mt-1">{item.value}</h3>
               </div>
             </div>
@@ -101,18 +125,18 @@ const AdminDashboard = ({ stats, weeklyData, studentLevelData, userDistribution,
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* User Ecosystem Chart */}
-        <div className="lg:col-span-1 bg-white dark:bg-gray-800 p-8 rounded-3xl border border-gray-100 dark:border-gray-700 shadow-sm relative">
-           <h3 className="text-xl font-black text-gray-900 dark:text-white mb-6">Écosystème</h3>
+        <div className="lg:col-span-1 bg-white dark:bg-gray-800 p-8 rounded-3xl border border-gray-100 dark:border-gray-700 shadow-sm relative overflow-hidden">
+           <h3 className="text-xl font-black text-gray-900 dark:text-white mb-6">Répartition par Secteur</h3>
            <div className="h-64">
              <ResponsiveContainer>
                <PieChart>
                  <Pie 
                    data={userDistribution} 
-                   innerRadius={60} 
-                   outerRadius={80} 
+                   innerRadius={65} 
+                   outerRadius={85} 
                    dataKey="value" 
                    nameKey="name" 
-                   paddingAngle={8}
+                   paddingAngle={5}
                    stroke="none"
                  >
                    {userDistribution.map((entry: any, index: number) => (
@@ -120,40 +144,53 @@ const AdminDashboard = ({ stats, weeklyData, studentLevelData, userDistribution,
                    ))}
                  </Pie>
                  <Tooltip 
-                    contentStyle={{ borderRadius: '16px', border: 'none', backgroundColor: isDark ? '#1F2937' : '#FFFFFF', color: isDark ? '#F3F4F6' : '#111827' }}
+                    contentStyle={{ borderRadius: '16px', border: 'none', backgroundColor: isDark ? '#1F2937' : '#FFFFFF', color: isDark ? '#F3F4F6' : '#111827', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
                  />
-                 <Legend verticalAlign="bottom" align="center" iconType="circle" wrapperStyle={{ fontSize: '10px', fontWeight: 'bold' }} />
+                 <Legend verticalAlign="bottom" align="center" iconType="circle" wrapperStyle={{ fontSize: '11px', fontWeight: 'bold', paddingTop: '20px' }} />
                </PieChart>
              </ResponsiveContainer>
            </div>
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-center pointer-events-none mt-4">
-              <span className="text-[10px] font-black text-gray-400 uppercase">Total</span>
-              <p className="text-2xl font-black text-gray-900 dark:text-white">{Number(stats.total) || 0}</p>
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-center pointer-events-none mt-2">
+              <span className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase">Users</span>
+              <p className="text-3xl font-black text-gray-900 dark:text-white">{Number(stats.total) || 0}</p>
            </div>
         </div>
 
         {/* Weekly Curve Chart */}
         <div className="lg:col-span-2 bg-white dark:bg-gray-800 p-8 rounded-3xl border border-gray-100 dark:border-gray-700 shadow-sm">
-           <div className="flex justify-between items-center mb-8">
-              <h3 className="text-xl font-black text-gray-900 dark:text-white">Assiduité Hebdo</h3>
-              <div className="flex gap-4">
-                 <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-indigo-500" /><span className="text-[10px] font-bold text-gray-400 uppercase">Présents</span></div>
-                 <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-amber-500" /><span className="text-[10px] font-bold text-gray-400 uppercase">Retards</span></div>
+           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4">
+              <div>
+                <h3 className="text-xl font-black text-gray-900 dark:text-white">Évolution des Présences</h3>
+                <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">Analyse comparative hebdomadaire</p>
+              </div>
+              <div className="flex gap-4 p-2 bg-gray-50 dark:bg-gray-900/50 rounded-xl">
+                 <div className="flex items-center gap-2"><div className="w-2.5 h-2.5 rounded-full bg-indigo-500 shadow-lg shadow-indigo-500/30" /><span className="text-[10px] font-black text-gray-500 dark:text-gray-400 uppercase">Présents</span></div>
+                 <div className="flex items-center gap-2"><div className="w-2.5 h-2.5 rounded-full bg-amber-500 shadow-lg shadow-amber-500/30" /><span className="text-[10px] font-black text-gray-500 dark:text-gray-400 uppercase">Retards</span></div>
               </div>
            </div>
            <div className="h-64">
               <ResponsiveContainer>
                 <AreaChart data={weeklyData}>
                   <defs>
-                    <linearGradient id="curvePresents" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#4f46e5" stopOpacity={0.1}/><stop offset="95%" stopColor="#4f46e5" stopOpacity={0}/></linearGradient>
-                    <linearGradient id="curveRetards" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#f59e0b" stopOpacity={0.1}/><stop offset="95%" stopColor="#f59e0b" stopOpacity={0}/></linearGradient>
+                    <linearGradient id="curvePresents" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#4f46e5" stopOpacity={0.2}/><stop offset="95%" stopColor="#4f46e5" stopOpacity={0}/></linearGradient>
+                    <linearGradient id="curveRetards" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#f59e0b" stopOpacity={0.2}/><stop offset="95%" stopColor="#f59e0b" stopOpacity={0}/></linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={isDark ? '#374151' : '#F3F4F6'} />
-                  <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#9CA3AF', fontSize: 10, fontWeight: 800 }} dy={10} />
-                  <YAxis axisLine={false} tickLine={false} tick={{ fill: '#9CA3AF', fontSize: 10, fontWeight: 800 }} />
-                  <Tooltip contentStyle={{ borderRadius: '16px', border: 'none', backgroundColor: isDark ? '#1F2937' : '#FFFFFF', color: isDark ? '#F3F4F6' : '#111827' }} />
-                  <Area type="monotone" dataKey="presents" stroke="#4f46e5" fill="url(#curvePresents)" strokeWidth={3} />
-                  <Area type="monotone" dataKey="retards" stroke="#f59e0b" fill="url(#curveRetards)" strokeWidth={3} />
+                  <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#9CA3AF', fontSize: 11, fontWeight: 900 }} dy={10} />
+                  <YAxis axisLine={false} tickLine={false} tick={{ fill: isDark ? '#9CA3AF' : '#64748b', fontSize: 11, fontWeight: 900 }} />
+                  <Tooltip 
+                    contentStyle={{ 
+                      borderRadius: '16px', 
+                      border: 'none', 
+                      backgroundColor: isDark ? '#1F2937' : '#FFFFFF', 
+                      color: isDark ? '#F3F4F6' : '#111827', 
+                      boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)',
+                      fontSize: '12px',
+                      fontWeight: 'bold'
+                    }} 
+                  />
+                  <Area type="monotone" dataKey="presents" stroke="#4f46e5" fill="url(#curvePresents)" strokeWidth={4} animationDuration={1500} dot={{ r: 4, strokeWidth: 2, fill: isDark ? '#1F2937' : '#FFFFFF' }} activeDot={{ r: 6, strokeWidth: 0 }} />
+                  <Area type="monotone" dataKey="retards" stroke="#f59e0b" fill="url(#curveRetards)" strokeWidth={4} animationDuration={1500} dot={{ r: 4, strokeWidth: 2, fill: isDark ? '#1F2937' : '#FFFFFF' }} activeDot={{ r: 6, strokeWidth: 0 }} />
                 </AreaChart>
               </ResponsiveContainer>
            </div>
@@ -162,28 +199,45 @@ const AdminDashboard = ({ stats, weeklyData, studentLevelData, userDistribution,
 
       {/* Class distribution indicators */}
       <div className="bg-white dark:bg-gray-800 p-8 rounded-3xl border border-gray-100 dark:border-gray-700 shadow-sm">
-        <h3 className="text-xl font-black text-gray-900 dark:text-white mb-8 text-center sm:text-left">Démographie par Classe</h3>
+        <div className="flex items-center justify-between mb-8">
+          <div>
+            <h3 className="text-xl font-black text-gray-900 dark:text-white">Densité par Classe</h3>
+            <p className="text-sm text-gray-500 dark:text-gray-400 font-medium">Répartition réelle de l'effectif étudiant</p>
+          </div>
+          <button className="p-2.5 bg-gray-50 dark:bg-gray-700 rounded-xl text-gray-400 hover:text-indigo-600 transition-colors">
+            <TrendingUp size={20} />
+          </button>
+        </div>
+        
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           {classData.length > 0 ? (
             classData.map((cls: any, i: number) => (
-              <div key={i} className="space-y-3 p-4 bg-gray-50 dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 transition-all hover:border-indigo-200 group">
-                <div className="flex justify-between items-center mb-1">
-                  <span className="text-xs font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-widest">{cls.name}</span>
-                  <span className="text-[10px] font-black py-0.5 px-2 bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300 rounded-full">{cls.percentage}%</span>
+              <div key={i} className="space-y-4 p-5 bg-gray-50 dark:bg-gray-900/50 rounded-2xl border border-gray-100 dark:border-gray-700 opacity-0 animate-fade-in transition-all hover:border-indigo-200 dark:hover:border-indigo-800 hover:translate-y-[-2px] group" style={{ animationDelay: `${i * 100}ms`, animationFillMode: 'forwards' }}>
+                <div className="flex justify-between items-center">
+                  <span className="text-[10px] font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-widest bg-indigo-50 dark:bg-indigo-900/50 px-2 py-1 rounded-md">{cls.name}</span>
+                  <div className="flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                    <span className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-tighter">Live</span>
+                  </div>
                 </div>
-                <div className="flex items-end justify-between">
-                   <h4 className="text-2xl font-black text-gray-900 dark:text-white">{Number(cls.students) || 0} <span className="text-xs font-medium text-gray-400">Élèves</span></h4>
-                   <div className="w-10 h-10 group-hover:scale-110 transition-transform">
+                
+                <div className="flex items-end justify-between gap-2">
+                   <div className="min-w-0">
+                     <h4 className="text-3xl font-black text-gray-900 dark:text-white truncate">{Number(cls.students) || 0}</h4>
+                     <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">Élèves</p>
+                   </div>
+                   <div className="w-12 h-12 shrink-0 group-hover:scale-110 transition-transform">
                       <ResponsiveContainer width="100%" height="100%">
                         <PieChart>
                           <Pie 
                             data={[{value: Number(cls.students) || 0}, {value: Math.max(0, (Number(stats.total) || 100) - (Number(cls.students) || 0))}]} 
                             dataKey="value" 
-                            innerRadius={15} 
-                            outerRadius={20} 
+                            innerRadius={18} 
+                            outerRadius={24} 
                             startAngle={90} 
                             endAngle={450} 
                             stroke="none"
+                            paddingAngle={2}
                           >
                             <Cell fill={COLORS[i % COLORS.length]} />
                             <Cell fill={isDark ? '#374151' : '#E5E7EB'} />
@@ -192,19 +246,32 @@ const AdminDashboard = ({ stats, weeklyData, studentLevelData, userDistribution,
                       </ResponsiveContainer>
                    </div>
                 </div>
-                <div className="h-1.5 w-full bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-                  <div 
-                    className="h-full rounded-full transition-all duration-1000" 
-                    style={{ 
-                      width: `${cls.percentage}%`, 
-                      backgroundColor: COLORS[i % COLORS.length] 
-                    }} 
-                  />
+
+                <div className="space-y-1.5">
+                  <div className="flex justify-between items-center text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase">
+                    <span>Occupation</span>
+                    <span className="text-gray-900 dark:text-white">{cls.percentage}%</span>
+                  </div>
+                  <div className="h-2 w-full bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden shadow-inner">
+                    <motion.div 
+                      initial={{ width: 0 }}
+                      animate={{ width: `${cls.percentage}%` }}
+                      className="h-full rounded-full transition-all duration-1000 shadow-md" 
+                      style={{ 
+                        backgroundColor: COLORS[i % COLORS.length] 
+                      }} 
+                    />
+                  </div>
                 </div>
               </div>
             ))
           ) : (
-             <div className="col-span-full py-12 text-center text-gray-400 font-medium font-inter">Capture des données en cours...</div>
+             <div className="col-span-full py-16 text-center">
+                <div className="w-12 h-12 bg-gray-100 dark:bg-gray-800 rounded-2xl flex items-center justify-center mx-auto mb-4 text-gray-300 dark:text-gray-600">
+                  <Activity size={24} />
+                </div>
+                <p className="text-sm font-black text-gray-400 uppercase tracking-widest">Initialisation des flux de données...</p>
+             </div>
           )}
         </div>
       </div>
@@ -745,7 +812,7 @@ export default function Dashboard({ onNavigate }: any) {
         const cData = Object.entries(countsByClass).map(([name, students]) => ({
           name,
           students,
-          percentage: totalStudents > 0 ? ((students / totalStudents) * 100).toFixed(1) : '0'
+          percentage: totalStudents > 0 ? Number(((students / totalStudents) * 100).toFixed(1)) : 0
         })).sort((a, b) => b.students - a.students).slice(0, 8);
         setClassData(cData);
 

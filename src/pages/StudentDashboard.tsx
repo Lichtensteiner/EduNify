@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { collection, query, where, getDocs, onSnapshot, updateDoc, doc, getDoc, deleteDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, onSnapshot, updateDoc, doc, getDoc, deleteDoc, orderBy, limit } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { 
   LogOut, 
@@ -19,7 +19,8 @@ import {
   TrendingUp,
   Award,
   BookOpen,
-  Settings
+  Settings,
+  Sparkles
 } from 'lucide-react';
 import { 
   AreaChart, 
@@ -53,6 +54,7 @@ export default function StudentDashboard({ onNavigate }: { onNavigate?: (tab: st
   const [selectedNotificationState, setSelectedNotificationState] = useState<Notification | null>(null);
   const [grades, setGrades] = useState<any[]>([]);
   const [homework, setHomework] = useState<any[]>([]);
+  const [courses, setCourses] = useState<any[]>([]);
   const [house, setHouse] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
@@ -101,40 +103,73 @@ export default function StudentDashboard({ onNavigate }: { onNavigate?: (tab: st
       setHomework(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     });
 
+    // Fetch live courses (preparations)
+    // Removed orderBy from the filtered query to avoid the need for a composite index
+    const coursesQuery = currentUser.classe 
+      ? query(collection(db, 'preparations'), where('grade', '==', currentUser.classe))
+      : query(collection(db, 'preparations'), orderBy('createdAt', 'desc'), limit(10));
+
+    const unsubscribeCourses = onSnapshot(coursesQuery, (snapshot) => {
+      const coursesData = snapshot.docs.map(doc => ({ 
+        id: doc.id, 
+        ...doc.data(),
+        title: doc.data().topic, // Mapping topic to title for UI
+        timestamp: doc.data().createdAt // Mapping createdAt to timestamp
+      }));
+      
+      // Sort client-side so newest appear first
+      coursesData.sort((a: any, b: any) => {
+        const timeA = a.createdAt?.seconds ? a.createdAt.seconds : (a.createdAt?.toDate ? a.createdAt.toDate().getTime() : new Date(a.createdAt || 0).getTime());
+        const timeB = b.createdAt?.seconds ? b.createdAt.seconds : (b.createdAt?.toDate ? b.createdAt.toDate().getTime() : new Date(b.createdAt || 0).getTime());
+        return timeB - timeA;
+      });
+
+      setCourses(coursesData);
+    });
+
     return () => {
       unsubscribeGrades();
       unsubscribeHw();
+      unsubscribeCourses();
     };
   }, [currentUser]);
 
   // Analytics Helpers
   const calculateAverage = (gradeList: any[]) => {
-    if (gradeList.length === 0) return 0;
-    const totalWeightedScore = gradeList.reduce((acc, g) => acc + (g.score / g.maxScore * 20) * (g.coefficient || 1), 0);
-    const totalCoefficients = gradeList.reduce((acc, g) => acc + (g.coefficient || 1), 0);
-    return totalWeightedScore / totalCoefficients;
+    if (!gradeList || gradeList.length === 0) return 0;
+    const validGrades = gradeList.filter(g => g.maxScore > 0);
+    if (validGrades.length === 0) return 0;
+    
+    const totalWeightedScore = validGrades.reduce((acc, g) => acc + (g.score / g.maxScore * 20) * (g.coefficient || 1), 0);
+    const totalCoefficients = validGrades.reduce((acc, g) => acc + (g.coefficient || 1), 0);
+    
+    if (totalCoefficients === 0) return 0;
+    const avg = totalWeightedScore / totalCoefficients;
+    return isNaN(avg) ? 0 : avg;
   };
 
   const getAnalyticsData = () => {
     // 1. Evolution Data
     const evolutionData = grades
+      .filter(g => g.maxScore > 0)
       .map(g => ({
         date: g.date?.toDate ? g.date.toDate().toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' }) : 'N/A',
         timestamp: g.date?.toDate ? g.date.toDate().getTime() : 0,
-        score: parseFloat(((g.score / g.maxScore) * 20).toFixed(2)),
+        score: parseFloat(((g.score / g.maxScore) * 20).toFixed(2)) || 0,
       }))
       .sort((a, b) => a.timestamp - b.timestamp);
 
     // 2. Homework Data
     const completedCount = homework.filter(h => h.completedBy?.includes(currentUser?.id)).length;
-    const pendingCount = homework.length - completedCount;
+    const totalHw = homework.length || 1; // Avoid divide by zero
+    const pendingCount = Math.max(0, homework.length - completedCount);
     const hwData = [
       { name: 'Terminés', value: completedCount, color: '#10b981' },
       { name: 'À faire', value: pendingCount, color: '#6366f1' }
     ];
 
     // 3. Subject Data
-    const subjectAverages = Array.from(new Set(grades.map(g => g.subject))).map(subject => {
+    const subjectAverages = Array.from(new Set(grades.filter(g => g && g.subject).map(g => g.subject))).map(subject => {
       const sGrades = grades.filter(g => g.subject === subject);
       return {
         subject,
@@ -142,12 +177,20 @@ export default function StudentDashboard({ onNavigate }: { onNavigate?: (tab: st
         interrogations: sGrades.filter(g => g.type === 'interrogation').length,
         evaluations: sGrades.filter(g => g.type === 'evaluation').length
       };
-    }).sort((a, b) => b.average - a.average);
+    }).sort((a, b) => (b.average || 0) - (a.average || 0));
 
-    return { evolutionData, hwData, subjectAverages };
+    // 3. Attendance Stats
+    const attendanceStats = {
+      presents: attendance.filter(a => a.statut === 'Présent').length,
+      absents: attendance.filter(a => a.statut === 'Absent').length,
+      retards: attendance.filter(a => a.statut === 'Retard').length,
+      total: attendance.length || 1
+    };
+
+    return { evolutionData, hwData, subjectAverages, attendanceStats };
   };
 
-  const { evolutionData, hwData, subjectAverages } = getAnalyticsData();
+  const { evolutionData, hwData, subjectAverages, attendanceStats } = getAnalyticsData();
 
   useEffect(() => {
     const fetchData = async () => {
@@ -324,8 +367,103 @@ export default function StudentDashboard({ onNavigate }: { onNavigate?: (tab: st
             </div>
           </motion.div>
 
-          {/* Homework Progress and Subject Averages */}
           <div className="space-y-6">
+            {/* Live Courses Feed */}
+            <motion.div
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              className="bg-white dark:bg-gray-800 p-6 rounded-3xl shadow-sm border border-gray-100 dark:border-gray-700"
+            >
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                  <h2 className="text-sm font-black text-gray-900 dark:text-white uppercase tracking-widest flex items-center gap-2">
+                    <Sparkles size={16} className="text-indigo-600" />
+                    Flux des Cours
+                  </h2>
+                  <p className="text-[10px] text-gray-400 font-bold uppercase mt-0.5">Mises à jour en direct</p>
+                </div>
+                <div className="flex -space-x-2">
+                  {[1, 2, 3].map((_, i) => (
+                    <div key={i} className={`w-6 h-6 rounded-full border-2 border-white dark:border-gray-800 bg-indigo-${100 + i * 100} flex items-center justify-center text-[8px] font-bold text-indigo-600`}>
+                      {String.fromCharCode(65 + i)}
+                    </div>
+                  ))}
+                </div>
+              </div>
+              
+              <div className="space-y-4 max-h-[450px] overflow-y-auto pr-2 custom-scrollbar">
+                <AnimatePresence initial={false} mode="popLayout">
+                  {courses.length > 0 ? courses.map((course, i) => (
+                    <motion.div
+                      key={course.id || i}
+                      layout
+                      initial={{ opacity: 0, x: -20, scale: 0.95 }}
+                      animate={{ opacity: 1, x: 0, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.95, transition: { duration: 0.2 } }}
+                      transition={{ 
+                        type: "spring",
+                        stiffness: 300,
+                        damping: 25,
+                        delay: Math.min(i * 0.1, 1) 
+                      }}
+                      className="group p-5 bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 hover:border-indigo-400 dark:hover:border-indigo-500 hover:shadow-xl transition-all cursor-pointer relative overflow-hidden active:scale-95"
+                      onClick={() => course.fileUrl && window.open(course.fileUrl, '_blank')}
+                    >
+                      <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-indigo-600 transform scale-y-0 group-hover:scale-y-100 transition-transform origin-top" />
+                      
+                      <div className="flex justify-between items-start gap-4">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-2">
+                            <div className="px-2 py-1 bg-indigo-50 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 text-[9px] font-black uppercase rounded-lg tracking-tight">
+                              {course.subject || 'Cours'}
+                            </div>
+                            <div className="flex items-center gap-1 text-[9px] text-gray-400 font-bold uppercase">
+                              <Clock size={10} />
+                              {course.timestamp ? new Date(course.timestamp).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' }) : 'Récent'}
+                            </div>
+                          </div>
+                          
+                          <h3 className="text-base font-black text-gray-900 dark:text-white line-clamp-2 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors leading-tight">
+                            {course.topic || course.title}
+                          </h3>
+                          
+                          <div className="flex items-center gap-2 mt-4 pt-4 border-t border-gray-50 dark:border-gray-700/50">
+                             <div className="w-6 h-6 rounded-full bg-indigo-100 dark:bg-gray-700 flex items-center justify-center text-[8px] font-black text-indigo-600">
+                               {course.authorName?.[0] || 'P'}
+                             </div>
+                             <div className="flex flex-col">
+                               <span className="text-[10px] text-gray-900 dark:text-gray-200 font-bold">{course.authorName || 'Enseignant'}</span>
+                               <span className="text-[8px] text-gray-400 uppercase font-black">Publié à l'instant</span>
+                             </div>
+                          </div>
+                        </div>
+                        
+                        <div className="w-12 h-12 rounded-2xl bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-700 flex items-center justify-center text-gray-400 group-hover:bg-indigo-600 group-hover:text-white group-hover:border-indigo-600 transition-all shadow-sm shrink-0">
+                          <BookOpen size={20} />
+                        </div>
+                      </div>
+                    </motion.div>
+                  )) : (
+                    <div className="py-12 text-center">
+                       <div className="w-12 h-12 bg-gray-50 dark:bg-gray-900 rounded-2xl flex items-center justify-center mx-auto mb-3 text-gray-300 dark:text-gray-700">
+                         <BookOpen size={24} />
+                       </div>
+                       <p className="text-xs font-black text-gray-400 uppercase tracking-widest">Aucun cours publié</p>
+                    </div>
+                  )}
+                </AnimatePresence>
+              </div>
+              
+              {onNavigate && courses.length > 5 && (
+                <button 
+                  onClick={() => onNavigate('classroom')}
+                  className="w-full mt-6 py-3 bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:scale-[1.02] transition-all shadow-lg active:scale-95"
+                >
+                  Ouvrir le Centre de Ressources
+                </button>
+              )}
+            </motion.div>
+
             <motion.div 
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
@@ -368,7 +506,7 @@ export default function StudentDashboard({ onNavigate }: { onNavigate?: (tab: st
                 <Award size={16} className="text-amber-500" />
                 Moyennes par Matière
               </h2>
-              <div className="space-y-4 max-h-[150px] overflow-y-auto pr-2 custom-scrollbar">
+              <div className="space-y-4 max-h-[150px] overflow-y-auto pr-2 custom-scrollbar border-b border-gray-50 pb-6">
                 {subjectAverages.length > 0 ? subjectAverages.map((sub, i) => (
                   <div key={i} className="space-y-1">
                     <div className="flex justify-between text-xs">
@@ -387,6 +525,35 @@ export default function StudentDashboard({ onNavigate }: { onNavigate?: (tab: st
                 )) : (
                   <p className="text-center text-xs text-gray-400 py-4 italic">En attente de notation</p>
                 )}
+              </div>
+
+              {/* Real-time Density indicator */}
+              <div className="pt-6">
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
+                      <Activity size={12} className="text-emerald-500" />
+                      Densité de Présence
+                    </h3>
+                    <p className="text-[8px] text-gray-300 font-bold uppercase">Écosystème Classe</p>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-xl font-black text-gray-900">{attendanceStats.total > 0 ? Math.round((attendanceStats.presents / attendanceStats.total) * 100) : 0}%</span>
+                  </div>
+                </div>
+                <div className="h-2.5 w-full bg-gray-50 rounded-full border border-gray-100 p-0.5 shadow-inner">
+                  <motion.div 
+                    initial={{ width: 0 }}
+                    animate={{ width: `${attendanceStats.total > 0 ? (attendanceStats.presents / attendanceStats.total) * 100 : 0}%` }}
+                    className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-teal-400 relative overflow-hidden"
+                  >
+                    <div className="absolute inset-0 bg-[linear-gradient(45deg,rgba(255,255,255,.2)_25%,transparent_25%,transparent_50%,rgba(255,255,255,.2)_50%,rgba(255,255,255,.2)_75%,transparent_75%,transparent)] bg-[length:15px_15px] animate-[slide_1s_linear_infinite]" />
+                  </motion.div>
+                </div>
+                <div className="flex justify-between items-center mt-2">
+                  <span className="text-[8px] font-bold text-gray-400 uppercase tracking-tighter">Engagement : Moyen</span>
+                  <span className="text-[8px] font-black text-emerald-600 uppercase tracking-tighter">{attendanceStats.presents} Connectés</span>
+                </div>
               </div>
             </motion.div>
           </div>

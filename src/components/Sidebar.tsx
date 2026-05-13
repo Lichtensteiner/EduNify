@@ -33,7 +33,10 @@ export default function Sidebar({ activeTab, setActiveTab, isMobileOpen, setIsMo
       snapshot.docs.forEach(doc => {
         const data = doc.data();
         if (data.unreadCounts && data.unreadCounts[currentUser.id]) {
-          count += data.unreadCounts[currentUser.id];
+          const unread = Number(data.unreadCounts[currentUser.id]);
+          if (!isNaN(unread)) {
+            count += unread;
+          }
         }
       });
       setTotalUnreadCount(count);
