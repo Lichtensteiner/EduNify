@@ -24,6 +24,7 @@ import {
   Download, 
   RefreshCw 
 } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
 import { SCHOOL_CLASSES, SCHOOL_SUBJECTS } from '../constants';
 
 interface CoursesSubjectsProps {
@@ -71,6 +72,7 @@ export default function CoursesSubjects({ initialPrepId }: CoursesSubjectsProps)
 
   const isAdmin = currentUser?.role === 'admin' || 
                   currentUser?.email === 'martinienmvezogo@gmail.com';
+  const isStudent = currentUser?.role === 'élève';
 
   useEffect(() => {
     if (initialPrepId && preparations.length > 0) {
@@ -107,6 +109,12 @@ export default function CoursesSubjects({ initialPrepId }: CoursesSubjectsProps)
     let prepsQuery;
     if (isAdmin) {
       prepsQuery = query(collection(db, 'preparations'));
+    } else if (isStudent) {
+      // Students see published resources for their class
+      prepsQuery = query(
+        collection(db, 'resources'),
+        where('class_name', '==', currentUser.classe)
+      );
     } else {
       prepsQuery = query(
         collection(db, 'preparations'),
@@ -115,7 +123,20 @@ export default function CoursesSubjects({ initialPrepId }: CoursesSubjectsProps)
     }
 
     const unsubscribePreps = onSnapshot(prepsQuery, (snap) => {
-      const preps = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      const preps = snap.docs.map(doc => {
+        const data = doc.data();
+        return { 
+          id: doc.id, 
+          ...data,
+          // Map resource fields to preparation-like fields for UI compatibility if needed
+          topic: data.topic || data.title,
+          content: data.content || data.description,
+          fileUrl: data.fileUrl || data.url,
+          grade: data.grade || data.class_name,
+          // Handle resources having string timestamp vs preparations having serverTimestamp
+          createdAt: data.createdAt || (data.timestamp ? { toDate: () => new Date(data.timestamp) } : null)
+        };
+      });
       preps.sort((a: any, b: any) => {
         const dateA = a.createdAt?.toDate?.() || new Date(0);
         const dateB = b.createdAt?.toDate?.() || new Date(0);
@@ -560,18 +581,22 @@ export default function CoursesSubjects({ initialPrepId }: CoursesSubjectsProps)
           </h1>
           <p className="text-gray-500 dark:text-gray-400 mt-1">
             {isAdmin 
-              ? 'Supervision de tous les contenus pédagogiques de l\'établissement'
-              : 'Gérez vos contenus pédagogiques et préparations IA par classe'}
+              ? t('courses_subjects_admin_desc')
+              : isStudent
+              ? t('courses_subjects_student_desc')
+              : t('courses_subjects_teacher_desc')}
           </p>
         </div>
         {(isAdmin || currentUser?.role === 'enseignant') && (
-          <button 
+          <motion.button 
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
             onClick={() => setShowAddModal(true)}
             className="flex items-center justify-center gap-2 px-6 py-3 bg-indigo-600 text-white font-bold rounded-2xl hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-200"
           >
             <Plus size={20} />
-            Ajouter un cours
-          </button>
+            {t('add_course')}
+          </motion.button>
         )}
       </div>
 
@@ -581,21 +606,21 @@ export default function CoursesSubjects({ initialPrepId }: CoursesSubjectsProps)
           onClick={() => setActiveTab('courses')}
           className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
             activeTab === 'courses'
-              ? 'border-indigo-600 text-indigo-600'
-              : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
+               ? 'border-indigo-600 text-indigo-600'
+               : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
           }`}
         >
-          Cours & Préparations
+          {isStudent ? t('my_courses') : t('courses_preparations')}
         </button>
         <button
           onClick={() => setActiveTab('subjects')}
           className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
             activeTab === 'subjects'
-              ? 'border-indigo-600 text-indigo-600'
-              : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
+               ? 'border-indigo-600 text-indigo-600'
+               : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
           }`}
         >
-          Matières par Classe
+          {isStudent ? t('class_subjects_student') : t('class_subjects_teacher')}
         </button>
       </div>
 
@@ -613,53 +638,75 @@ export default function CoursesSubjects({ initialPrepId }: CoursesSubjectsProps)
                 className="w-full pl-10 pr-4 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
               />
             </div>
-            <div className="flex items-center gap-2">
-              <Filter size={18} className="text-gray-400" />
-              <select
-                value={selectedClassId}
-                onChange={(e) => setSelectedClassId(e.target.value)}
-                className="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
-              >
-                <option value="all">Toutes les classes / niveaux</option>
-                {Array.from(new Set(preparations.map(p => p.grade))).filter(Boolean).map(grade => (
-                  <option key={grade} value={grade}>{grade}</option>
-                ))}
-              </select>
-            </div>
+            {!isStudent && (
+              <div className="flex items-center gap-2">
+                <Filter size={18} className="text-gray-400" />
+                <select
+                  value={selectedClassId}
+                  onChange={(e) => setSelectedClassId(e.target.value)}
+                  className="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                >
+                  <option value="all">Toutes les classes / niveaux</option>
+                  {Array.from(new Set(preparations.map(p => p.grade))).filter(Boolean).sort().map(grade => (
+                    <option key={grade} value={grade}>{grade}</option>
+                  ))}
+                </select>
+              </div>
+            )}
           </div>
 
           {/* Content */}
           {Object.keys(groupedPreps).length === 0 ? (
-            <div className="bg-white dark:bg-gray-800 rounded-2xl border border-dashed border-gray-200 dark:border-gray-700 p-12 text-center">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="bg-white dark:bg-gray-800 rounded-2xl border border-dashed border-gray-200 dark:border-gray-700 p-12 text-center"
+            >
               <div className="w-16 h-16 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-full flex items-center justify-center mx-auto mb-4">
                 <FileText size={32} />
               </div>
-              <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-2">Aucun cours trouvé</h2>
+              <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-2">{t('no_courses_found')}</h2>
               <p className="text-gray-500 dark:text-gray-400 max-w-md mx-auto">
-                {currentUser?.role === 'admin' 
-                  ? 'Aucune préparation n\'a été générée par les enseignants pour le moment.'
-                  : 'Vous n\'avez pas encore de préparations enregistrées. Utilisez l\'Assistant IA pour générer vos premiers cours.'}
+                {isAdmin 
+                  ? t('no_courses_admin')
+                  : isStudent
+                  ? t('no_courses_student')
+                  : t('no_courses_teacher')}
               </p>
-            </div>
+            </motion.div>
           ) : (
-            <div className="space-y-8">
+            <div className="space-y-12">
               {Object.keys(groupedPreps).map(subject => (
-                <div key={subject} className="space-y-4">
+                <motion.div 
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  key={subject} 
+                  className="space-y-4"
+                >
                   <div className="flex items-center gap-2 px-2">
                     <div className="w-2 h-6 bg-indigo-600 rounded-full"></div>
                     <h2 className="text-lg font-bold text-gray-900 dark:text-white uppercase tracking-wider">{subject}</h2>
                     <span className="text-xs font-medium text-gray-400 bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded-full">
-                      {groupedPreps[subject].length} cours
+                      {groupedPreps[subject].length} {groupedPreps[subject].length > 1 ? 'cours' : 'cours'}
                     </span>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {groupedPreps[subject].map((prep: any) => (
-                      <div 
-                        key={prep.id}
-                        className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm hover:shadow-md transition-all overflow-hidden group"
-                      >
-                        <div className="p-6">
+                    <AnimatePresence mode="popLayout">
+                      {groupedPreps[subject].map((prep: any, i: number) => (
+                        <motion.div 
+                          key={prep.id}
+                          layout
+                          initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                          animate={{ opacity: 1, scale: 1, y: 0 }}
+                          exit={{ opacity: 0, scale: 0.9, y: -20 }}
+                          transition={{ duration: 0.3, delay: i * 0.05 }}
+                          className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm hover:shadow-xl transition-all overflow-hidden group hover:border-indigo-200 dark:hover:border-indigo-900/50"
+                        >
+                          <div 
+                            className="p-6 cursor-pointer"
+                            onClick={() => setSelectedPrep(prep)}
+                          >
                           <div className="flex justify-between items-start mb-4">
                             <div className="p-3 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-xl group-hover:scale-110 transition-transform">
                               <Sparkles size={24} />
@@ -702,11 +749,11 @@ export default function CoursesSubjects({ initialPrepId }: CoursesSubjectsProps)
                           <div className="space-y-2 mb-6">
                             <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
                               <Clock size={14} />
-                              <span>Généré le {new Date(prep.createdAt?.toDate()).toLocaleDateString()}</span>
+                              <span>{isStudent ? 'Publié le' : 'Généré le'} {prep.createdAt?.toDate ? new Date(prep.createdAt.toDate()).toLocaleDateString() : 'Récemment'}</span>
                             </div>
                             <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
                               <User size={14} />
-                              <span>Par {prep.authorName}</span>
+                              <span>{t('by_author')} {prep.authorName || (prep.teacher_id ? t('published_by_teacher') : t('system_label'))}</span>
                             </div>
                           </div>
 
@@ -735,14 +782,15 @@ export default function CoursesSubjects({ initialPrepId }: CoursesSubjectsProps)
                             onClick={() => setSelectedPrep(prep)}
                             className="text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:underline"
                           >
-                            Détails du cours
+                            {t('details_course')}
                           </button>
                           <ChevronRight size={14} className="text-indigo-600 dark:text-indigo-400" />
                         </div>
-                      </div>
-                    ))}
+                      </motion.div>
+                      ))}
+                    </AnimatePresence>
                   </div>
-                </div>
+                </motion.div>
               ))}
             </div>
           )}
@@ -755,9 +803,13 @@ export default function CoursesSubjects({ initialPrepId }: CoursesSubjectsProps)
               <div>
                 <h3 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
                   <BookOpen className="text-indigo-600" size={24} />
-                  Répertoire des Matières
+                  {t('subjects_repertoire')}
                 </h3>
-                <p className="text-xs text-gray-500 mt-1 italic">Configurez les matières globales et assignez les enseignants responsables</p>
+                <p className="text-xs text-gray-500 mt-1 italic">
+                  {isStudent
+                    ? t('subjects_student_desc')
+                    : t('subjects_teacher_desc')}
+                </p>
               </div>
               
               {isAdmin && (
@@ -912,7 +964,9 @@ export default function CoursesSubjects({ initialPrepId }: CoursesSubjectsProps)
             </div>
             
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {classes.map(cls => (
+              {classes
+                .filter(cls => !isStudent || cls.nom === currentUser?.classe)
+                .map(cls => (
                 <div key={cls.id} className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm overflow-hidden group hover:shadow-md transition-all">
                   <div className="p-6 border-b border-gray-100 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/50 flex justify-between items-start">
                     <div>
@@ -1059,7 +1113,7 @@ export default function CoursesSubjects({ initialPrepId }: CoursesSubjectsProps)
                 )}
               </div>
               <div className="flex items-center gap-2">
-                {!isEditing && (
+                {!isEditing && (isAdmin || currentUser?.role === 'enseignant') && (
                   <button 
                     onClick={handleStartEdit}
                     className="p-2 text-gray-400 hover:text-indigo-600 transition-colors"
@@ -1140,46 +1194,48 @@ export default function CoursesSubjects({ initialPrepId }: CoursesSubjectsProps)
                   >
                     {t('close')}
                   </button>
-                  <div className="relative">
-                    {showPublishSelect && (
-                      <div className="absolute bottom-full right-0 mb-2 w-64 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl shadow-xl p-4 animate-in slide-in-from-bottom-2 duration-200 z-10">
-                        <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-3">Publier à :</h4>
-                        <div className="space-y-2 max-h-48 overflow-y-auto custom-scrollbar mb-4">
-                          {classes.map(cls => (
-                            <label key={cls.id} className="flex items-center gap-3 p-2 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg cursor-pointer transition-colors">
-                              <input 
-                                type="checkbox"
-                                checked={classesToPublish.includes(cls.nom)}
-                                onChange={(e) => {
-                                  if (e.target.checked) setClassesToPublish([...classesToPublish, cls.nom]);
-                                  else setClassesToPublish(classesToPublish.filter(c => c !== cls.nom));
-                                }}
-                                className="w-4 h-4 rounded text-indigo-600 border-gray-300 focus:ring-indigo-500"
-                              />
-                              <span className="text-sm font-bold text-gray-700 dark:text-gray-300">{cls.nom}</span>
-                            </label>
-                          ))}
+                  {(isAdmin || currentUser?.role === 'enseignant') && (
+                    <div className="relative">
+                      {showPublishSelect && (
+                        <div className="absolute bottom-full right-0 mb-2 w-64 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl shadow-xl p-4 animate-in slide-in-from-bottom-2 duration-200 z-10">
+                          <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-3">Publier à :</h4>
+                          <div className="space-y-2 max-h-48 overflow-y-auto custom-scrollbar mb-4">
+                            {classes.map(cls => (
+                              <label key={cls.id} className="flex items-center gap-3 p-2 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg cursor-pointer transition-colors">
+                                <input 
+                                  type="checkbox"
+                                  checked={classesToPublish.includes(cls.nom)}
+                                  onChange={(e) => {
+                                    if (e.target.checked) setClassesToPublish([...classesToPublish, cls.nom]);
+                                    else setClassesToPublish(classesToPublish.filter(c => c !== cls.nom));
+                                  }}
+                                  className="w-4 h-4 rounded text-indigo-600 border-gray-300 focus:ring-indigo-500"
+                                />
+                                <span className="text-sm font-bold text-gray-700 dark:text-gray-300">{cls.nom}</span>
+                              </label>
+                            ))}
+                          </div>
+                          <button
+                            disabled={classesToPublish.length === 0 || publishing}
+                            onClick={handlePublishCourse}
+                            className="w-full py-2 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 disabled:opacity-50 transition-all flex items-center justify-center gap-2"
+                          >
+                            {publishing ? <RefreshCw className="animate-spin" size={16} /> : <Send size={16} />}
+                            Confirmer la publication
+                          </button>
                         </div>
-                        <button
-                          disabled={classesToPublish.length === 0 || publishing}
-                          onClick={handlePublishCourse}
-                          className="w-full py-2 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 disabled:opacity-50 transition-all flex items-center justify-center gap-2"
-                        >
-                          {publishing ? <RefreshCw className="animate-spin" size={16} /> : <Send size={16} />}
-                          Confirmer la publication
-                        </button>
-                      </div>
-                    )}
-                    <button
-                      onClick={() => setShowPublishSelect(!showPublishSelect)}
-                      className={`px-6 py-2 rounded-xl font-medium transition-all flex items-center gap-2 ${
-                        showPublishSelect ? 'bg-amber-100 text-amber-700 border border-amber-200 shadow-inner' : 'bg-indigo-600 text-white hover:bg-indigo-700'
-                      }`}
-                    >
-                      <Send size={18} />
-                      {showPublishSelect ? 'Annuler' : t('publish_to_class')}
-                    </button>
-                  </div>
+                      )}
+                      <button
+                        onClick={() => setShowPublishSelect(!showPublishSelect)}
+                        className={`px-6 py-2 rounded-xl font-medium transition-all flex items-center gap-2 ${
+                          showPublishSelect ? 'bg-amber-100 text-amber-700 border border-amber-200 shadow-inner' : 'bg-indigo-600 text-white hover:bg-indigo-700'
+                        }`}
+                      >
+                        <Send size={18} />
+                        {showPublishSelect ? 'Annuler' : t('publish_to_class')}
+                      </button>
+                    </div>
+                  )}
                 </>
               )}
             </div>

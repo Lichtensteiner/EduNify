@@ -480,7 +480,7 @@ const TeacherDashboard = ({ currentUser, t, tData, onNavigate }: any) => {
       <div className="bg-gradient-to-r from-blue-600 to-indigo-700 rounded-3xl p-8 text-white shadow-xl relative overflow-hidden">
         <div className="relative z-10 flex flex-col md:flex-row justify-between items-center gap-6">
           <div className="text-center md:text-left">
-            <h2 className="text-3xl font-black mb-2">Bonjour, Prof. {currentUser?.nom} !</h2>
+            <h2 className="text-3xl font-black mb-2 lowercase first-letter:uppercase">{t('teacher_greeting')} {currentUser?.prenom} {currentUser?.nom} !</h2>
             <p className="text-blue-100 opacity-90 max-w-md">Prêt pour une nouvelle journée d'enseignement ? Voici un aperçu de vos classes et de vos tâches pédagogiques.</p>
           </div>
           <div className="flex gap-4">
@@ -861,7 +861,13 @@ export default function Dashboard({ onNavigate }: any) {
       <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 tracking-tight">{t('dashboard')}</h1>
-          <p className="text-sm text-gray-500 mt-1">Bonjour {currentUser?.prenom}, ravi de vous revoir !</p>
+          <p className="text-sm text-gray-500 mt-1">
+            {currentUser?.role === 'enseignant' 
+              ? `${t('teacher_greeting')} ${currentUser?.prenom || ''} ${currentUser?.nom || ''}`
+              : currentUser?.role === 'élève'
+              ? `${t('student_greeting')} ${currentUser?.prenom || ''} ${currentUser?.nom || ''}`
+              : `Bonjour ${currentUser?.prenom || 'Utilisateur'}, ravi de vous revoir !`}
+          </p>
         </div>
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-2 bg-white dark:bg-gray-800 px-4 py-2 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm">

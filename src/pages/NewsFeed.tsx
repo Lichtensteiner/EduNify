@@ -63,8 +63,48 @@ export default function NewsFeed() {
   // Modal for likes/views
   const [showUsersModal, setShowUsersModal] = useState(false);
   const [modalTitle, setModalTitle] = useState('');
+  const [modalPostId, setModalPostId] = useState<string | null>(null);
+  const [modalType, setModalType] = useState<'likes' | 'views' | null>(null);
+  const [activeIds, setActiveIds] = useState<string[]>([]);
   const [modalUsers, setModalUsers] = useState<UserInfo[]>([]);
   const [modalLoading, setModalLoading] = useState(false);
+
+  // Re-fetch users whenever activeIds changes (real-time when modal is open)
+  useEffect(() => {
+    if (!showUsersModal || activeIds.length === 0) return;
+
+    const fetchUsers = async () => {
+      setModalLoading(true);
+      try {
+        const chunks = [];
+        for (let i = 0; i < activeIds.length; i += 30) {
+          chunks.push(activeIds.slice(i, i + 30));
+        }
+
+        const allUsers: UserInfo[] = [];
+        for (const chunk of chunks) {
+          const q = query(collection(db, 'users'), where('id', 'in', chunk));
+          const snap = await getDocs(q);
+          snap.docs.forEach(doc => {
+            const data = doc.data();
+            allUsers.push({
+              id: doc.id,
+              nom: data.nom || '',
+              prenom: data.prenom || '',
+              photo: data.photo
+            });
+          });
+        }
+        setModalUsers(allUsers);
+      } catch (error) {
+        console.error("Error fetching modal users:", error);
+      } finally {
+        setModalLoading(false);
+      }
+    };
+
+    fetchUsers();
+  }, [showUsersModal, activeIds]);
 
   const locales = { fr, en: enUS, es };
   const currentLocale = locales[language as keyof typeof locales] || fr;
@@ -278,43 +318,12 @@ export default function NewsFeed() {
     }
   };
 
-  const showInteractionUsers = async (title: string, userIds: string[]) => {
-    if (!userIds || userIds.length === 0) return;
-    
+  const showInteractionUsers = (title: string, userIds: string[], postId: string, type: 'likes' | 'views') => {
     setModalTitle(title);
+    setModalPostId(postId);
+    setModalType(type);
+    setActiveIds(userIds || []);
     setShowUsersModal(true);
-    setModalLoading(true);
-    setModalUsers([]);
-
-    try {
-      // Fetch user details for the IDs
-      // Note: Firestore 'in' query is limited to 30 items. 
-      // For more, we'd need to chunk or fetch individually.
-      const chunks = [];
-      for (let i = 0; i < userIds.length; i += 30) {
-        chunks.push(userIds.slice(i, i + 30));
-      }
-
-      const allUsers: UserInfo[] = [];
-      for (const chunk of chunks) {
-        const q = query(collection(db, 'users'), where('id', 'in', chunk));
-        const snap = await getDocs(q);
-        snap.docs.forEach(doc => {
-          const data = doc.data();
-          allUsers.push({
-            id: doc.id,
-            nom: data.nom || '',
-            prenom: data.prenom || '',
-            photo: data.photo
-          });
-        });
-      }
-      setModalUsers(allUsers);
-    } catch (error) {
-      console.error("Error fetching modal users:", error);
-    } finally {
-      setModalLoading(false);
-    }
   };
 
   return (
@@ -401,6 +410,14 @@ export default function NewsFeed() {
           const hasLiked = currentUser ? post.likes?.includes(currentUser.id) : false;
           const isAuthor = currentUser?.id === post.authorId;
           const postComments = comments[post.id] || [];
+          
+          // Update modal IDs in real-time if modal is open for this post
+          if (showUsersModal && modalPostId === post.id) {
+            const currentIds = modalType === 'likes' ? post.likes : post.viewers;
+            if (JSON.stringify(currentIds) !== JSON.stringify(activeIds)) {
+               setActiveIds(currentIds || []);
+            }
+          }
 
           return (
             <div 
@@ -507,7 +524,7 @@ export default function NewsFeed() {
               {/* Post Stats */}
               <div className="px-4 py-2 flex items-center justify-between text-sm text-gray-500 dark:text-gray-400 border-t border-gray-100 dark:border-gray-700">
                 <button 
-                  onClick={() => showInteractionUsers("Personnes qui ont aimé", post.likes || [])}
+                  onClick={() => showInteractionUsers("Personnes qui ont aimé", post.likes || [], post.id, 'likes')}
                   className="flex items-center gap-1 hover:text-indigo-600 transition-colors"
                 >
                   <Heart size={14} className={post.likes?.length > 0 ? "fill-red-500 text-red-500" : ""} />
@@ -521,11 +538,18 @@ export default function NewsFeed() {
                     {post.commentsCount || 0} commentaires
                   </button>
                   <button 
-                    onClick={() => showInteractionUsers("Personnes qui ont vu", post.viewers || [])}
+                    onClick={() => showInteractionUsers("Personnes qui ont vu", post.viewers || [], post.id, 'views')}
                     className="flex items-center gap-1 hover:text-indigo-600 transition-colors"
                   >
                     <Eye size={14} />
-                    <span>{post.views || 0} vues</span>
+                    <motion.span
+                      key={post.viewers?.length || 0}
+                      initial={{ scale: 1.2, color: '#4f46e5' }}
+                      animate={{ scale: 1, color: 'inherit' }}
+                      transition={{ duration: 0.3 }}
+                    >
+                      {post.viewers?.length || 0} vues
+                    </motion.span>
                   </button>
                 </div>
               </div>

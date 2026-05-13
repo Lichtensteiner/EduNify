@@ -349,6 +349,9 @@ export default function Messaging({ initialChatTargetId, onClearTarget }: Messag
           convId = newConvRef.id;
         }
         
+        // Prefix broadcast with sender name if we want to follow the "real network" pattern
+        const senderDisplayName = currentUser.prenom || currentUser.nom ? `${currentUser.prenom || ''} ${currentUser.nom || ''}`.trim() : currentUser.email?.split('@')[0] || t('user');
+        
         await addDoc(collection(db, `conversations/${convId}/messages`), {
           senderId: currentUser.id,
           text: groupMessageText.trim(),
@@ -364,10 +367,9 @@ export default function Messaging({ initialChatTargetId, onClearTarget }: Messag
         }, { merge: true });
 
         // Notify recipient
-        const senderName = currentUser.prenom || currentUser.nom ? `${currentUser.prenom || ''} ${currentUser.nom || ''}`.trim() : currentUser.email?.split('@')[0] || t('user');
         await createNotification({
           user_id: userId,
-          title: `${t('new_message_from')} ${senderName}`,
+          title: `${t('new_message_from')} ${senderDisplayName}`,
           message: groupMessageText.trim(),
           type: 'info',
           targetTab: 'messaging'
@@ -515,8 +517,15 @@ export default function Messaging({ initialChatTargetId, onClearTarget }: Messag
                           <h3 className="font-medium text-gray-900 dark:text-white">
                             {conv.groupName}
                           </h3>
-                          <p className="text-sm text-gray-500 dark:text-gray-400 line-clamp-1">
-                            {conv.lastMessage}
+                          <p className={`text-sm dark:text-gray-400 line-clamp-1 ${conv.unreadCounts?.[currentUser.id] ? 'text-gray-900 dark:text-gray-200 font-semibold' : 'text-gray-500'}`}>
+                            {conv.isGroup && conv.lastMessage.includes(': ') ? (
+                              <>
+                                <span className="font-bold text-gray-700 dark:text-gray-300">{conv.lastMessage.split(': ')[0]}: </span>
+                                {conv.lastMessage.split(': ').slice(1).join(': ')}
+                              </>
+                            ) : (
+                              conv.lastMessage || <span className="italic">{t('new_conversation')}</span>
+                            )}
                           </p>
                         </div>
                       </div>
@@ -566,7 +575,7 @@ export default function Messaging({ initialChatTargetId, onClearTarget }: Messag
                           <h3 className="font-medium text-gray-900 dark:text-white">
                             {user.prenom || user.nom ? `${user.prenom || ''} ${user.nom || ''}`.trim() : user.email?.split('@')[0] || t('user')}
                           </h3>
-                          <p className="text-sm text-gray-500 dark:text-gray-400 line-clamp-1">
+                          <p className={`text-sm line-clamp-1 ${existingConv?.unreadCounts?.[currentUser?.id] ? 'text-gray-900 dark:text-gray-200 font-semibold italic' : 'text-gray-500 dark:text-gray-400'}`}>
                             {existingConv?.lastMessage || <span className="italic">{t('new_conversation')}</span>}
                           </p>
                         </div>

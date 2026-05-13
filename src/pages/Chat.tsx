@@ -131,16 +131,20 @@ export default function Chat({ conversationId, onBack }: ChatProps) {
         } else {
           // Fetch all participants for group chat
           const fetchParticipants = async () => {
-             const newMap: Record<string, any> = {};
+             const newMap: Record<string, any> = { ...participantsMap };
+             let changed = false;
              for (const pId of data.participants) {
-                if (pId !== currentUser.id) {
+                if (pId !== currentUser.id && !newMap[pId]) {
                    const uDoc = await getDoc(doc(db, 'users', pId));
                    if (uDoc.exists()) {
                       newMap[pId] = { id: uDoc.id, ...uDoc.data() };
+                      changed = true;
                    }
                 }
              }
-             setParticipantsMap(newMap);
+             if (changed) {
+               setParticipantsMap(prev => ({ ...prev, ...newMap }));
+             }
           };
           fetchParticipants();
         }
@@ -321,8 +325,13 @@ export default function Chat({ conversationId, onBack }: ChatProps) {
           else lastMsgText = `📎 ${t('file')}`;
         }
 
+        const senderName = currentUser.prenom || currentUser.nom ? `${currentUser.prenom || ''} ${currentUser.nom || ''}`.trim() : currentUser.email?.split('@')[0] || t('user');
+        
+        // For groups, prefix last message with sender name
+        const displayLastMsg = conversationData?.isGroup ? `${senderName}: ${lastMsgText}` : lastMsgText;
+
         const updateData: any = {
-          lastMessage: lastMsgText,
+          lastMessage: displayLastMsg,
           lastMessageTime: serverTimestamp(),
           unreadCounts: {}
         };
