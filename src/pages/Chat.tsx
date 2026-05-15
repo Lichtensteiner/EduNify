@@ -42,6 +42,7 @@ export default function Chat({ conversationId, onBack }: ChatProps) {
   const [conversationData, setConversationData] = useState<any>(null);
   const [showScheduleModal, setShowScheduleModal] = useState(false);
   const [showOptions, setShowOptions] = useState(false);
+  const [showGroupMembers, setShowGroupMembers] = useState(false);
   const [scheduledDate, setScheduledDate] = useState('');
   const [scheduledTime, setScheduledTime] = useState('');
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
@@ -65,18 +66,53 @@ export default function Chat({ conversationId, onBack }: ChatProps) {
   }, []);
 
   const handleDeleteMessage = async (messageId: string) => {
-    if (!window.confirm(t('delete_message_confirm'))) return;
+    if (!window.confirm("Supprimer ce message pour tout le monde ?")) return;
     
     try {
       await updateDoc(doc(db, `conversations/${conversationId}/messages`, messageId), {
         isDeleted: true,
         text: '',
         mediaUrl: null,
-        mediaType: null
+        mediaType: null,
+        updatedAt: serverTimestamp()
       });
       setActiveMessageMenu(null);
     } catch (error) {
       console.error("Erreur lors de la suppression du message:", error);
+    }
+  };
+
+  const handleClearChat = async () => {
+    if (!currentUser || !conversationId) return;
+    if (!window.confirm("Voulez-vous vraiment supprimer TOUS les messages de cette conversation pour TOUT LE MONDE ? Cette action est irréversible.")) return;
+
+    try {
+      const messagesRef = collection(db, `conversations/${conversationId}/messages`);
+      const snapshot = await getDocs(messagesRef);
+      
+      const deletePromises = snapshot.docs.map(messageDoc => 
+        updateDoc(doc(db, `conversations/${conversationId}/messages`, messageDoc.id), {
+          isDeleted: true,
+          text: '',
+          mediaUrl: null,
+          mediaType: null,
+          updatedAt: serverTimestamp()
+        })
+      );
+
+      await Promise.all(deletePromises);
+      
+      // Update last message in conversation
+      await updateDoc(doc(db, 'conversations', conversationId), {
+        lastMessage: "Messages effacés",
+        lastMessageTime: serverTimestamp()
+      });
+
+      setShowOptions(false);
+      alert("La conversation a été vidée.");
+    } catch (error) {
+      console.error("Error clearing chat:", error);
+      alert("Une erreur est survenue lors de la suppression des messages.");
     }
   };
 
@@ -276,12 +312,106 @@ export default function Chat({ conversationId, onBack }: ChatProps) {
     setUploadProgress(0);
   };
 
+  const toggleMute = async () => {
+    if (!conversationId || !currentUser) return;
+    const isMuted = conversationData?.mutedBy?.includes(currentUser.id);
+    try {
+      const convRef = doc(db, 'conversations', conversationId);
+      if (isMuted) {
+        await updateDoc(convRef, {
+          mutedBy: conversationData.mutedBy.filter((id: string) => id !== currentUser.id)
+        });
+      } else {
+        await updateDoc(convRef, {
+          mutedBy: [...(conversationData.mutedBy || []), currentUser.id]
+        });
+      }
+      setShowOptions(false);
+    } catch (error) {
+      console.error("Error toggling mute:", error);
+    }
+  };
+
+  const handleBlockUser = async () => {
+    if (!otherUser || !currentUser) return;
+    const isAlreadyBlocked = currentUser.blockedUsers?.includes(otherUser.id);
+    const confirmMsg = isAlreadyBlocked 
+      ? `Débloquer ${otherUser.prenom} ${otherUser.nom} ?`
+      : `Bloquer ${otherUser.prenom} ${otherUser.nom} ?`;
+    
+    if (!window.confirm(confirmMsg)) return;
+
+    try {
+      const currentBlocked = currentUser.blockedUsers || [];
+      const userRef = doc(db, 'users', currentUser.id);
+      
+      if (isAlreadyBlocked) {
+        await updateDoc(userRef, {
+          blockedUsers: currentBlocked.filter((id: string) => id !== otherUser.id)
+        });
+      } else {
+        await updateDoc(userRef, {
+          blockedUsers: [...currentBlocked, otherUser.id]
+        });
+      }
+      setShowOptions(false);
+    } catch (error) {
+      console.error("Error blocking user:", error);
+    }
+  };
+
+  const handleLeaveGroup = async () => {
+    if (!conversationId || !currentUser || !conversationData?.isGroup) return;
+    if (!window.confirm("Quitter ce groupe ? Vous ne pourrez plus voir les nouveaux messages.")) return;
+
+    try {
+      const convRef = doc(db, 'conversations', conversationId);
+      const newParticipants = conversationData.participants.filter((id: string) => id !== currentUser.id);
+      
+      if (newParticipants.length === 0) {
+        // Delete conversation if no one left
+        // (In a real app, maybe mark as inactive)
+      } else {
+        await updateDoc(convRef, {
+          participants: newParticipants,
+          lastMessage: `${currentUser.prenom || 'Un utilisateur'} a quitté le groupe`,
+          lastMessageTime: serverTimestamp()
+        });
+      }
+      setShowOptions(false);
+      onBack();
+    } catch (error) {
+      console.error("Error leaving group:", error);
+    }
+  };
+
+  const handleDeleteConversation = async () => {
+    if (!conversationId || !currentUser) return;
+    if (!window.confirm("Supprimer cette conversation définitivement ?")) return;
+
+    try {
+      // In a real app we might just hide it for this user
+      // For this implementation, we'll remove the user from participants if it's 1v1
+      const convRef = doc(db, 'conversations', conversationId);
+      if (!conversationData.isGroup) {
+        const newParticipants = conversationData.participants.filter((id: string) => id !== currentUser.id);
+        await updateDoc(convRef, {
+          participants: newParticipants
+        });
+      }
+      setShowOptions(false);
+      onBack();
+    } catch (error) {
+      console.error("Error deleting conversation:", error);
+    }
+  };
+
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if ((!newMessage.trim() && !selectedFile) || !currentUser || !conversationId) return;
 
-    if (currentUser.chatBlocked) {
-      alert(t('messaging_blocked_notice'));
+    if (currentUser.chatBlocked || (!conversationData?.isGroup && currentUser.blockedUsers?.includes(otherUser?.id))) {
+      alert(currentUser.chatBlocked ? t('messaging_blocked_notice') : "Vous avez bloqué cet utilisateur.");
       return;
     }
 
@@ -448,30 +578,106 @@ export default function Chat({ conversationId, onBack }: ChatProps) {
           </button>
           
           {showOptions && (
-            <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-100 dark:border-gray-700 overflow-hidden z-50 py-1">
+            <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-100 dark:border-gray-700 overflow-hidden z-50 py-1">
               <button 
-                onClick={() => { setShowOptions(false); alert(t('view_profile')); }}
-                className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                onClick={() => { setShowOptions(false); setShowGroupMembers(true); }}
+                className="w-full text-left px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors flex items-center gap-2"
               >
-                {t('view_profile')}
+                <Users size={16} />
+                {conversationData?.isGroup ? "Membres du groupe" : t('view_profile')}
               </button>
+              
               <button 
-                onClick={() => { setShowOptions(false); alert(t('search_in_conversation')); }}
-                className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                onClick={toggleMute}
+                className="w-full text-left px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors flex items-center gap-2"
               >
-                {t('search_in_conversation')}
+                <Smile size={16} />
+                {conversationData?.mutedBy?.includes(currentUser?.id) ? "Rétablir les sons" : "Sourdine"}
               </button>
+
               <div className="h-px bg-gray-100 dark:bg-gray-700 my-1"></div>
-              <button 
-                onClick={() => { setShowOptions(false); alert(t('block_user')); }}
-                className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
-              >
-                {t('block_user')}
-              </button>
+              
+              {conversationData?.isGroup ? (
+                <button 
+                  onClick={handleLeaveGroup}
+                  className="w-full text-left px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors flex items-center gap-2"
+                >
+                  <ArrowLeft size={16} />
+                  Quitter le groupe
+                </button>
+              ) : (
+                <>
+                  <button 
+                    onClick={handleBlockUser}
+                    className="w-full text-left px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors flex items-center gap-2"
+                  >
+                    <Ban size={16} />
+                    {currentUser?.blockedUsers?.includes(otherUser?.id) ? "Débloquer" : t('block_user')}
+                  </button>
+                  <button 
+                    onClick={handleDeleteConversation}
+                    className="w-full text-left px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors flex items-center gap-2"
+                  >
+                    <Trash2 size={16} />
+                    Supprimer la conversation
+                  </button>
+                </>
+              )}
+
+              {(currentUser?.role === 'admin' || currentUser?.role === 'enseignant') && (
+                <>
+                  <div className="h-px bg-gray-100 dark:bg-gray-700 my-1"></div>
+                  <button 
+                    onClick={handleClearChat}
+                    className="w-full text-left px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors flex items-center gap-2"
+                  >
+                    <Trash2 size={16} />
+                    Vider les messages (Admin)
+                  </button>
+                </>
+              )}
             </div>
           )}
         </div>
       </div>
+
+      {/* Group Members Modal / Sidebar Overlay */}
+      {showGroupMembers && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl w-full max-w-sm overflow-hidden animate-in fade-in zoom-in duration-200">
+            <div className="p-4 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center">
+              <h3 className="font-bold text-gray-900 dark:text-white">Membres</h3>
+              <button onClick={() => setShowGroupMembers(false)} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-colors">
+                <X size={20} className="text-gray-400" />
+              </button>
+            </div>
+            <div className="max-h-[60vh] overflow-y-auto p-2 space-y-1">
+              {conversationData?.participants.map((pId: string) => {
+                const user = pId === currentUser?.id ? currentUser : participantsMap[pId];
+                if (!user) return null;
+                return (
+                  <div key={pId} className="flex items-center gap-3 p-3 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-xl transition-colors">
+                    <div className="w-10 h-10 rounded-full bg-indigo-100 dark:bg-indigo-900/50 flex items-center justify-center text-indigo-600 dark:text-indigo-400 font-bold overflow-hidden shadow-sm">
+                      {user.photo ? (
+                        <img src={user.photo} alt="" className="w-full h-full object-cover" />
+                      ) : (
+                        `${user.prenom?.[0] || ''}${user.nom?.[0] || 'U'}`
+                      )}
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-sm font-bold dark:text-white">{user.prenom} {user.nom}</p>
+                      <p className="text-[10px] text-gray-500 uppercase font-black">{user.role}</p>
+                    </div>
+                    {pId === currentUser?.id && (
+                      <span className="text-[9px] font-black text-indigo-600 bg-indigo-50 px-2 py-1 rounded-lg uppercase">Moi</span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Messages Area */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50 dark:bg-gray-900 custom-scrollbar">
@@ -512,7 +718,7 @@ export default function Chat({ conversationId, onBack }: ChatProps) {
                     ? (isScheduled ? 'bg-indigo-400 text-white rounded-br-none border border-indigo-500 border-dashed' : 'bg-indigo-600 text-white rounded-br-none') 
                     : 'bg-white dark:bg-gray-800 text-gray-900 dark:text-white border border-gray-200 dark:border-gray-700 rounded-bl-none'
                 }`}>
-                  {isMine && !msg.isDeleted && (
+                  {((isMine && !msg.isDeleted) || (currentUser?.role === 'admin' || currentUser?.role === 'enseignant')) && !msg.isDeleted && (
                     <div className="message-menu-container absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity">
                       <button 
                         onClick={() => setActiveMessageMenu(activeMessageMenu === msg.id ? null : msg.id)}
@@ -528,7 +734,7 @@ export default function Chat({ conversationId, onBack }: ChatProps) {
                               className="w-full flex items-center gap-2 px-4 py-3 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
                             >
                               <Trash2 size={16} />
-                              {t('delete_for_everyone')}
+                              {isMine ? t('delete_for_everyone') : "Supprimer (Modération)"}
                             </button>
                         </div>
                       )}
