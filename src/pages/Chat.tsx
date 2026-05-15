@@ -550,18 +550,18 @@ export default function Chat({ conversationId, onBack }: ChatProps) {
               <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-white dark:border-gray-800 rounded-full"></div>
             )}
           </div>
-          <div>
-            <h2 className="font-bold text-gray-900 dark:text-white">
+          <div className="min-w-0">
+            <h2 className="font-bold text-gray-900 dark:text-white truncate max-w-[150px] sm:max-w-none">
               {conversationData?.isGroup 
                 ? conversationData.groupName 
                 : (otherUser ? `${otherUser.prenom} ${otherUser.nom}` : t('loading'))}
             </h2>
             {!conversationData?.isGroup && otherUser && (
-              <p className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1">
+              <p className="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1 truncate">
                 {otherUser.status === 'online' ? (
                   <span className="text-green-500 font-medium">{t('online_status')}</span>
                 ) : (
-                  <span>
+                  <span className="truncate">
                     {t('online_status')} {otherUser.lastSeen ? t('online_at').replace('{{date}}', format(otherUser.lastSeen.toDate(), 'dd/MM')).replace('{{time}}', format(otherUser.lastSeen.toDate(), 'HH:mm')) : t('recently')}
                   </span>
                 )}
@@ -578,10 +578,10 @@ export default function Chat({ conversationId, onBack }: ChatProps) {
           </button>
           
           {showOptions && (
-            <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-100 dark:border-gray-700 overflow-hidden z-50 py-1">
+            <div className="absolute right-0 mt-2 w-48 sm:w-56 bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-100 dark:border-gray-700 overflow-hidden z-50 py-1 origin-top-right">
               <button 
                 onClick={() => { setShowOptions(false); setShowGroupMembers(true); }}
-                className="w-full text-left px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors flex items-center gap-2"
+                className="w-full text-left px-4 py-2.5 text-xs sm:text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors flex items-center gap-2"
               >
                 <Users size={16} />
                 {conversationData?.isGroup ? "Membres du groupe" : t('view_profile')}
@@ -589,7 +589,7 @@ export default function Chat({ conversationId, onBack }: ChatProps) {
               
               <button 
                 onClick={toggleMute}
-                className="w-full text-left px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors flex items-center gap-2"
+                className="w-full text-left px-4 py-2.5 text-xs sm:text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors flex items-center gap-2"
               >
                 <Smile size={16} />
                 {conversationData?.mutedBy?.includes(currentUser?.id) ? "Rétablir les sons" : "Sourdine"}
@@ -609,14 +609,14 @@ export default function Chat({ conversationId, onBack }: ChatProps) {
                 <>
                   <button 
                     onClick={handleBlockUser}
-                    className="w-full text-left px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors flex items-center gap-2"
+                    className="w-full text-left px-4 py-2.5 text-[11px] sm:text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors flex items-center gap-2"
                   >
                     <Ban size={16} />
                     {currentUser?.blockedUsers?.includes(otherUser?.id) ? "Débloquer" : t('block_user')}
                   </button>
                   <button 
                     onClick={handleDeleteConversation}
-                    className="w-full text-left px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors flex items-center gap-2"
+                    className="w-full text-left px-4 py-2.5 text-[11px] sm:text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors flex items-center gap-2"
                   >
                     <Trash2 size={16} />
                     Supprimer la conversation
@@ -728,10 +728,10 @@ export default function Chat({ conversationId, onBack }: ChatProps) {
                       </button>
                       
                       {activeMessageMenu === msg.id && (
-                        <div className="absolute right-0 mt-1 w-48 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 overflow-hidden z-50">
+                        <div className={`absolute ${isMine ? 'right-0' : 'left-0'} mt-1 w-44 sm:w-48 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 overflow-hidden z-50 animate-in fade-in zoom-in duration-150`}>
                             <button 
                               onClick={() => handleDeleteMessage(msg.id)}
-                              className="w-full flex items-center gap-2 px-4 py-3 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                              className="w-full flex items-center gap-2 px-4 py-3 text-xs sm:text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
                             >
                               <Trash2 size={16} />
                               {isMine ? t('delete_for_everyone') : "Supprimer (Modération)"}
@@ -853,13 +853,13 @@ export default function Chat({ conversationId, onBack }: ChatProps) {
                     <Smile size={18} />
                   </button>
                   {showEmojiPicker && (
-                    <div className="absolute bottom-full left-0 sm:left-0 -left-16 mb-2 z-50 shadow-xl rounded-lg">
+                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 sm:left-0 sm:translate-x-0 mb-2 z-50 shadow-2xl rounded-lg">
                       <EmojiPicker 
                         onEmojiClick={onEmojiClick}
                         theme={document.documentElement.classList.contains('dark') ? Theme.DARK : Theme.LIGHT}
                         searchPlaceHolder={t('search_emoji')}
-                        width={window.innerWidth < 640 ? 280 : 320}
-                        height={400}
+                        width={Math.min(window.innerWidth - 32, 320)}
+                        height={350}
                       />
                     </div>
                   )}
