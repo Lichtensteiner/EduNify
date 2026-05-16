@@ -142,7 +142,7 @@ const TeacherPlanning: React.FC = () => {
       const end = new Date(`${formData.endDate}T${formData.endTime}`);
 
       if (end <= start) {
-        notifyError("L'heure de fin doit être après l'heure de début.");
+        notifyError(t('end_before_start_error'));
         return;
       }
 
@@ -164,13 +164,13 @@ const TeacherPlanning: React.FC = () => {
 
       if (editingItem) {
         await updateDoc(doc(db, 'teacher_planning', editingItem.id), data);
-        notifySuccess("Planning mis à jour !");
+        notifySuccess(t('activity_saved'));
       } else {
         await addDoc(collection(db, 'teacher_planning'), {
           ...data,
           createdAt: serverTimestamp()
         });
-        notifySuccess("Planning ajouté !");
+        notifySuccess(t('activity_saved'));
       }
 
       setShowAddModal(false);
@@ -198,12 +198,12 @@ const TeacherPlanning: React.FC = () => {
   };
 
   const handleDelete = async (id: string) => {
-    if (!window.confirm("Supprimer cet élément du planning ?")) return;
+    if (!window.confirm(t('teacher_planning_delete_confirm'))) return;
     try {
       await deleteDoc(doc(db, 'teacher_planning', id));
-      notifyDelete("Élément supprimé");
+      notifyDelete(t('activity_deleted'));
     } catch (error) {
-      notifyError("Erreur lors de la suppression");
+      notifyError(t('error_saving'));
     }
   };
 
@@ -265,15 +265,15 @@ const TeacherPlanning: React.FC = () => {
           <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 p-6">
             <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
               <Clock className="text-indigo-500" />
-              Aujourd'hui
+              {t('today')}
             </h3>
             <div className="space-y-4">
               <div className="flex items-center justify-between p-3 bg-indigo-50 dark:bg-indigo-900/20 rounded-xl border border-indigo-100 dark:border-indigo-800">
-                <span className="text-sm font-medium text-indigo-700 dark:text-indigo-300">Total activités</span>
+                <span className="text-sm font-medium text-indigo-700 dark:text-indigo-300">{t('total_activities')}</span>
                 <span className="text-2xl font-bold text-indigo-900 dark:text-indigo-100">{planning.length}</span>
               </div>
               <p className="text-xs text-gray-500 dark:text-gray-400 italic">
-                * Les activités s'affichent pour 24 heures glissantes.
+                {t('activity_display_notice')}
               </p>
             </div>
           </div>
@@ -309,7 +309,7 @@ const TeacherPlanning: React.FC = () => {
                         {isCurrent && (
                           <span className="flex items-center gap-1.5 px-2 py-0.5 bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 rounded-full text-[10px] font-bold animate-pulse">
                             <span className="w-1.5 h-1.5 bg-green-500 rounded-full"></span>
-                            EN COURS
+                            {t('in_progress_caps')}
                           </span>
                         )}
                       </div>
@@ -341,7 +341,7 @@ const TeacherPlanning: React.FC = () => {
                       <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
                         <Clock size={16} className="text-indigo-500" />
                         <span>
-                          {item.startTime.toDate().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })} - {item.endTime.toDate().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+                          {item.startTime.toDate().toLocaleTimeString(language === 'fr' ? 'fr-FR' : language, { hour: '2-digit', minute: '2-digit' })} - {item.endTime.toDate().toLocaleTimeString(language === 'fr' ? 'fr-FR' : language, { hour: '2-digit', minute: '2-digit' })}
                         </span>
                       </div>
                       {item.className && (
@@ -352,7 +352,7 @@ const TeacherPlanning: React.FC = () => {
                       )}
                       <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
                         <CalendarIcon size={16} className="text-indigo-500" />
-                        <span>{item.startTime.toDate().toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}</span>
+                        <span>{item.startTime.toDate().toLocaleDateString(language === 'fr' ? 'fr-FR' : language, { day: 'numeric', month: 'short' })}</span>
                       </div>
                       {item.subject && (
                         <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400 justify-end">
@@ -364,7 +364,7 @@ const TeacherPlanning: React.FC = () => {
                     
                     {isAdmin && (
                       <div className="mt-4 pt-3 border-t border-dashed border-gray-100 dark:border-gray-700 flex items-center justify-between">
-                         <span className="text-[10px] text-gray-400 uppercase font-medium">Enseignant</span>
+                         <span className="text-[10px] text-gray-400 uppercase font-medium">{t('teacher')}</span>
                          <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">{item.teacherName}</span>
                       </div>
                     )}
@@ -424,7 +424,7 @@ const TeacherPlanning: React.FC = () => {
                       required
                       value={formData.title}
                       onChange={e => setFormData({...formData, title: e.target.value})}
-                      placeholder="Ex: Cours de Mathématiques, Staff Meeting..."
+                      placeholder={t('activity_title_placeholder')}
                       className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-sm"
                     />
                   </div>
@@ -450,7 +450,7 @@ const TeacherPlanning: React.FC = () => {
                   </div>
 
                   <div className="col-span-2">
-                    <label className="block text-xs font-semibold text-gray-500 uppercase mb-2 ml-1">Description (Optionnel)</label>
+                    <label className="block text-xs font-semibold text-gray-500 uppercase mb-2 ml-1">{t('description_optional')}</label>
                     <textarea
                       rows={3}
                       value={formData.description}
@@ -460,13 +460,13 @@ const TeacherPlanning: React.FC = () => {
                   </div>
 
                   <div>
-                    <label className="block text-xs font-semibold text-gray-500 uppercase mb-2 ml-1">Classe</label>
+                    <label className="block text-xs font-semibold text-gray-500 uppercase mb-2 ml-1">{t('class')}</label>
                     <select
                       value={formData.classId}
                       onChange={e => setFormData({...formData, classId: e.target.value})}
                       className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-sm"
                     >
-                      <option value="">Sélectionner une classe</option>
+                      <option value="">{t('select_class')}</option>
                       {classes.map(c => (
                         <option key={c.id} value={c.id}>{c.name}</option>
                       ))}
@@ -474,13 +474,13 @@ const TeacherPlanning: React.FC = () => {
                   </div>
 
                   <div>
-                    <label className="block text-xs font-semibold text-gray-500 uppercase mb-2 ml-1">Matière</label>
+                    <label className="block text-xs font-semibold text-gray-500 uppercase mb-2 ml-1">{t('subject')}</label>
                     <select
                       value={formData.subject}
                       onChange={e => setFormData({...formData, subject: e.target.value})}
                       className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-sm"
                     >
-                      <option value="">Sélectionner une matière</option>
+                      <option value="">{t('select_subject')}</option>
                       {subjects.map((s, idx) => (
                         <option key={idx} value={s}>{s}</option>
                       ))}
@@ -488,7 +488,7 @@ const TeacherPlanning: React.FC = () => {
                   </div>
 
                   <div>
-                    <label className="block text-xs font-semibold text-gray-500 uppercase mb-2 ml-1">Date de début</label>
+                    <label className="block text-xs font-semibold text-gray-500 uppercase mb-2 ml-1">{t('start_date_label')}</label>
                     <input
                       type="date"
                       required
@@ -499,7 +499,7 @@ const TeacherPlanning: React.FC = () => {
                   </div>
 
                   <div>
-                    <label className="block text-xs font-semibold text-gray-500 uppercase mb-2 ml-1">Heure de début</label>
+                    <label className="block text-xs font-semibold text-gray-500 uppercase mb-2 ml-1">{t('start_time_label')}</label>
                     <input
                       type="time"
                       required
@@ -510,7 +510,7 @@ const TeacherPlanning: React.FC = () => {
                   </div>
 
                   <div>
-                    <label className="block text-xs font-semibold text-gray-500 uppercase mb-2 ml-1">Date de fin</label>
+                    <label className="block text-xs font-semibold text-gray-500 uppercase mb-2 ml-1">{t('end_date_label')}</label>
                     <input
                       type="date"
                       required
@@ -521,7 +521,7 @@ const TeacherPlanning: React.FC = () => {
                   </div>
 
                   <div>
-                    <label className="block text-xs font-semibold text-gray-500 uppercase mb-2 ml-1">Heure de fin</label>
+                    <label className="block text-xs font-semibold text-gray-500 uppercase mb-2 ml-1">{t('end_time_label')}</label>
                     <input
                       type="time"
                       required
@@ -537,7 +537,7 @@ const TeacherPlanning: React.FC = () => {
                     type="submit"
                     className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-500/25 active:scale-95"
                   >
-                    {editingItem ? "Enregistrer les modifications" : "Ajouter au planning"}
+                    {editingItem ? t('save_changes') : t('add_to_planning')}
                   </button>
                 </div>
               </form>

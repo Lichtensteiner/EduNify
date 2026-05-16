@@ -126,13 +126,13 @@ const AdminDashboard = ({ stats, weeklyData, studentLevelData, userDistribution,
                   <X size={24} className="text-gray-400" />
                 </button>
               </div>
-              <h3 className="text-2xl font-black text-gray-900 dark:text-white mb-4">Détails de l'Analyse</h3>
+              <h3 className="text-2xl font-black text-gray-900 dark:text-white mb-4">{t('admin_analysis_details')}</h3>
               <div className="space-y-4 text-gray-600 dark:text-gray-400 leading-relaxed font-medium">
                 <p>
-                  Le rôle de cette section est de fournir des <strong>insights exploitables</strong> basés sur les données brutes de l'établissement.
+                  {t('admin_insights_desc')}
                 </p>
                 <div className="p-4 bg-gray-50 dark:bg-gray-900/50 rounded-2xl border border-gray-100 dark:border-gray-800">
-                  <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-2">Sources de données</h4>
+                  <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-2">{t('data_sources')}</h4>
                   <ul className="text-xs space-y-2 list-disc list-inside">
                     <li>Historique d'assiduité (Journalier/Hebdomadaire)</li>
                     <li>Évolution des points de maisons (Performance comportementale)</li>
@@ -147,7 +147,7 @@ const AdminDashboard = ({ stats, weeklyData, studentLevelData, userDistribution,
                 onClick={() => setIsDetailOpen(false)}
                 className="w-full mt-8 py-4 bg-indigo-600 text-white rounded-2xl font-black shadow-lg shadow-indigo-200 dark:shadow-none hover:bg-indigo-700 transition-all"
               >
-                Fermer
+                {t('close')}
               </button>
            </div>
         </div>
@@ -165,10 +165,10 @@ const AdminDashboard = ({ stats, weeklyData, studentLevelData, userDistribution,
                   <X size={24} className="text-gray-400" />
                 </button>
               </div>
-              <h3 className="text-2xl font-black text-gray-900 dark:text-white mb-4">Optimisation Systémique</h3>
+              <h3 className="text-2xl font-black text-gray-900 dark:text-white mb-4">{t('system_optimization')}</h3>
               <div className="space-y-4 text-gray-600 dark:text-gray-400 leading-relaxed font-medium">
                 <p>
-                  Le rôle du mode <strong>Optimiser</strong> est de transformer la recommandation en une <strong>action concrète</strong>.
+                  {t('optimization_desc')}
                 </p>
                 <div className="grid grid-cols-1 gap-3">
                   <div className="p-4 rounded-2xl border border-emerald-100 dark:border-emerald-800/50 bg-emerald-50/50 dark:bg-emerald-900/20 flex gap-4">
@@ -208,17 +208,17 @@ const AdminDashboard = ({ stats, weeklyData, studentLevelData, userDistribution,
       {/* Top Indicators with Curves */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {[
-          { icon: Users, label: 'Effectif Total', value: Number(stats.total) || 0, color: '#4f46e5', bg: 'bg-indigo-50 dark:bg-indigo-900/30', text: 'text-indigo-600 dark:text-indigo-400' },
-          { icon: UserCheck, label: 'Taux de Présence', value: `${(Number(stats.total) || 0) > 0 ? Math.round(((Number(stats.presents) || 0) / (Number(stats.total) || 0)) * 100) : 0}%`, color: '#10b981', bg: 'bg-emerald-50 dark:bg-emerald-900/30', text: 'text-emerald-600 dark:text-emerald-400' },
-          { icon: Clock, label: 'Moyenne Retards', value: Number(stats.retards) || 0, color: '#f59e0b', bg: 'bg-amber-50 dark:bg-amber-900/30', text: 'text-amber-600 dark:text-amber-400' },
-          { icon: Award, label: 'Points Maisons', value: houses.reduce((acc: number, h: any) => acc + (Number(h.points) || 0), 0), color: '#8b5cf6', bg: 'bg-purple-50 dark:bg-purple-900/30', text: 'text-purple-600 dark:text-purple-400' }
+          { icon: Users, label: t('total_workforce'), value: Number(stats.total) || 0, color: '#4f46e5', bg: 'bg-indigo-50 dark:bg-indigo-900/30', text: 'text-indigo-600 dark:text-indigo-400' },
+          { icon: UserCheck, label: t('attendance_rate'), value: `${(Number(stats.total) || 0) > 0 ? Math.round(((Number(stats.presents) || 0) / (Number(stats.total) || 0)) * 100) : 0}%`, color: '#10b981', bg: 'bg-emerald-50 dark:bg-emerald-900/30', text: 'text-emerald-600 dark:text-emerald-400' },
+          { icon: Clock, label: t('late_average'), value: Number(stats.retards) || 0, color: '#f59e0b', bg: 'bg-amber-50 dark:bg-amber-900/30', text: 'text-amber-600 dark:text-amber-400' },
+          { icon: Award, label: t('house_points_label'), value: houses.reduce((acc: number, h: any) => acc + (Number(h.points) || 0), 0), color: '#8b5cf6', bg: 'bg-purple-50 dark:bg-purple-900/30', text: 'text-purple-600 dark:text-purple-400' }
         ].map((item, i) => {
           let sparkHistory = [];
-          if (item.label === 'Effectif Total') {
+          if (item.label === t('total_workforce')) {
             sparkHistory = [{value: Math.max(0, item.value * 0.9)}, {value: Math.max(0, item.value * 0.95)}, {value: Math.max(0, item.value * 0.98)}, {value: Math.max(0, item.value * 1.02)}, {value: item.value}];
-          } else if (item.label === 'Taux de Présence' && weeklyData.length > 0) {
+          } else if (item.label === t('attendance_rate') && weeklyData.length > 0) {
             sparkHistory = weeklyData.map(d => ({ value: (stats.total > 0 ? (d.presents / stats.total) * 100 : 0) }));
-          } else if (item.label === 'Moyenne Retards' && weeklyData.length > 0) {
+          } else if (item.label === t('late_average') && weeklyData.length > 0) {
             sparkHistory = weeklyData.map(d => ({ value: Number(d.retards) || 0 }));
           } else {
             sparkHistory = [{value: 50}, {value: 70}, {value: 65}, {value: 80}, {value: item.value}];
@@ -245,7 +245,7 @@ const AdminDashboard = ({ stats, weeklyData, studentLevelData, userDistribution,
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* User Ecosystem Chart */}
         <div className="lg:col-span-1 bg-white dark:bg-gray-800 p-8 rounded-3xl border border-gray-100 dark:border-gray-700 shadow-sm relative overflow-hidden flex flex-col">
-           <h3 className="text-xl font-black text-gray-900 dark:text-white mb-6">Répartition par Secteur</h3>
+           <h3 className="text-xl font-black text-gray-900 dark:text-white mb-6">{t('sector_distribution')}</h3>
            <div className="h-48">
              <ResponsiveContainer>
                <PieChart>
@@ -276,16 +276,16 @@ const AdminDashboard = ({ stats, weeklyData, studentLevelData, userDistribution,
 
            <div className="mt-auto pt-6 border-t border-gray-100 dark:border-gray-700">
               <div className="flex items-center justify-between mb-4">
-                <h4 className="text-sm font-black uppercase text-gray-400">Planning du jour</h4>
+                <h4 className="text-sm font-black uppercase text-gray-400">{t('daily_planning')}</h4>
                 <div className="px-2 py-1 bg-indigo-50 dark:bg-indigo-900/30 rounded-lg text-indigo-600 dark:text-indigo-400 text-[10px] font-black">
-                  {teacherPlanning.length} ACTIVITÉS
+                  {teacherPlanning.length} {t('activities').toUpperCase()}
                 </div>
               </div>
               <div className="space-y-3 max-h-48 overflow-y-auto pr-2 custom-scrollbar">
                 {teacherPlanning.length > 0 ? teacherPlanning.slice(0, 5).map((plan) => (
                   <div key={plan.id} className="flex gap-3 items-start p-2 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
                     <div className="text-[9px] font-black text-indigo-500 bg-indigo-50 dark:bg-indigo-900/30 px-1.5 py-0.5 rounded h-fit">
-                      {plan.startTime?.toDate?.().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+                      {plan.startTime?.toDate?.().toLocaleTimeString(language === 'fr' ? 'fr-FR' : language, { hour: '2-digit', minute: '2-digit' })}
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-xs font-bold text-gray-900 dark:text-white truncate">{plan.title}</p>
@@ -293,7 +293,7 @@ const AdminDashboard = ({ stats, weeklyData, studentLevelData, userDistribution,
                     </div>
                   </div>
                 )) : (
-                  <p className="text-xs text-gray-400 italic text-center py-4">Aucune activité prévue aujourd'hui</p>
+                  <p className="text-xs text-gray-400 italic text-center py-4">{t('no_activity_today')}</p>
                 )}
               </div>
            </div>
@@ -344,8 +344,8 @@ const AdminDashboard = ({ stats, weeklyData, studentLevelData, userDistribution,
       <div className="bg-white dark:bg-gray-800 p-8 rounded-3xl border border-gray-100 dark:border-gray-700 shadow-sm">
         <div className="flex items-center justify-between mb-8">
           <div>
-            <h3 className="text-xl font-black text-gray-900 dark:text-white">Densité par Classe</h3>
-            <p className="text-sm text-gray-500 dark:text-gray-400 font-medium">Répartition réelle de l'effectif étudiant</p>
+            <h3 className="text-xl font-black text-gray-900 dark:text-white">{t('class_density')}</h3>
+            <p className="text-sm text-gray-500 dark:text-gray-400 font-medium">{t('real_distribution_desc')}</p>
           </div>
           <button className="p-2.5 bg-gray-50 dark:bg-gray-700 rounded-xl text-gray-400 hover:text-indigo-600 transition-colors">
             <TrendingUp size={20} />
@@ -367,7 +367,7 @@ const AdminDashboard = ({ stats, weeklyData, studentLevelData, userDistribution,
                 <div className="flex items-end justify-between gap-2">
                    <div className="min-w-0">
                      <h4 className="text-3xl font-black text-gray-900 dark:text-white truncate">{Number(cls.students) || 0}</h4>
-                     <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">Élèves</p>
+                     <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">{t('students_label')}</p>
                    </div>
                    <div className="w-12 h-12 shrink-0 group-hover:scale-110 transition-transform">
                       <ResponsiveContainer width="100%" height="100%">
@@ -392,7 +392,7 @@ const AdminDashboard = ({ stats, weeklyData, studentLevelData, userDistribution,
 
                 <div className="space-y-1.5">
                   <div className="flex justify-between items-center text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase">
-                    <span>Occupation</span>
+                    <span>{t('occupation')}</span>
                     <span className="text-gray-900 dark:text-white">{cls.percentage}%</span>
                   </div>
                   <div className="h-2 w-full bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden shadow-inner">
@@ -426,9 +426,9 @@ const AdminDashboard = ({ stats, weeklyData, studentLevelData, userDistribution,
             <div className="relative z-10 flex flex-col h-full">
                <div className="flex justify-between items-start mb-6">
                   <div className="p-3 bg-white/20 rounded-2xl backdrop-blur-xl"><Sparkles size={24} /></div>
-                  <div className="px-3 py-1 bg-white/20 rounded-full backdrop-blur-xl text-[10px] font-black uppercase tracking-widest text-white/90">Analyse IA</div>
+                  <div className="px-3 py-1 bg-white/20 rounded-full backdrop-blur-xl text-[10px] font-black uppercase tracking-widest text-white/90">{t('ai_analysis')}</div>
                </div>
-               <h3 className="text-2xl font-black mb-2">Recommandation Stratégique</h3>
+               <h3 className="text-2xl font-black mb-2">{t('strategic_recommendation')}</h3>
                <p className="text-indigo-100 font-medium leading-relaxed mb-8">
                   {recommendation?.text || "Vos indicateurs montrent une corrélation forte entre la ponctualité matinale et les taux de réussite. Envisagez un programme d'encouragement ciblé."}
                </p>
@@ -452,7 +452,7 @@ const AdminDashboard = ({ stats, weeklyData, studentLevelData, userDistribution,
 
          {/* House Leaderboard */}
          <div className="bg-slate-900 p-8 rounded-3xl shadow-xl relative overflow-hidden">
-            <h3 className="text-xl font-black text-white mb-8 border-b border-white/10 pb-4">Championnat des Maisons</h3>
+            <h3 className="text-xl font-black text-white mb-8 border-b border-white/10 pb-4">{t('house_championship')}</h3>
             <div className="space-y-4">
                {houses.length > 0 ? houses.sort((a: any, b: any) => b.points - a.points).map((house: any, i: number) => (
                   <div key={house.id} className="group flex items-center gap-4 bg-white/5 p-4 rounded-2xl border border-white/5 hover:border-white/20 transition-all">
@@ -466,11 +466,11 @@ const AdminDashboard = ({ stats, weeklyData, studentLevelData, userDistribution,
                      </div>
                      <div className="text-right">
                         <p className="text-lg font-black text-white">{house.points}</p>
-                        <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Points</p>
+                        <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{t('points_stat')}</p>
                      </div>
                   </div>
                )) : (
-                  <div className="py-12 text-center text-slate-500 text-xs italic">Aucune donnée de points disponible</div>
+                  <div className="py-12 text-center text-slate-500 text-xs italic">{t('no_points_data')}</div>
                )}
             </div>
          </div>
@@ -480,6 +480,7 @@ const AdminDashboard = ({ stats, weeklyData, studentLevelData, userDistribution,
 };
 
 const TeacherDashboard = ({ currentUser, t, tData, onNavigate }: any) => {
+  const { language } = useLanguage();
   const [classes, setClasses] = useState<any[]>([]);
   const [studentCounts, setStudentCounts] = useState<{[key: string]: number}>({});
   const [recentAssignments, setRecentAssignments] = useState<any[]>([]);
@@ -561,10 +562,7 @@ const TeacherDashboard = ({ currentUser, t, tData, onNavigate }: any) => {
         if (slots.length > 0) {
           setSchedule(slots);
         } else {
-          setSchedule([
-            { heure_debut: '08:00', matiere: 'Cours Principal', classe: '3ème A', color: 'bg-blue-600' },
-            { heure_debut: '10:00', matiere: 'Soutien', classe: '2nde B', color: 'bg-purple-600' },
-          ]);
+          setSchedule([]);
         }
       },
       (error) => console.error("Index or permission error in schedule:", error)
@@ -653,7 +651,7 @@ const TeacherDashboard = ({ currentUser, t, tData, onNavigate }: any) => {
         <div className="relative z-10 flex flex-col md:flex-row justify-between items-center gap-6">
           <div className="text-center md:text-left">
             <h2 className="text-3xl font-black mb-2 lowercase first-letter:uppercase">{t('teacher_greeting')} {currentUser?.prenom} {currentUser?.nom} !</h2>
-            <p className="text-blue-100 opacity-90 max-w-md">Prêt pour une nouvelle journée d'enseignement ? Voici un aperçu de vos classes et de vos tâches pédagogiques.</p>
+            <p className="text-blue-100 opacity-90 max-w-md">{t('teacher_greeting_desc')}</p>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 w-full md:w-auto">
             <div className="bg-white/10 backdrop-blur-md p-3 sm:p-4 rounded-2xl border border-white/10 text-center flex-1">
@@ -694,13 +692,13 @@ const TeacherDashboard = ({ currentUser, t, tData, onNavigate }: any) => {
              <div className="flex items-center justify-between mb-6">
                 <h3 className="text-lg font-black flex items-center gap-2">
                   <Users className="text-blue-600" size={20} />
-                  Mes Classes
+                  {t('my_classes')}
                 </h3>
                 <button 
                   onClick={() => onNavigate('classes')}
                   className="text-xs font-bold text-blue-600 hover:underline"
                 >
-                  Voir tout
+                  {t('see_all')}
                 </button>
              </div>
              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -708,21 +706,21 @@ const TeacherDashboard = ({ currentUser, t, tData, onNavigate }: any) => {
                  <div key={cls.id} className="p-4 rounded-2xl border border-gray-50 bg-gray-50/50 hover:bg-white hover:shadow-md transition-all group">
                    <div className="flex justify-between items-start mb-3">
                      <div className="bg-blue-600 text-white w-10 h-10 rounded-xl flex items-center justify-center font-black">{cls.nom}</div>
-                     <span className="text-[10px] font-black text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full uppercase">Actif</span>
+                     <span className="text-[10px] font-black text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full uppercase">{t('active_status')}</span>
                    </div>
                    <h4 className="font-bold text-gray-900 mb-1">{cls.nom}</h4>
-                   <p className="text-xs text-gray-500 mb-4">{studentCounts[cls.nom] || 0} Élèves Inscrits</p>
+                   <p className="text-xs text-gray-500 mb-4">{studentCounts[cls.nom] || 0} {t('enrolled_students')}</p>
                    <button 
                      onClick={() => onNavigate('classes', { classId: cls.id })}
                      className="w-full py-2 bg-white border border-gray-200 rounded-xl text-xs font-bold text-gray-700 group-hover:bg-blue-600 group-hover:text-white group-hover:border-blue-600 transition-all font-inter"
                     >
-                     Suivi de Classe
+                     {t('class_tracking')}
                    </button>
                  </div>
                )) : (
                  <div className="col-span-full py-8 text-center text-gray-400 bg-gray-50 rounded-2xl border-2 border-dashed border-gray-100">
                     <Users size={32} className="mx-auto mb-2 opacity-20" />
-                    <p className="text-xs font-bold italic">Aucune classe officiellement assignée</p>
+                    <p className="text-xs font-bold italic">{t('no_class_assigned')}</p>
                  </div>
                )}
              </div>
@@ -733,7 +731,7 @@ const TeacherDashboard = ({ currentUser, t, tData, onNavigate }: any) => {
              <div className="flex items-center justify-between mb-6">
                <h3 className="text-lg font-black flex items-center gap-2">
                  <ListTodo className="text-purple-600" size={20} />
-                 Tâches & Devoirs
+                 {t('tasks_and_homework')}
                </h3>
                <button 
                  onClick={() => setIsTaskModalOpen(true)}
@@ -751,11 +749,11 @@ const TeacherDashboard = ({ currentUser, t, tData, onNavigate }: any) => {
                      type="text" 
                      value={newTaskTitle}
                      onChange={(e) => setNewTaskTitle(e.target.value)}
-                     placeholder="Nouvelle tâche..."
+                     placeholder={t('new_task_placeholder')}
                      className="flex-1 bg-white border border-purple-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
                    />
                    <button type="submit" className="bg-purple-600 text-white px-4 py-2 rounded-xl text-xs font-bold">
-                     Ajouter
+                     {t('add')}
                    </button>
                    <button type="button" onClick={() => setIsTaskModalOpen(false)} className="text-gray-400 hover:text-gray-600">
                      <X size={16} />
@@ -778,7 +776,7 @@ const TeacherDashboard = ({ currentUser, t, tData, onNavigate }: any) => {
                               {status.label}
                             </span>
                           </div>
-                          <p className={`text-[10px] ${status.text} font-medium`}>{hw.class_nom} • Échéance: {hw.dueDate}</p>
+                          <p className={`text-[10px] ${status.text} font-medium`}>{hw.class_nom} • {t('due_date_label')}: {hw.dueDate}</p>
                         </div>
                         <ChevronRightIcon className={`${status.text} group-hover:translate-x-1 transition-transform`} />
                     </div>
@@ -805,9 +803,9 @@ const TeacherDashboard = ({ currentUser, t, tData, onNavigate }: any) => {
                              )}
                           </div>
                           <p className="text-[10px] text-gray-500 font-medium flex items-center gap-2">
-                            <span>Priorité: {task.priority || 'Normale'}</span>
+                            <span>{t('priority_label')}: {task.priority || 'Normale'}</span>
                             {task.dueDate && <span>•</span>}
-                            {task.dueDate && <span className={status.text}>Échéance: {task.dueDate}</span>}
+                            {task.dueDate && <span className={status.text}>{t('due_date_label')}: {task.dueDate}</span>}
                           </p>
                         </div>
                     </div>
@@ -894,12 +892,12 @@ const TeacherDashboard = ({ currentUser, t, tData, onNavigate }: any) => {
                     </div>
                   ) : (
                     <div className="text-center py-6">
-                       <p className="text-[10px] text-gray-400 italic font-medium">Aucune activité ajoutée aujourd'hui</p>
+                       <p className="text-[10px] text-gray-400 italic font-medium">{t('no_activity_today')}</p>
                        <button 
                          onClick={() => onNavigate('planning')}
                          className="mt-2 text-[10px] font-black text-indigo-600 hover:underline"
                        >
-                         + Ajouter au planning
+                         + {t('add_to_planning')}
                        </button>
                     </div>
                   )}
@@ -907,7 +905,7 @@ const TeacherDashboard = ({ currentUser, t, tData, onNavigate }: any) => {
 
                 {schedule.length === 0 && personalPlanning.length === 0 && (
                   <div className="text-center py-6 text-gray-400 text-xs italic">
-                    Aucun cours programmé aujourd'hui
+                    {t('no_class_today')}
                   </div>
                 )}
              </div>
