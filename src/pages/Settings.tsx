@@ -27,17 +27,23 @@ import {
   Activity,
   History,
   Fingerprint,
-  RefreshCw
+  RefreshCw,
+  LayoutDashboard,
+  Users as UsersIcon,
 } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useAuth } from '../contexts/AuthContext';
 import { motion, AnimatePresence } from 'motion/react';
-import { doc, updateDoc, onSnapshot, collection, query, where, getDocs, limit, orderBy } from 'firebase/firestore';
+import { doc, updateDoc, onSnapshot, collection, query, where, getDocs, limit, orderBy, Timestamp } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage, auth } from '../lib/firebase';
 import { resizeImage } from '../lib/imageUtils';
 import confetti from 'canvas-confetti';
+import { 
+  PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, 
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend 
+} from 'recharts';
 
 export default function Settings() {
   const { theme, setTheme } = useTheme();
@@ -57,6 +63,13 @@ export default function Settings() {
   const [storageUsage, setStorageUsage] = useState({ used: 0, total: 5, percentage: 0 });
   const [density, setDensity] = useState(0);
   const [notifications, setNotifications] = useState<{ id: string; title: string; message: string; timestamp: string; read: boolean; type?: string }[]>([]);
+  const [adminSessions, setAdminSessions] = useState<any[]>([]);
+  const [systemStats, setSystemStats] = useState({
+    browsers: [] as any[],
+    os: [] as any[],
+    devices: [] as any[],
+    totalActive: 0
+  });
   const [notifPreferences, setNotifPreferences] = useState({
     push: true,
     email: false,
@@ -69,6 +82,8 @@ export default function Settings() {
   const [formCover, setFormCover] = useState(currentUser?.cover_photo || '');
   const [saving, setSaving] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
+
+  const isAdmin = currentUser?.role === 'admin';
 
   const handleTerminateSession = async (sessionId: string) => {
     try {
@@ -228,11 +243,9 @@ export default function Settings() {
       ]);
 
       // 2. Real-time Active Sessions Explorer
-      const sessionsQuery = query(
-        collection(db, 'user_sessions'),
-        where('userId', '==', currentUser?.id),
-        where('status', '==', 'active')
-      );
+      const sessionsQuery = isAdmin 
+        ? query(collection(db, 'user_sessions'), where('status', '==', 'active'))
+        : query(collection(db, 'user_sessions'), where('userId', '==', currentUser?.id), where('status', '==', 'active'));
 
       const unsubSessions = onSnapshot(sessionsQuery, (snapshot) => {
         const sessions = snapshot.docs.map(doc => ({
@@ -241,21 +254,48 @@ export default function Settings() {
         })) as any[];
         
         // Sort sessions: current one first, then by lastActive
-        const sortedSessions = sessions.sort((a, b) => {
-          if (a.userAgent === navigator.userAgent) return -1;
-          if (b.userAgent === navigator.userAgent) return 1;
+        const sortedSessions = [...sessions].sort((a, b) => {
+          if (a.id === auth.currentUser?.uid) return -1; // Not perfect but session info is better
           return (b.lastActive?.seconds || 0) - (a.lastActive?.seconds || 0);
         });
 
-        setActiveSessions(sortedSessions.map(s => ({
-          id: s.id,
-          device: s.device,
-          location: s.location || 'Libreville, GA',
-          current: s.userAgent === navigator.userAgent,
-          date: s.lastActive?.toDate ? s.lastActive.toDate().toLocaleString() : 'En ligne',
-          os: s.os,
-          browser: s.browser
-        })));
+        if (isAdmin) {
+          setAdminSessions(sessions);
+          // Calculate Stats
+          const browserMap: Record<string, number> = {};
+          const osMap: Record<string, number> = {};
+          const deviceMap: Record<string, number> = {};
+
+          sessions.forEach(s => {
+            const b = s.browser?.split(' ')[0] || 'Unknown';
+            browserMap[b] = (browserMap[b] || 0) + 1;
+            
+            const o = s.os?.split(' ')[0] || 'Unknown';
+            osMap[o] = (osMap[o] || 0) + 1;
+
+            const d = s.isMobile ? 'Mobile/Tablette' : 'Ordinateur';
+            deviceMap[d] = (deviceMap[d] || 0) + 1;
+          });
+
+          setSystemStats({
+            browsers: Object.entries(browserMap).map(([name, value]) => ({ name, value })),
+            os: Object.entries(osMap).map(([name, value]) => ({ name, value })),
+            devices: Object.entries(deviceMap).map(([name, value]) => ({ name, value })),
+            totalActive: sessions.length
+          });
+        }
+
+        setActiveSessions(sortedSessions
+          .filter(s => !isAdmin || s.userId === currentUser?.id)
+          .map(s => ({
+            id: s.id,
+            device: s.device,
+            location: s.location || 'Libreville, GA',
+            current: s.userAgent === navigator.userAgent,
+            date: s.lastActive?.toDate ? s.lastActive.toDate().toLocaleString() : 'En ligne',
+            os: s.os,
+            browser: s.browser
+          })));
       });
 
       // 3. Real-time User Density
@@ -331,18 +371,19 @@ export default function Settings() {
           <p className="text-gray-500 dark:text-gray-400 mt-1 font-medium">{t('global_app_config')}</p>
         </div>
 
-        <div className="flex items-center gap-3 bg-white dark:bg-gray-800 p-2 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm">
-          <div className="hidden sm:flex px-3 py-1.5 rounded-xl items-center gap-2 text-[10px] font-black text-gray-400 bg-gray-50 dark:bg-gray-900/50">
-            <Clock size={12} />
-            SAUVEGARDÉ : {lastSaved.toUpperCase()}
+        <div className="flex items-center gap-2 sm:gap-3 bg-white dark:bg-gray-800 p-1.5 sm:p-2 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm overflow-hidden flex-wrap sm:flex-nowrap justify-center sm:justify-start">
+          <div className="flex px-3 py-1.5 rounded-xl items-center gap-2 text-[8px] sm:text-[10px] font-black text-gray-400 bg-gray-50 dark:bg-gray-900/50">
+            <Clock size={12} className="shrink-0" />
+            <span className="hidden xs:inline">SAUVEGARDÉ :</span> {lastSaved.toUpperCase()}
           </div>
-          <div className={`px-3 py-1.5 rounded-xl flex items-center gap-2 text-xs font-bold ${isOnline ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}>
-            <Wifi size={14} className={isOnline ? 'animate-pulse' : ''} />
+          <div className={`px-2 sm:px-3 py-1.5 rounded-xl flex items-center gap-2 text-[10px] sm:text-xs font-bold ${isOnline ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}>
+            <Wifi size={14} className={isOnline ? 'animate-pulse shrink-0' : 'shrink-0'} />
             {latency}ms
           </div>
-          <div className={`px-3 py-1.5 rounded-xl flex items-center gap-2 text-xs font-bold ${dbStatus === 'connected' ? 'bg-blue-50 text-blue-600' : 'bg-amber-50 text-amber-600'}`}>
-            <Database size={14} />
-            {dbStatus === 'connected' ? 'CLOUD READY' : 'SYNCING...'}
+          <div className={`px-2 sm:px-3 py-1.5 rounded-xl flex items-center gap-2 text-[10px] sm:text-xs font-bold ${dbStatus === 'connected' ? 'bg-blue-50 text-blue-600' : 'bg-amber-50 text-amber-600'}`}>
+            <Database size={14} className="shrink-0" />
+            <span className="hidden xs:inline">{dbStatus === 'connected' ? 'CLOUD READY' : 'SYNCING...'}</span>
+            <span className="xs:hidden">{dbStatus === 'connected' ? 'READY' : 'SYNC'}</span>
           </div>
         </div>
       </div>
@@ -630,131 +671,390 @@ export default function Settings() {
               )}
 
               {activeTab === 'system' && (
-                <div className="space-y-8">
-                  <div>
-                    <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">Santé du Système</h3>
-                    <p className="text-sm text-gray-500 dark:text-gray-400 font-medium">Diagnostics techniques en temps réel.</p>
+                <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div>
+                      <h3 className="text-2xl font-black text-gray-900 dark:text-white flex items-center gap-3">
+                        <Activity className="text-indigo-600" size={28} />
+                        Santé & Monitoring Système
+                      </h3>
+                      <p className="text-sm text-gray-500 dark:text-gray-400 font-medium">Analyse temps réel de l'infrastructure et des accès.</p>
+                    </div>
+                    {currentUser?.role === 'admin' && (
+                      <div className="flex items-center gap-2 px-4 py-2 bg-indigo-50 dark:bg-indigo-900/30 rounded-2xl border border-indigo-100 dark:border-indigo-800">
+                        <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                        <span className="text-xs font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-widest">{systemStats.totalActive} UTILISATEURS ACTIFS</span>
+                      </div>
+                    )}
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div className="p-4 rounded-2xl bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-700 flex items-center gap-4">
-                      <div className="w-10 h-10 bg-white dark:bg-gray-800 rounded-xl flex items-center justify-center shadow-sm text-amber-500">
-                        <Monitor size={20} />
-                      </div>
-                      <div className="flex-1">
-                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Plateforme</p>
-                        <p className="font-bold text-sm truncate">{navigator.platform} ({navigator.language})</p>
-                      </div>
-                    </div>
-                    <div className="p-4 rounded-2xl bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-700 flex items-center gap-4">
-                      <div className="w-10 h-10 bg-white dark:bg-gray-800 rounded-xl flex items-center justify-center shadow-sm text-indigo-500">
-                        <Database size={20} />
-                      </div>
-                      <div className="flex-1">
-                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Stockage Local</p>
-                        <p className="font-bold text-sm">1.2 MB / 5.0 MB</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="space-y-4">
-                    <h4 className="text-sm font-black text-gray-900 dark:text-white uppercase tracking-widest flex items-center justify-between">
-                      Activités de la Session
-                      <span className="px-2 py-1 bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 text-[10px] rounded-md animate-pulse">LIVE STREAM</span>
-                    </h4>
-                    <div className="space-y-2 max-h-48 overflow-y-auto no-scrollbar pr-2">
-                      {sessionLogs.map(log => (
-                        <motion.div 
-                          layout
-                          initial={{ opacity: 0, x: -20 }}
-                          animate={{ opacity: 1, x: 0 }}
-                          key={log.id} 
-                          className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-900 rounded-xl border border-gray-100 dark:border-gray-800 hover:border-indigo-200 dark:hover:border-indigo-800 transition-all group"
-                        >
-                          <div className="flex items-center gap-3">
-                            <div className={`w-2 h-2 rounded-full ${log.type === 'auth' ? 'bg-emerald-500' : log.type === 'system' ? 'bg-blue-500' : 'bg-indigo-400'} group-hover:scale-125 transition-transform`} />
-                            <span className="text-xs font-bold text-gray-700 dark:text-gray-300">{log.event}</span>
-                          </div>
-                          <span className="text-[10px] font-mono text-gray-400">{log.time}</span>
-                        </motion.div>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="space-y-4 pt-4">
-                    <h4 className="text-sm font-black text-gray-900 dark:text-white uppercase tracking-widest">Explorateur de Sessions Actives</h4>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                       {activeSessions.map(session => (
-                         <div key={session.id} className={`p-4 rounded-2xl border ${session.current ? 'border-indigo-600 bg-indigo-50/10 shadow-sm shadow-indigo-100 dark:shadow-none' : 'border-gray-100 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-900/50'} flex justify-between items-center group transition-all hover:border-indigo-300`}>
-                            <div className="flex items-center gap-4">
-                               <div className={`p-3 rounded-xl ${session.current ? 'bg-indigo-600 text-white' : 'bg-gray-200 dark:bg-gray-800 text-gray-500'}`}>
-                                  {session.device?.includes('iPhone') || session.device?.includes('Mobile') ? <Smartphone size={18} /> : <Monitor size={18} />}
-                               </div>
-                               <div>
-                                  <p className="text-[13px] font-black text-gray-900 dark:text-white flex items-center gap-2">
-                                    {session.device}
-                                    {session.current && <span className="text-[8px] px-2 py-0.5 bg-emerald-500 text-white rounded-full font-black tracking-widest uppercase">ACTUELLE</span>}
-                                  </p>
-                                  <p className="text-[10px] text-gray-500 dark:text-gray-400 font-bold uppercase mt-0.5">
-                                    {session.location} • {session.date}
-                                  </p>
-                                  <div className="flex items-center gap-2 mt-1.5 overflow-hidden">
-                                    <span className="text-[9px] font-black px-1.5 py-0.5 bg-gray-100 dark:bg-gray-800 text-gray-400 rounded uppercase">{session.os || 'N/A'}</span>
-                                    <span className="text-[9px] font-black px-1.5 py-0.5 bg-gray-100 dark:bg-gray-800 text-gray-400 rounded uppercase">{session.browser || 'N/A'}</span>
-                                  </div>
-                               </div>
-                            </div>
-                            {!session.current && (
-                              <button 
-                                onClick={() => handleTerminateSession(session.id)}
-                                className="text-red-500 opacity-0 group-hover:opacity-100 transition-opacity p-2.5 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl"
-                                title="Terminer cette session"
+                  {currentUser?.role === 'admin' && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                      {/* Browser Stats */}
+                      <div className="bg-gray-50/50 dark:bg-gray-900/50 p-6 rounded-3xl border border-gray-100 dark:border-gray-700">
+                        <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-6 flex items-center gap-2">
+                          <Globe size={14} className="text-blue-500" />
+                          Navigateurs
+                        </h4>
+                        <div className="h-48">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <PieChart>
+                              <Pie
+                                data={systemStats.browsers}
+                                cx="50%"
+                                cy="50%"
+                                innerRadius={40}
+                                outerRadius={60}
+                                paddingAngle={5}
+                                dataKey="value"
                               >
-                                <LogOut size={18} />
-                              </button>
-                            )}
-                         </div>
-                       ))}
-                       {activeSessions.length === 0 && (
-                         <div className="col-span-full py-8 text-center bg-gray-50 dark:bg-gray-900/50 rounded-2xl border border-dashed border-gray-200 dark:border-gray-700">
-                           <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Aucune session active détectée</p>
-                         </div>
-                       )}
+                                {[0, 1, 2, 3, 4].map((entry, index) => (
+                                  <Cell key={`cell-${index}`} fill={['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'][index % 5]} />
+                                ))}
+                              </Pie>
+                              <RechartsTooltip 
+                                contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+                              />
+                            </PieChart>
+                          </ResponsiveContainer>
+                        </div>
+                        <div className="space-y-2 mt-4">
+                          {systemStats.browsers.map((b, i) => (
+                            <div key={b.name} className="flex items-center justify-between text-[10px] font-bold">
+                              <span className="text-gray-500 uppercase">{b.name}</span>
+                              <span className="text-gray-900 dark:text-white px-2 py-0.5 bg-white dark:bg-gray-800 rounded-md border border-gray-100 dark:border-gray-700">{b.value}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* OS Stats */}
+                      <div className="bg-gray-50/50 dark:bg-gray-900/50 p-6 rounded-3xl border border-gray-100 dark:border-gray-700">
+                        <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-6 flex items-center gap-2">
+                          <Monitor size={14} className="text-indigo-500" />
+                          Systèmes d'Exploitation
+                        </h4>
+                        <div className="h-48">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <BarChart data={systemStats.os}>
+                              <XAxis dataKey="name" hide />
+                              <YAxis hide />
+                              <RechartsTooltip cursor={{fill: 'transparent'}} />
+                              <Bar dataKey="value" fill="#6366f1" radius={[4, 4, 0, 0]} />
+                            </BarChart>
+                          </ResponsiveContainer>
+                        </div>
+                        <div className="space-y-2 mt-4">
+                          {systemStats.os.map((o, i) => (
+                            <div key={o.name} className="flex items-center justify-between text-[10px] font-bold">
+                              <span className="text-gray-500 uppercase">{o.name}</span>
+                              <span className="text-gray-900 dark:text-white px-2 py-0.5 bg-white dark:bg-gray-800 rounded-md border border-gray-100 dark:border-gray-700">{o.value}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Device Stats */}
+                      <div className="bg-gray-50/50 dark:bg-gray-900/50 p-6 rounded-3xl border border-gray-100 dark:border-gray-700">
+                        <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-6 flex items-center gap-2">
+                          <Smartphone size={14} className="text-emerald-500" />
+                          Type d'Appareils
+                        </h4>
+                        <div className="h-48">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <PieChart>
+                              <Pie
+                                data={systemStats.devices}
+                                cx="50%"
+                                cy="50%"
+                                outerRadius={60}
+                                dataKey="value"
+                                label={({name, percent}) => `${(percent * 100).toFixed(0)}%`}
+                              >
+                                {systemStats.devices.map((entry, index) => (
+                                  <Cell key={`cell-${index}`} fill={index === 0 ? '#10b981' : '#6366f1'} />
+                                ))}
+                              </Pie>
+                            </PieChart>
+                          </ResponsiveContainer>
+                        </div>
+                        <div className="space-y-2 mt-4">
+                          {systemStats.devices.map((d, i) => (
+                            <div key={d.name} className="flex items-center justify-between text-[10px] font-bold">
+                              <span className="text-gray-500 uppercase">{d.name}</span>
+                              <span className="text-gray-900 dark:text-white px-2 py-0.5 bg-white dark:bg-gray-800 rounded-md border border-gray-100 dark:border-gray-700">{d.value}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Desktop / All users section */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* User's Current Specs */}
+                    <div className="space-y-4">
+                      <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest">Ma Configuration Actuelle</h4>
+                      <div className="grid grid-cols-1 gap-3">
+                        <div className="p-4 rounded-2xl bg-white dark:bg-gray-900 border border-indigo-100 dark:border-indigo-900 shadow-sm flex items-center gap-4">
+                           <div className="w-12 h-12 bg-indigo-50 dark:bg-indigo-900/50 rounded-xl flex items-center justify-center text-indigo-600">
+                             {/iPhone|Android|Mobile/.test(navigator.userAgent) ? <Smartphone size={24} /> : <Monitor size={24} />}
+                           </div>
+                           <div>
+                             <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Appareil Détecté</p>
+                             <p className="font-black text-sm text-gray-900 dark:text-white">
+                                {/iPhone|iPad/.test(navigator.userAgent) ? 'Apple iOS' : /Android/.test(navigator.userAgent) ? 'Android' : 'Poste de Travail'}
+                             </p>
+                             <p className="text-[9px] font-bold text-indigo-500 uppercase">{navigator.platform}</p>
+                           </div>
+                        </div>
+
+                        <div className="p-4 rounded-2xl bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 shadow-sm flex items-center gap-4">
+                           <div className="w-12 h-12 bg-gray-50 dark:bg-gray-800 rounded-xl flex items-center justify-center text-gray-400">
+                             <Globe size={24} />
+                           </div>
+                           <div>
+                             <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Navigateur & Version</p>
+                             <p className="font-black text-sm text-gray-900 dark:text-white">
+                                {navigator.userAgent.includes('Chrome') ? 'Google Chrome' : 
+                                 navigator.userAgent.includes('Firefox') ? 'Mozilla Firefox' :
+                                 navigator.userAgent.includes('Safari') ? 'Apple Safari' :
+                                 navigator.userAgent.includes('Edge') ? 'Microsoft Edge' : 'Navigateur Web'}
+                             </p>
+                             <p className="text-[9px] font-bold text-gray-400 uppercase truncate max-w-[200px]">{navigator.language} • {navigator.cookieEnabled ? 'Cookies OK' : 'No Cookies'}</p>
+                           </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* System Resources */}
+                    <div className="space-y-4">
+                      <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest">Ressources & Performance</h4>
+                      <div className="p-6 rounded-3xl bg-gray-900 text-white relative overflow-hidden group">
+                        <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:opacity-20 transition-opacity">
+                          <Cpu size={80} />
+                        </div>
+                        <div className="relative z-10 space-y-6">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              <div className="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center">
+                                <Zap size={20} className="text-indigo-400" />
+                              </div>
+                              <div>
+                                <p className="text-[10px] font-black text-indigo-300 uppercase tracking-tighter">Latence Gateway</p>
+                                <p className="text-xl font-black">{latency}ms</p>
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <div className="flex items-center justify-end gap-1 mb-1">
+                                {[1, 2, 3, 4, 5].map(i => (
+                                  <div key={i} className={`w-1 h-3 rounded-full ${i <= 4 ? 'bg-emerald-500' : 'bg-white/20'}`} />
+                                ))}
+                              </div>
+                              <p className="text-[8px] font-black uppercase text-emerald-400">Stable</p>
+                            </div>
+                          </div>
+
+                          <div className="space-y-2">
+                             <div className="flex justify-between text-[10px] font-black uppercase text-gray-400">
+                                <span>Utilisation Base de Données</span>
+                                <span>{Math.round((density / 100) * 100)}%</span>
+                             </div>
+                             <div className="h-1.5 w-full bg-white/10 rounded-full overflow-hidden">
+                                <motion.div 
+                                  initial={{ width: 0 }}
+                                  animate={{ width: `${density}%` }}
+                                  className="h-full bg-indigo-500" 
+                                />
+                             </div>
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   </div>
+
+                  {currentUser?.role === 'admin' && (
+                    <div className="space-y-4 pt-6">
+                      <div className="flex items-center justify-between">
+                        <h4 className="text-sm font-black text-gray-900 dark:text-white uppercase tracking-widest">Dashboard Global des Sessions</h4>
+                        <div className="flex items-center gap-4">
+                           <div className="flex items-center gap-2 text-[10px] font-bold text-gray-500 uppercase">
+                              <div className="w-2 h-2 rounded-full bg-emerald-500" />
+                              Web
+                           </div>
+                           <div className="flex items-center gap-2 text-[10px] font-bold text-gray-500 uppercase">
+                              <div className="w-2 h-2 rounded-full bg-indigo-500" />
+                              Mobile
+                           </div>
+                        </div>
+                      </div>
+                      
+                      <div className="bg-gray-50 dark:bg-gray-900/50 rounded-3xl border border-gray-100 dark:border-gray-700 overflow-hidden">
+                        <div className="overflow-x-auto lg:overflow-visible">
+                          {/* Desktop Table View */}
+                          <table className="hidden md:table w-full text-left border-collapse">
+                            <thead>
+                              <tr className="bg-gray-100/50 dark:bg-gray-800/50">
+                                <th className="px-6 py-4 text-[10px] font-black text-gray-500 uppercase tracking-wider">Utilisateur</th>
+                                <th className="px-6 py-4 text-[10px] font-black text-gray-500 uppercase tracking-wider">Appareil</th>
+                                <th className="px-6 py-4 text-[10px] font-black text-gray-500 uppercase tracking-wider">Localisation / IP</th>
+                                <th className="px-6 py-4 text-[10px] font-black text-gray-500 uppercase tracking-wider">Dernière Activité</th>
+                                <th className="px-6 py-4 text-[10px] font-black text-gray-500 uppercase tracking-wider text-right">Actions</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+                              {adminSessions.slice(0, 10).map((session) => (
+                                <tr key={session.id} className="hover:bg-white dark:hover:bg-gray-800 transition-colors group">
+                                  <td className="px-6 py-4">
+                                    <div className="flex items-center gap-3">
+                                      <div className="w-8 h-8 rounded-full bg-indigo-100 dark:bg-indigo-900/50 flex items-center justify-center text-indigo-600 dark:text-indigo-400 font-bold text-xs">
+                                        {session.userName?.[0]}
+                                      </div>
+                                      <div>
+                                        <p className="text-sm font-black text-gray-900 dark:text-white">{session.userName}</p>
+                                        <p className="text-[10px] text-gray-400 font-bold uppercase">{session.userId}</p>
+                                      </div>
+                                    </div>
+                                  </td>
+                                  <td className="px-6 py-4">
+                                    <div className="flex items-center gap-2">
+                                      {session.isMobile ? <Smartphone size={14} className="text-indigo-500" /> : <Monitor size={14} className="text-emerald-500" />}
+                                      <span className="text-xs font-bold text-gray-700 dark:text-gray-300">{session.device}</span>
+                                    </div>
+                                    <div className="flex gap-2 mt-1">
+                                      <span className="text-[8px] font-black px-1.5 py-0.5 bg-gray-100 dark:bg-gray-800 text-gray-400 rounded uppercase">{session.browser?.split(' ')[0]}</span>
+                                      <span className="text-[8px] font-black px-1.5 py-0.5 bg-gray-100 dark:bg-gray-800 text-gray-400 rounded uppercase">{session.os?.split(' ')[0]}</span>
+                                    </div>
+                                  </td>
+                                  <td className="px-6 py-4">
+                                    <p className="text-xs font-bold text-gray-700 dark:text-gray-300">{session.location || 'Libreville, GA'}</p>
+                                    <p className="text-[10px] font-mono text-gray-400">{session.ip || '0.0.0.0'}</p>
+                                  </td>
+                                  <td className="px-6 py-4">
+                                    <div className="flex items-center gap-2">
+                                      <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                                      <span className="text-xs font-bold text-gray-700 dark:text-gray-300">
+                                        {session.lastActive?.toDate ? session.lastActive.toDate().toLocaleTimeString() : 'Maintenant'}
+                                      </span>
+                                    </div>
+                                  </td>
+                                  <td className="px-6 py-4 text-right">
+                                    {session.id !== auth.currentUser?.uid && (
+                                      <button 
+                                        onClick={() => handleTerminateSession(session.id)}
+                                        className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-all opacity-0 group-hover:opacity-100"
+                                      >
+                                        <LogOut size={16} />
+                                      </button>
+                                    )}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+
+                          {/* Mobile List View */}
+                          <div className="md:hidden divide-y divide-gray-100 dark:divide-gray-800">
+                             {adminSessions.slice(0, 10).map((session) => (
+                               <div key={session.id} className="p-4 space-y-4">
+                                 <div className="flex justify-between items-start">
+                                    <div className="flex items-center gap-3">
+                                      <div className="w-10 h-10 rounded-xl bg-indigo-100 dark:bg-indigo-900/50 flex items-center justify-center text-indigo-600 dark:text-indigo-400 font-black text-sm">
+                                        {session.userName?.[0]}
+                                      </div>
+                                      <div>
+                                        <p className="text-sm font-black text-gray-900 dark:text-white">{session.userName}</p>
+                                        <p className="text-[10px] text-gray-400 font-bold uppercase">{session.userId}</p>
+                                      </div>
+                                    </div>
+                                    {session.id !== auth.currentUser?.uid && (
+                                      <button 
+                                        onClick={() => handleTerminateSession(session.id)}
+                                        className="p-2 text-red-500 bg-red-50 dark:bg-red-900/20 rounded-lg"
+                                      >
+                                        <LogOut size={16} />
+                                      </button>
+                                    )}
+                                 </div>
+                                 <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                       <p className="text-[9px] font-black text-gray-400 uppercase mb-1">Appareil</p>
+                                       <div className="flex items-center gap-1.5">
+                                          {session.isMobile ? <Smartphone size={12} className="text-indigo-500" /> : <Monitor size={12} className="text-emerald-500" />}
+                                          <span className="text-[11px] font-bold text-gray-700 dark:text-gray-300 truncate">{session.device}</span>
+                                       </div>
+                                    </div>
+                                    <div>
+                                       <p className="text-[9px] font-black text-gray-400 uppercase mb-1">Dernière Activité</p>
+                                       <p className="text-[11px] font-bold text-gray-700 dark:text-gray-300">
+                                         {session.lastActive?.toDate ? session.lastActive.toDate().toLocaleTimeString() : 'Maintenant'}
+                                       </p>
+                                    </div>
+                                 </div>
+                                 <div className="flex items-center justify-between pt-2 border-t border-gray-50 dark:border-gray-800">
+                                    <span className="text-[10px] font-bold text-gray-500">{session.location || 'Libreville, GA'}</span>
+                                    <div className="flex gap-1">
+                                       <span className="text-[8px] font-black px-1.5 py-0.5 bg-gray-100 dark:bg-gray-800 text-gray-400 rounded uppercase">{session.browser?.split(' ')[0]}</span>
+                                       <span className="text-[8px] font-black px-1.5 py-0.5 bg-gray-100 dark:bg-gray-800 text-gray-400 rounded uppercase">{session.os?.split(' ')[0]}</span>
+                                    </div>
+                                 </div>
+                               </div>
+                             ))}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {!isAdmin && (
+                    <div className="space-y-4 pt-4">
+                      <h4 className="text-sm font-black text-gray-900 dark:text-white uppercase tracking-widest">Mes Sessions Actives</h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                         {activeSessions.map(session => (
+                           <div key={session.id} className={`p-4 rounded-2xl border ${session.current ? 'border-indigo-600 bg-indigo-50/10 shadow-sm shadow-indigo-100 dark:shadow-none' : 'border-gray-100 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-900/50'} flex justify-between items-center group transition-all hover:border-indigo-300`}>
+                              <div className="flex items-center gap-4">
+                                 <div className={`p-3 rounded-xl ${session.current ? 'bg-indigo-600 text-white' : 'bg-gray-200 dark:bg-gray-800 text-gray-500'}`}>
+                                    {session.device?.includes('iPhone') || session.device?.includes('Mobile') ? <Smartphone size={18} /> : <Monitor size={18} />}
+                                 </div>
+                                 <div className="min-w-0">
+                                    <p className="text-[13px] font-black text-gray-900 dark:text-white flex items-center gap-2 truncate">
+                                      {session.device}
+                                      {session.current && <span className="text-[8px] px-2 py-0.5 bg-emerald-500 text-white rounded-full font-black tracking-widest uppercase flex-shrink-0">ACTUELLE</span>}
+                                    </p>
+                                    <p className="text-[10px] text-gray-500 dark:text-gray-400 font-bold uppercase mt-0.5 truncate">
+                                      {session.location} • {session.date}
+                                    </p>
+                                    <div className="flex items-center gap-2 mt-1.5 overflow-hidden">
+                                      <span className="text-[9px] font-black px-1.5 py-0.5 bg-gray-100 dark:bg-gray-800 text-gray-400 rounded uppercase truncate">{session.os || 'N/A'}</span>
+                                      <span className="text-[9px] font-black px-1.5 py-0.5 bg-gray-100 dark:bg-gray-800 text-gray-400 rounded uppercase truncate">{session.browser || 'N/A'}</span>
+                                    </div>
+                                 </div>
+                              </div>
+                              {!session.current && (
+                                <button 
+                                  onClick={() => handleTerminateSession(session.id)}
+                                  className="text-red-500 opacity-0 group-hover:opacity-100 transition-opacity p-2.5 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl flex-shrink-0"
+                                  title="Terminer cette session"
+                                >
+                                  <LogOut size={18} />
+                                </button>
+                              )}
+                           </div>
+                         ))}
+                      </div>
+                    </div>
+                  )}
 
                   <div className="space-y-4 pt-4 pb-4">
                     <div className="flex items-center justify-between">
-                      <h4 className="text-sm font-black text-gray-900 dark:text-white uppercase tracking-widest">Indicateur de Densité de l'Établissement</h4>
-                      <span className="text-xs font-black text-indigo-600 px-3 py-1 bg-indigo-50 dark:bg-indigo-900/50 rounded-full">{density}%</span>
+                      <h4 className="text-sm font-black text-gray-900 dark:text-white uppercase tracking-widest">Journal Local</h4>
+                      <span className="text-[8px] font-black text-gray-400 uppercase">Synchronisé à {new Date().toLocaleTimeString()}</span>
                     </div>
-                    <div className="h-4 w-full bg-gray-100 dark:bg-gray-900 rounded-full p-1 shadow-inner border border-gray-200 dark:border-gray-700">
-                       <motion.div 
-                         initial={{ width: 0 }}
-                         animate={{ width: `${density}%` }}
-                         className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-indigo-600 relative overflow-hidden shadow-lg"
-                       >
-                         <div className="absolute inset-0 bg-[linear-gradient(45deg,rgba(255,255,255,.15)_25%,transparent_25%,transparent_50%,rgba(255,255,255,.15)_50%,rgba(255,255,255,.15)_75%,transparent_75%,transparent)] bg-[length:10px_10px] animate-[slide_1s_linear_infinite]" />
-                       </motion.div>
-                    </div>
-                    <p className="text-[10px] text-gray-500 dark:text-gray-400 font-medium italic">Calculé en temps réel basé sur les scans de présence actifs ce jour.</p>
-                  </div>
-
-                  <div className="space-y-4">
-                    <h4 className="text-sm font-black text-gray-900 dark:text-white uppercase tracking-widest">Autorisations Navigateur</h4>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                      {[
-                        { label: 'Caméra (QR Scanner)', status: 'Vérifié', ok: true },
-                        { label: 'Géolocalisation', status: 'Actif', ok: true },
-                        { label: 'Microphone', status: 'Non utilisé', ok: null },
-                        { label: 'Notification API', status: 'Autorisé', ok: true },
-                        { label: 'Auth Biométrique', status: 'Inconnu', ok: false },
-                      ].map((auth, i) => (
-                        <div key={i} className="px-4 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl flex items-center justify-between">
-                          <span className="text-xs font-bold text-gray-600 dark:text-gray-400">{auth.label}</span>
-                          {auth.ok === true ? <CheckCircle2 size={14} className="text-emerald-500" /> : 
-                           auth.ok === false ? <AlertCircle size={14} className="text-amber-500" /> : 
-                           <div className="w-3 h-3 bg-gray-200 rounded-full" />}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {sessionLogs.slice(0, 4).map(log => (
+                        <div key={log.id} className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-900/50 rounded-xl border border-gray-100 dark:border-gray-800">
+                          <div className={`w-1.5 h-1.5 rounded-full ${log.type === 'auth' ? 'bg-emerald-500' : 'bg-indigo-500'}`} />
+                          <span className="text-[11px] font-bold text-gray-600 dark:text-gray-400">{log.event}</span>
                         </div>
                       ))}
                     </div>
