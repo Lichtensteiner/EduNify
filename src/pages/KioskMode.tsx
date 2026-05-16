@@ -23,13 +23,43 @@ export default function KioskMode({ onExit }: KioskModeProps) {
   const startCamera = async () => {
     try {
       setError(null);
-      const mediaStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
+      
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+        setStream(null);
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+
+      let mediaStream: MediaStream;
+      try {
+        mediaStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
+      } catch (e) {
+        console.warn("Attempt with ideal constraints failed, falling back to any video source", e);
+        mediaStream = await navigator.mediaDevices.getUserMedia({ video: true });
+      }
+
       setStream(mediaStream);
       if (videoRef.current) {
         videoRef.current.srcObject = mediaStream;
+        try {
+          await videoRef.current.play();
+        } catch (playErr) {
+          console.error("Kiosk video play failed:", playErr);
+        }
       }
     } catch (err: any) {
-      setError("Impossible d'accéder à la caméra.");
+      let errorMessage = "Impossible d'accéder à la caméra.";
+      const errName = err.name || "";
+      const errMessage = err.message || "";
+
+      if (errName === 'NotAllowedError' || errMessage.includes('denied')) {
+        errorMessage = "Permission refusée. Veuillez autoriser la caméra.";
+      } else if (errName === 'NotFoundError' || errMessage.includes('not found')) {
+        errorMessage = "Aucune caméra détectée.";
+      } else if (errName === 'NotReadableError' || errMessage.includes('Starting videoinput failed')) {
+        errorMessage = "Caméra occupée ou erreur matérielle (Starting videoinput failed).";
+      }
+      setError(errorMessage);
     }
   };
 
@@ -37,6 +67,9 @@ export default function KioskMode({ onExit }: KioskModeProps) {
     if (stream) {
       stream.getTracks().forEach(track => track.stop());
       setStream(null);
+      if (videoRef.current) {
+        videoRef.current.srcObject = null;
+      }
     }
   };
 

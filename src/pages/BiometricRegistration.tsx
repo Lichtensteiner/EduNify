@@ -17,24 +17,60 @@ export default function BiometricRegistration() {
   const startCamera = async () => {
     try {
       setError(null);
+      
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+        setStream(null);
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
         throw new Error("L'accès à la caméra n'est pas supporté par votre navigateur.");
       }
-      const mediaStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
+      
+      let mediaStream: MediaStream;
+      try {
+        mediaStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
+      } catch (e) {
+        console.warn("Attempt with ideal constraints failed, falling back to any video source", e);
+        mediaStream = await navigator.mediaDevices.getUserMedia({ video: true });
+      }
+
       setStream(mediaStream);
       if (videoRef.current) {
         videoRef.current.srcObject = mediaStream;
+        try {
+          await videoRef.current.play();
+        } catch (playErr) {
+          console.error("Biometric video play failed:", playErr);
+        }
       }
-    } catch (err) {
-      console.error("Erreur caméra:", err);
-      setError("Impossible d'accéder à la caméra.");
+    } catch (err: any) {
+      let errorMessage = "Impossible d'accéder à la caméra.";
+      const errName = err.name || "";
+      const errMessage = err.message || "";
+
+      if (errName === 'NotAllowedError' || errMessage.includes('denied')) {
+        errorMessage = "Permission refusée. Veuillez autoriser la caméra.";
+      } else if (errName === 'NotFoundError' || errMessage.includes('not found')) {
+        errorMessage = "Aucune caméra détectée.";
+      } else if (errName === 'NotReadableError' || errMessage.includes('Starting videoinput failed')) {
+        errorMessage = "Caméra occupée ou erreur matérielle (Hardware failed).";
+      }
+      setError(errorMessage);
+      console.error("Erreur caméra détaillée (catched):", errName, errMessage);
     }
   };
 
   const stopCamera = () => {
     if (stream) {
-      stream.getTracks().forEach(track => track.stop());
+      stream.getTracks().forEach(track => {
+        track.stop();
+      });
       setStream(null);
+      if (videoRef.current) {
+        videoRef.current.srcObject = null;
+      }
     }
   };
 

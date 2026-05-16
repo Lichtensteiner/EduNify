@@ -797,41 +797,55 @@ export default function Settings() {
                     <div className="space-y-4">
                       <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest">Ma Configuration Actuelle</h4>
                       <div className="grid grid-cols-1 gap-3">
-                        <div className="p-4 rounded-2xl bg-white dark:bg-gray-900 border border-indigo-100 dark:border-indigo-900 shadow-sm flex items-center gap-4">
-                           <div className="w-12 h-12 bg-indigo-50 dark:bg-indigo-900/50 rounded-xl flex items-center justify-center text-indigo-600">
-                             {/iPhone|Android|Mobile/.test(navigator.userAgent) ? <Smartphone size={24} /> : <Monitor size={24} />}
-                           </div>
-                           <div>
-                             <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Appareil Détecté</p>
-                             <p className="font-black text-sm text-gray-900 dark:text-white">
-                                {/iPhone|iPad/.test(navigator.userAgent) ? 'Apple iOS' : /Android/.test(navigator.userAgent) ? 'Android' : 'Poste de Travail'}
-                             </p>
-                             <p className="text-[9px] font-bold text-indigo-500 uppercase">{navigator.platform}</p>
-                           </div>
-                        </div>
+                         <div className="p-4 rounded-2xl bg-white dark:bg-gray-900 border border-indigo-100 dark:border-indigo-900 shadow-sm flex items-center gap-4">
+                            <div className="w-12 h-12 bg-indigo-50 dark:bg-indigo-900/50 rounded-xl flex items-center justify-center text-indigo-600">
+                              {/iPhone|Android|Mobile/.test(navigator.userAgent) ? <Smartphone size={24} /> : <Monitor size={24} />}
+                            </div>
+                            <div>
+                              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Appareil Détecté</p>
+                              <p className="font-black text-sm text-gray-900 dark:text-white">
+                                 {/Android/.test(navigator.userAgent) ? 'Android Mobile' : 
+                                  /iPhone|iPad/.test(navigator.userAgent) ? 'Apple iOS' : 
+                                  /Mac/.test(navigator.userAgent) ? 'macOS Desktop' : 
+                                  /Win/.test(navigator.userAgent) ? 'Windows PC' : 
+                                  /Linux/.test(navigator.userAgent) ? 'Linux Station' : 'Poste de Travail'}
+                              </p>
+                              <p className="text-[9px] font-bold text-indigo-500 uppercase tracking-wider">{navigator.platform} • {window.screen.width}x{window.screen.height}</p>
+                            </div>
+                         </div>
 
-                        <div className="p-4 rounded-2xl bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 shadow-sm flex items-center gap-4">
-                           <div className="w-12 h-12 bg-gray-50 dark:bg-gray-800 rounded-xl flex items-center justify-center text-gray-400">
-                             <Globe size={24} />
-                           </div>
-                           <div>
-                             <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Navigateur & Version</p>
-                             <p className="font-black text-sm text-gray-900 dark:text-white">
-                                {navigator.userAgent.includes('Chrome') ? 'Google Chrome' : 
-                                 navigator.userAgent.includes('Firefox') ? 'Mozilla Firefox' :
-                                 navigator.userAgent.includes('Safari') ? 'Apple Safari' :
-                                 navigator.userAgent.includes('Edge') ? 'Microsoft Edge' : 'Navigateur Web'}
-                             </p>
-                             <p className="text-[9px] font-bold text-gray-400 uppercase truncate max-w-[200px]">{navigator.language} • {navigator.cookieEnabled ? 'Cookies OK' : 'No Cookies'}</p>
-                           </div>
-                        </div>
+                         <div className="p-4 rounded-2xl bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 shadow-sm flex items-center gap-4">
+                            <div className="w-12 h-12 bg-gray-50 dark:bg-gray-800 rounded-xl flex items-center justify-center text-gray-400">
+                              <Globe size={24} />
+                            </div>
+                            <div>
+                              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Navigateur & Moteur</p>
+                              <p className="font-black text-sm text-gray-900 dark:text-white">
+                                 {navigator.userAgent.includes('Edg/') ? 'Microsoft Edge' :
+                                  navigator.userAgent.includes('Chrome') ? 'Google Chrome' : 
+                                  navigator.userAgent.includes('Firefox') ? 'Mozilla Firefox' :
+                                  navigator.userAgent.includes('Safari') && !navigator.userAgent.includes('Chrome') ? 'Apple Safari' :
+                                  navigator.userAgent.includes('Opera') || navigator.userAgent.includes('OPR') ? 'Opera' : 'Navigateur Web'}
+                              </p>
+                              <div className="flex items-center gap-2 mt-0.5">
+                                <span className="text-[9px] font-bold text-gray-400 uppercase font-mono">{navigator.language}</span>
+                                <span className="w-1 h-1 bg-gray-300 rounded-full"></span>
+                                <span className="text-[9px] font-black text-indigo-500 uppercase">SYNC LIVE</span>
+                              </div>
+                            </div>
+                         </div>
                       </div>
                     </div>
 
                     {/* System Resources */}
                     <div className="space-y-4">
-                      <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest">Ressources & Performance</h4>
-                      <div className="p-6 rounded-3xl bg-gray-900 text-white relative overflow-hidden group">
+                      <div className="flex items-center justify-between">
+                        <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest">Analyse de Flux Temps Réel</h4>
+                        <div className="flex items-center gap-2">
+                           <span className="text-[8px] font-black text-emerald-500 border border-emerald-100 dark:border-emerald-900/50 px-2 py-0.5 rounded-full animate-pulse">OPTIMISÉ</span>
+                        </div>
+                      </div>
+                      <div className="p-6 rounded-3xl bg-gray-900 text-white relative overflow-hidden group border border-white/5 shadow-2xl">
                         <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:opacity-20 transition-opacity">
                           <Cpu size={80} />
                         </div>
@@ -843,29 +857,34 @@ export default function Settings() {
                               </div>
                               <div>
                                 <p className="text-[10px] font-black text-indigo-300 uppercase tracking-tighter">Latence Gateway</p>
-                                <p className="text-xl font-black">{latency}ms</p>
+                                <div className="flex items-baseline gap-1">
+                                  <p className="text-xl font-black">{latency}</p>
+                                  <span className="text-[10px] font-bold opacity-50">ms</span>
+                                </div>
                               </div>
                             </div>
                             <div className="text-right">
                               <div className="flex items-center justify-end gap-1 mb-1">
                                 {[1, 2, 3, 4, 5].map(i => (
-                                  <div key={i} className={`w-1 h-3 rounded-full ${i <= 4 ? 'bg-emerald-500' : 'bg-white/20'}`} />
+                                  <div key={i} className={`w-1 h-3 rounded-full ${latency < 300 ? 'bg-emerald-500' : 'bg-amber-500'}`} />
                                 ))}
                               </div>
-                              <p className="text-[8px] font-black uppercase text-emerald-400">Stable</p>
+                              <p className={`text-[8px] font-black uppercase ${latency < 300 ? 'text-emerald-400' : 'text-amber-400'}`}>
+                                {latency < 300 ? 'STABLE' : 'FAIBLE'}
+                              </p>
                             </div>
                           </div>
 
                           <div className="space-y-2">
                              <div className="flex justify-between text-[10px] font-black uppercase text-gray-400">
                                 <span>Utilisation Base de Données</span>
-                                <span>{Math.round((density / 100) * 100)}%</span>
+                                <span>{Math.min(100, Math.round((adminSessions.length / 50) * 100))}%</span>
                              </div>
                              <div className="h-1.5 w-full bg-white/10 rounded-full overflow-hidden">
                                 <motion.div 
                                   initial={{ width: 0 }}
-                                  animate={{ width: `${density}%` }}
-                                  className="h-full bg-indigo-500" 
+                                  animate={{ width: `${Math.min(100, (adminSessions.length / 50) * 100)}%` }}
+                                  className="h-full bg-indigo-500 shadow-[0_0_10px_rgba(99,102,241,0.5)]" 
                                 />
                              </div>
                           </div>
