@@ -244,7 +244,7 @@ export default function Settings() {
 
       // 2. Real-time Active Sessions Explorer
       const sessionsQuery = isAdmin 
-        ? query(collection(db, 'user_sessions'), where('status', '==', 'active'))
+        ? query(collection(db, 'user_sessions'), orderBy('lastActive', 'desc'), limit(50))
         : query(collection(db, 'user_sessions'), where('userId', '==', currentUser?.id), where('status', '==', 'active'));
 
       const unsubSessions = onSnapshot(sessionsQuery, (snapshot) => {
@@ -255,18 +255,19 @@ export default function Settings() {
         
         // Sort sessions: current one first, then by lastActive
         const sortedSessions = [...sessions].sort((a, b) => {
-          if (a.id === auth.currentUser?.uid) return -1; // Not perfect but session info is better
+          if (a.id === auth.currentUser?.uid) return -1;
           return (b.lastActive?.seconds || 0) - (a.lastActive?.seconds || 0);
         });
 
         if (isAdmin) {
           setAdminSessions(sessions);
-          // Calculate Stats
+          // Calculate Stats only for active sessions
+          const activeSessionsData = sessions.filter(s => s.status === 'active');
           const browserMap: Record<string, number> = {};
           const osMap: Record<string, number> = {};
           const deviceMap: Record<string, number> = {};
 
-          sessions.forEach(s => {
+          activeSessionsData.forEach(s => {
             const b = s.browser?.split(' ')[0] || 'Unknown';
             browserMap[b] = (browserMap[b] || 0) + 1;
             
@@ -281,7 +282,7 @@ export default function Settings() {
             browsers: Object.entries(browserMap).map(([name, value]) => ({ name, value })),
             os: Object.entries(osMap).map(([name, value]) => ({ name, value })),
             devices: Object.entries(deviceMap).map(([name, value]) => ({ name, value })),
-            totalActive: sessions.length
+            totalActive: activeSessionsData.length
           });
         }
 
@@ -932,11 +933,14 @@ export default function Settings() {
                                   </td>
                                   <td className="px-6 py-4">
                                     <div className="flex items-center gap-2">
-                                      <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                                      <span className="text-xs font-bold text-gray-700 dark:text-gray-300">
-                                        {session.lastActive?.toDate ? session.lastActive.toDate().toLocaleTimeString() : 'Maintenant'}
+                                      <div className={`w-1.5 h-1.5 rounded-full ${session.status === 'active' ? 'bg-emerald-500 animate-pulse' : 'bg-gray-300'}`} />
+                                      <span className={`text-xs font-bold ${session.status === 'active' ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-500'}`}>
+                                        {session.status === 'active' ? 'En ligne' : 'Hors ligne'}
                                       </span>
                                     </div>
+                                    <p className="text-[10px] font-medium text-gray-400 mt-0.5">
+                                      {session.lastActive?.toDate ? session.lastActive.toDate().toLocaleString() : 'Maintenant'}
+                                    </p>
                                   </td>
                                   <td className="px-6 py-4 text-right">
                                     {session.id !== auth.currentUser?.uid && (
@@ -985,8 +989,14 @@ export default function Settings() {
                                        </div>
                                     </div>
                                     <div>
-                                       <p className="text-[9px] font-black text-gray-400 uppercase mb-1">Dernière Activité</p>
-                                       <p className="text-[11px] font-bold text-gray-700 dark:text-gray-300">
+                                       <p className="text-[9px] font-black text-gray-400 uppercase mb-1">Status & Activité</p>
+                                       <div className="flex items-center gap-2">
+                                          <div className={`w-1.5 h-1.5 rounded-full ${session.status === 'active' ? 'bg-emerald-500 animate-pulse' : 'bg-gray-300'}`} />
+                                          <span className={`text-[11px] font-bold ${session.status === 'active' ? 'text-emerald-600' : 'text-gray-500'}`}>
+                                            {session.status === 'active' ? 'En ligne' : 'Hors ligne'}
+                                          </span>
+                                       </div>
+                                       <p className="text-[9px] font-medium text-gray-400">
                                          {session.lastActive?.toDate ? session.lastActive.toDate().toLocaleTimeString() : 'Maintenant'}
                                        </p>
                                     </div>
