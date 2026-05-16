@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
-import { db } from '../lib/firebase';
+import { db, auth } from '../lib/firebase';
+import { handleFirestoreError, OperationType } from '../lib/firestoreErrorHandler';
 import { recordAuditLog } from '../services/auditService';
 import { collection, query, where, onSnapshot, orderBy, addDoc, serverTimestamp, getDocs, deleteDoc, doc, updateDoc } from 'firebase/firestore';
 import { 
@@ -165,7 +166,7 @@ const Grades: React.FC = () => {
       setGrades(gradesData);
       setLoading(false);
     }, (error) => {
-      console.error("Error fetching grades:", error);
+      handleFirestoreError(error, OperationType.LIST, 'grades');
       setLoading(false);
     });
 
@@ -239,10 +240,10 @@ const Grades: React.FC = () => {
     if (!grade) return;
 
     // Permissions check
-    const canManage = currentUser?.role === 'admin' || 
-                    (currentUser?.role === 'enseignant' && (grade.teacherId === currentUser.id || currentUser.matieres?.includes(grade.subject) || currentUser.matiere === grade.subject));
+    const canManageContext = currentUser?.role === 'admin' || 
+                    (currentUser?.role === 'enseignant' && grade.teacherId === currentUser.id && (currentUser.matieres?.includes(grade.subject) || currentUser.matiere === grade.subject));
     
-    if (!canManage) {
+    if (!canManageContext) {
       notifyError(t('insufficient_permissions') || "Vous n'avez pas l'autorisation de supprimer cette note.");
       return;
     }
@@ -261,17 +262,18 @@ const Grades: React.FC = () => {
           category: 'grades'
         });
       }
+      notifyDelete("La note");
     } catch (error) {
-      console.error("Error deleting grade:", error);
+      handleFirestoreError(error, OperationType.DELETE, `grades/${id}`);
     }
   };
 
   const handleEditGrade = (grade: Grade) => {
     // Permissions check
-    const canManage = currentUser?.role === 'admin' || 
-                    (currentUser?.role === 'enseignant' && (grade.teacherId === currentUser.id || currentUser.matieres?.includes(grade.subject) || currentUser.matiere === grade.subject));
+    const canManageContext = currentUser?.role === 'admin' || 
+                    (currentUser?.role === 'enseignant' && grade.teacherId === currentUser.id && (currentUser.matieres?.includes(grade.subject) || currentUser.matiere === grade.subject));
     
-    if (!canManage) {
+    if (!canManageContext) {
       notifyError(t('insufficient_permissions') || "Vous n'avez pas l'autorisation de modifier cette note.");
       return;
     }
@@ -319,6 +321,7 @@ const Grades: React.FC = () => {
           details: `Élève: ${gradeData.studentName}, Note: ${gradeData.score}/${gradeData.maxScore}, Matière: ${gradeData.subject}`,
           category: 'grades'
         });
+        notifyUpdate("La note");
       } else {
         await addDoc(collection(db, 'grades'), {
           ...gradeData,
@@ -333,6 +336,7 @@ const Grades: React.FC = () => {
           details: `Élève: ${gradeData.studentName}, Note: ${gradeData.score}/${gradeData.maxScore}, Matière: ${gradeData.subject}`,
           category: 'grades'
         });
+        notifyAdd("La note");
       }
       
       setShowAddModal(false);
@@ -356,7 +360,7 @@ const Grades: React.FC = () => {
       });
       setShowSuccess(true);
     } catch (error) {
-      console.error("Error saving grade:", error);
+      handleFirestoreError(error, editingGrade ? OperationType.UPDATE : OperationType.CREATE, editingGrade ? `grades/${editingGrade.id}` : 'grades');
     } finally {
       setIsSaving(false);
     }

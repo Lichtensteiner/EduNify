@@ -22,6 +22,7 @@ export default function Users() {
   const [users, setUsers] = useState<any[]>([]);
   const [houses, setHouses] = useState<any[]>([]);
   const [classes, setClasses] = useState<any[]>([]);
+  const [subjects, setSubjects] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Modals state
@@ -89,10 +90,16 @@ export default function Users() {
       setClasses(classesData);
     });
 
+    const unsubscribeSubjects = onSnapshot(collection(db, 'subjects'), (snapshot) => {
+      const subjectsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setSubjects(subjectsData.sort((a: any, b: any) => (a.name || '').localeCompare(b.name || '')));
+    });
+
     return () => {
       unsubscribe();
       unsubscribeHouses();
       unsubscribeClasses();
+      unsubscribeSubjects();
     };
   }, []);
 
@@ -1306,14 +1313,31 @@ export default function Users() {
                     {editUser.role === 'enseignant' && (
                       <div className="col-span-1 md:col-span-2 space-y-4">
                         <div>
-                          <label className="block text-xs font-medium text-gray-500 mb-1.5 ml-1 uppercase">{t('subjects')} {t('comma_separated')}</label>
-                          <input
-                            type="text"
-                            value={editUser.matieres?.join(', ') || editUser.matiere || ''}
-                            onChange={(e) => setEditUser({...editUser, matieres: e.target.value.split(',').map(s => s.trim()).filter(s => s !== '')})}
-                            placeholder={t('subjects_placeholder')}
-                            className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-sm"
-                          />
+                          <label className="block text-xs font-medium text-gray-500 mb-2 ml-1 uppercase">{t('subjects')}</label>
+                          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-40 overflow-y-auto p-3 border border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-gray-900/50">
+                            {subjects.length > 0 ? (
+                              subjects.map(subj => (
+                                <label key={subj.id} className="flex items-center gap-2 p-2 hover:bg-white dark:hover:bg-gray-800 rounded-lg cursor-pointer transition-colors border border-transparent hover:border-gray-100 dark:hover:border-gray-700">
+                                  <input
+                                    type="checkbox"
+                                    checked={(editUser.matieres || []).includes(subj.name)}
+                                    onChange={(e) => {
+                                      const currentSubjects = editUser.matieres || [];
+                                      if (e.target.checked) {
+                                        setEditUser({...editUser, matieres: [...currentSubjects, subj.name]});
+                                      } else {
+                                        setEditUser({...editUser, matieres: currentSubjects.filter((s: string) => s !== subj.name)});
+                                      }
+                                    }}
+                                    className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                                  />
+                                  <span className="text-xs text-gray-700 dark:text-gray-300">{subj.name}</span>
+                                </label>
+                              ))
+                            ) : (
+                                <p className="text-xs text-gray-500 col-span-full p-2 italic">Aucune matière trouvée dans le répertoire.</p>
+                            )}
+                          </div>
                         </div>
                         <div>
                           <label className="block text-xs font-medium text-gray-500 mb-2 ml-1 uppercase">{t('assigned_classes')}</label>
@@ -1837,14 +1861,31 @@ export default function Users() {
                       {newUser.role === 'enseignant' && (
                         <div className="space-y-4">
                           <div>
-                            <label className="block text-xs font-medium text-gray-500 mb-1.5 ml-1 uppercase">{t('subjects')} {t('comma_separated')}</label>
-                            <input
-                              type="text"
-                              value={newUser.matieres?.join(', ') || newUser.matiere || ''}
-                              onChange={(e) => setNewUser({...newUser, matieres: e.target.value.split(',').map(s => s.trim()).filter(s => s !== '')})}
-                              placeholder={t('subjects_placeholder')}
-                              className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-sm"
-                            />
+                            <label className="block text-xs font-medium text-gray-500 mb-2 ml-1 uppercase">{t('subjects')}</label>
+                            <div className="grid grid-cols-2 gap-2 max-h-40 overflow-y-auto p-3 border border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-gray-900/50">
+                              {subjects.length > 0 ? (
+                                subjects.map(subj => (
+                                  <label key={subj.id} className="flex items-center gap-2 p-2 hover:bg-white dark:hover:bg-gray-800 rounded-lg cursor-pointer transition-colors border border-transparent hover:border-gray-100 dark:hover:border-gray-700">
+                                    <input
+                                      type="checkbox"
+                                      checked={(newUser.matieres || []).includes(subj.name)}
+                                      onChange={(e) => {
+                                        const currentSubjects = newUser.matieres || [];
+                                        if (e.target.checked) {
+                                          setNewUser({...newUser, matieres: [...currentSubjects, subj.name]});
+                                        } else {
+                                          setNewUser({...newUser, matieres: currentSubjects.filter((s: string) => s !== subj.name)});
+                                        }
+                                      }}
+                                      className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                                    />
+                                    <span className="text-xs text-gray-700 dark:text-gray-300">{subj.name}</span>
+                                  </label>
+                                ))
+                              ) : (
+                                <p className="text-xs text-gray-500 col-span-full p-2 italic">Aucune matière trouvée dans le répertoire.</p>
+                              )}
+                            </div>
                           </div>
                           <div>
                             <label className="block text-xs font-medium text-gray-500 mb-2 ml-1 uppercase">{t('assigned_classes')}</label>

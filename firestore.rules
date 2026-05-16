@@ -18,11 +18,15 @@ service cloud.firestore {
     
     function isAdmin() {
       return isAuthenticated() && (
-        request.auth.token.email == "martinienmvezogo@gmail.com" ||
+        (request.auth.token.email == "martinienmvezogo@gmail.com" && request.auth.token.email_verified == true) ||
         getUserData().get('role', '') == 'admin'
       );
     }
     
+    function isVerified() {
+      return isAuthenticated() && request.auth.token.email_verified == true;
+    }
+
     function isTeacher() {
       return isAuthenticated() && getUserData().role == 'enseignant';
     }
@@ -50,37 +54,30 @@ service cloud.firestore {
     function canManageBySubject(subject) {
       let user = get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
       return isAdmin() || (
-        isTeacher() && (
+        user.role == 'enseignant' && (
           (user.get('matiere', '') == subject) || 
           (user.get('matieres', []).hasAny([subject]))
         )
       );
     }
 
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
     // ===============================================================
     // Collections
     // ===============================================================
 
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
     // Users Collection
     match /users/{userId} {
-      // Anyone can create their own profile during registration, 
-      // but they MUST NOT be able to set their role to 'admin' 
-      // unless they are the designated admin account.
-      allow create: if isAuthenticated() && 
-        (
-          (request.resource.data.role != 'admin') || 
-          (request.auth.token.email == "martinienmvezogo@gmail.com")
-        );
-      
-      // Users can read their own profile, admins, teachers and staff can read all
-      // Parents can read their children's profiles
       allow read: if isOwner(userId) || isAdmin() || isTeacher() || isStaff() || isChildOf(userId);
-      
-      // Only admins can update roles or other sensitive data
-      // Users can update their own bio/profile pic but not their role
-      allow update: if isAdmin() || 
-        (isOwner(userId) && request.resource.data.role == resource.data.role);
-        
+      allow create: if isVerified() && (incoming().role != 'admin' || request.auth.token.email == "martinienmvezogo@gmail.com");
+      allow update: if isAdmin() || (isOwner(userId) && incoming().role == existing().role);
       allow delete: if isAdmin();
     }
 
@@ -93,43 +90,53 @@ service cloud.firestore {
     // Attendance Collection
     match /attendance/{attendanceId} {
       allow read: if isAuthenticated() && (isAdmin() || isTeacher() || isStaff() || isOwner(resource.data.user_id) || isChildOf(resource.data.user_id));
-      allow create: if isAuthenticated(); // Students can clock in
+      allow create: if isVerified(); // Students can clock in
       allow update, delete: if isAdmin(); // ONLY Admin can modify/delete summary records
     }
 
     // Attendance Logs Collection (Detailed scans)
     match /attendance_logs/{logId} {
       allow read: if isAuthenticated() && (isAdmin() || isTeacher() || isStaff() || isOwner(resource.data.user_id) || isChildOf(resource.data.user_id));
-      allow create: if isAuthenticated(); // Scanners can create logs
+      allow create: if isVerified(); // Scanners can create logs
       allow update, delete: if isAdmin(); // ONLY Admin can modify/delete logs
     }
 
     // Grades Collection
     match /grades/{gradeId} {
       function isValidGrade(data) {
-        return data.keys().hasAll(['studentId', 'subject', 'score', 'maxScore', 'title', 'teacherId']) &&
-               data.studentId is string && 
-               data.subject is string &&
-               data.score is number &&
+        return data.keys().hasAll(['studentId', 'subject', 'score', 'maxScore', 'title', 'teacherId', 'classId', 'type']) &&
+               data.studentId is string && data.studentId.size() <= 128 &&
+               data.subject is string && data.subject.size() <= 100 &&
+               data.score is number && 
                data.maxScore is number &&
-               data.title is string && data.title.size() <= 200 &&
-               data.teacherId == request.auth.uid;
+               data.teacherId == request.auth.uid &&
+               data.classId is string;
       }
 
       allow read: if isAuthenticated() && (isAdmin() || isTeacher() || isOwner(resource.data.studentId) || isChildOf(resource.data.studentId));
       
-      allow create: if isAuthenticated() && isValidGrade(incoming()) && canManageBySubject(incoming().subject);
+      allow create: if isVerified() && 
+                    isValidId(gradeId) && 
+                    isValidGrade(incoming()) && 
+                    canManageBySubject(incoming().subject);
       
-      allow update: if isAuthenticated() && isValidGrade(incoming()) && canManageBySubject(existing().subject) && (
+      allow update: if isVerified() && 
+                    isValidId(gradeId) &&
+                    isValidGrade(incoming()) && 
+                    canManageBySubject(existing().subject) && (
         isAdmin() || (
           incoming().diff(existing()).affectedKeys().hasOnly(['score', 'maxScore', 'coefficient', 'title', 'comment', 'type', 'updatedAt']) &&
           incoming().subject == existing().subject &&
           incoming().studentId == existing().studentId &&
-          incoming().teacherId == existing().teacherId
+          incoming().teacherId == existing().teacherId &&
+          incoming().teacherId == request.auth.uid
         )
       );
       
-      allow delete: if isAuthenticated() && canManageBySubject(existing().subject);
+      allow delete: if isVerified() && 
+                    isValidId(gradeId) &&
+                    canManageBySubject(existing().subject) && 
+                    (isAdmin() || existing().teacherId == request.auth.uid);
     }
 
     // Subjects Collection
