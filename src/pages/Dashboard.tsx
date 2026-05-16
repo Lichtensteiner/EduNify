@@ -85,8 +85,102 @@ const AdminDashboard = ({ stats, weeklyData, studentLevelData, userDistribution,
   const { theme } = useTheme();
   const isDark = theme === 'dark';
 
+  const [isDetailOpen, setIsDetailOpen] = useState(false);
+  const [isOptimizeOpen, setIsOptimizeOpen] = useState(false);
+
   return (
     <div className="space-y-6">
+      {/* Detail Modal */}
+      {isDetailOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+           <div className="bg-white dark:bg-gray-800 rounded-3xl p-8 max-w-lg w-full shadow-2xl border border-indigo-100 dark:border-indigo-900/50 animate-in zoom-in-95 duration-200">
+              <div className="flex justify-between items-start mb-6">
+                <div className="p-3 bg-indigo-50 dark:bg-indigo-900/50 rounded-2xl text-indigo-600 dark:text-indigo-400">
+                  <Activity size={32} />
+                </div>
+                <button onClick={() => setIsDetailOpen(false)} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-xl transition-colors">
+                  <X size={24} className="text-gray-400" />
+                </button>
+              </div>
+              <h3 className="text-2xl font-black text-gray-900 dark:text-white mb-4">Détails de l'Analyse</h3>
+              <div className="space-y-4 text-gray-600 dark:text-gray-400 leading-relaxed font-medium">
+                <p>
+                  Le rôle de cette section est de fournir des <strong>insights exploitables</strong> basés sur les données brutes de l'établissement.
+                </p>
+                <div className="p-4 bg-gray-50 dark:bg-gray-900/50 rounded-2xl border border-gray-100 dark:border-gray-800">
+                  <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-2">Sources de données</h4>
+                  <ul className="text-xs space-y-2 list-disc list-inside">
+                    <li>Historique d'assiduité (Journalier/Hebdomadaire)</li>
+                    <li>Évolution des points de maisons (Performance comportementale)</li>
+                    <li>Taux de ponctualité par classe et par heure</li>
+                  </ul>
+                </div>
+                <p className="text-sm">
+                  Le bouton <strong>Détails</strong> permet d'accéder au rapport complet généré par l'IA, décomposant chaque variable influençant la recommandation actuelle.
+                </p>
+              </div>
+              <button 
+                onClick={() => setIsDetailOpen(false)}
+                className="w-full mt-8 py-4 bg-indigo-600 text-white rounded-2xl font-black shadow-lg shadow-indigo-200 dark:shadow-none hover:bg-indigo-700 transition-all"
+              >
+                Fermer
+              </button>
+           </div>
+        </div>
+      )}
+
+      {/* Optimize Modal */}
+      {isOptimizeOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+           <div className="bg-white dark:bg-gray-800 rounded-3xl p-8 max-w-lg w-full shadow-2xl border border-indigo-100 dark:border-indigo-900/50 animate-in zoom-in-95 duration-200">
+              <div className="flex justify-between items-start mb-6">
+                <div className="p-3 bg-emerald-50 dark:bg-emerald-900/50 rounded-2xl text-emerald-600 dark:text-emerald-400">
+                  <RefreshCw size={32} className="animate-spin-slow" />
+                </div>
+                <button onClick={() => setIsOptimizeOpen(false)} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-xl transition-colors">
+                  <X size={24} className="text-gray-400" />
+                </button>
+              </div>
+              <h3 className="text-2xl font-black text-gray-900 dark:text-white mb-4">Optimisation Systémique</h3>
+              <div className="space-y-4 text-gray-600 dark:text-gray-400 leading-relaxed font-medium">
+                <p>
+                  Le rôle du mode <strong>Optimiser</strong> est de transformer la recommandation en une <strong>action concrète</strong>.
+                </p>
+                <div className="grid grid-cols-1 gap-3">
+                  <div className="p-4 rounded-2xl border border-emerald-100 dark:border-emerald-800/50 bg-emerald-50/50 dark:bg-emerald-900/20 flex gap-4">
+                    <UserCheck className="text-emerald-500 shrink-0" size={20} />
+                    <p className="text-xs">Générer automatiquement des convocations pour les élèves à risque de décrochage.</p>
+                  </div>
+                  <div className="p-4 rounded-2xl border border-indigo-100 dark:border-indigo-800/50 bg-indigo-50/50 dark:bg-indigo-900/20 flex gap-4">
+                    <TrendingUp className="text-indigo-500 shrink-0" size={20} />
+                    <p className="text-xs">Ajuster les seuils de notifications pour les responsables légaux.</p>
+                  </div>
+                </div>
+                <p className="text-sm">
+                  C'est ici que l'IA propose d'automatiser les processus chronophages pour libérer du temps à l'équipe administrative.
+                </p>
+              </div>
+              <div className="grid grid-cols-2 gap-4 mt-8">
+                <button 
+                  onClick={() => setIsOptimizeOpen(false)}
+                  className="py-4 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-2xl font-black"
+                >
+                  Annuler
+                </button>
+                <button 
+                  onClick={() => {
+                    alert("Optimisation lancée avec succès !");
+                    setIsOptimizeOpen(false);
+                  }}
+                  className="py-4 bg-emerald-600 text-white rounded-2xl font-black shadow-lg shadow-emerald-200 dark:shadow-none hover:bg-emerald-700 transition-all"
+                >
+                  Lancer l'Action
+                </button>
+              </div>
+           </div>
+        </div>
+      )}
+
       {/* Top Indicators with Curves */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {[
@@ -291,8 +385,18 @@ const AdminDashboard = ({ stats, weeklyData, studentLevelData, userDistribution,
                   {recommendation?.text || "Vos indicateurs montrent une corrélation forte entre la ponctualité matinale et les taux de réussite. Envisagez un programme d'encouragement ciblé."}
                </p>
                <div className="mt-auto flex gap-4">
-                  <button className="flex-1 py-3 bg-white text-indigo-600 rounded-2xl font-black text-sm hover:bg-white/90 transition-colors">Détails</button>
-                  <button className="flex-1 py-3 bg-white/10 text-white rounded-2xl font-black text-sm hover:bg-white/20 transition-colors border border-white/20">Optimiser</button>
+                  <button 
+                    onClick={() => setIsDetailOpen(true)}
+                    className="flex-1 py-3 bg-white text-indigo-600 rounded-2xl font-black text-sm hover:bg-white/90 transition-colors"
+                  >
+                    Détails
+                  </button>
+                  <button 
+                    onClick={() => setIsOptimizeOpen(true)}
+                    className="flex-1 py-3 bg-white/10 text-white rounded-2xl font-black text-sm hover:bg-white/20 transition-colors border border-white/20"
+                  >
+                    Optimiser
+                  </button>
                </div>
             </div>
             <Layout className="absolute -bottom-8 -right-8 w-40 h-40 text-black/5" />
