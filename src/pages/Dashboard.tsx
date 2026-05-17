@@ -102,11 +102,16 @@ const AdminDashboard = ({ stats, weeklyData, studentLevelData, userDistribution,
     const unsubAdminPlanning = onSnapshot(
       query(
         collection(db, 'teacher_planning'),
-        where('startTime', '>=', Timestamp.fromDate(yesterday)),
         orderBy('startTime', 'asc')
       ),
       (snapshot) => {
-        setTeacherPlanning(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        const items = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        // Filter in memory to avoid needing a complex index if other where clauses are added later
+        // and because the single field range query might still be picky in some SDK states
+        setTeacherPlanning(items.filter((item: any) => {
+          const start = item.startTime?.toDate?.() || new Date(0);
+          return start >= yesterday;
+        }));
       },
       (error) => {
         handleFirestoreError(error, OperationType.GET, 'teacher_planning');
@@ -582,12 +587,25 @@ const TeacherDashboard = ({ currentUser, t, tData, onNavigate }: any) => {
     const unsubPersonalPlanning = onSnapshot(
       query(
         collection(db, 'teacher_planning'),
-        where('teacherId', '==', currentUser.id),
-        where('startTime', '>=', Timestamp.fromDate(planningStartLimit)),
-        orderBy('startTime', 'asc')
+        where('teacherId', '==', currentUser.id)
       ),
       (snapshot) => {
-        setPersonalPlanning(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), isPersonal: true })));
+        let items = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), isPersonal: true } as any));
+        
+        // Filter in memory
+        items = items.filter(item => {
+          const start = item.startTime?.toDate?.() || new Date(0);
+          return start >= planningStartLimit;
+        });
+
+        // Sort in memory
+        items.sort((a, b) => {
+          const timeA = a.startTime?.toDate?.().getTime() || 0;
+          const timeB = b.startTime?.toDate?.().getTime() || 0;
+          return timeA - timeB;
+        });
+
+        setPersonalPlanning(items);
       },
       (error) => {
         handleFirestoreError(error, OperationType.GET, 'teacher_planning');

@@ -61,6 +61,16 @@ const TeacherPlanning: React.FC = () => {
   const [classes, setClasses] = useState<{id: string, name: string}[]>([]);
   const [subjects, setSubjects] = useState<string[]>([]);
   
+  const getCurrentTime = () => {
+    const now = new Date();
+    return `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+  };
+
+  const getOneHourLater = () => {
+    const later = new Date(Date.now() + 3600000);
+    return `${later.getHours().toString().padStart(2, '0')}:${later.getMinutes().toString().padStart(2, '0')}`;
+  };
+
   // Form state
   const [formData, setFormData] = useState({
     title: '',
@@ -70,9 +80,9 @@ const TeacherPlanning: React.FC = () => {
     className: '',
     subject: '',
     startDate: new Date().toISOString().split('T')[0],
-    startTime: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+    startTime: getCurrentTime(),
     endDate: new Date().toISOString().split('T')[0],
-    endTime: new Date(Date.now() + 3600000).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
+    endTime: getOneHourLater()
   });
 
   const isTeacher = currentUser?.role === 'enseignant';
@@ -87,24 +97,36 @@ const TeacherPlanning: React.FC = () => {
 
     let q = query(
       collection(db, 'teacher_planning'),
-      where('startTime', '>=', Timestamp.fromDate(startLimit)),
       orderBy('startTime', 'asc')
     );
 
     if (isTeacher) {
+      // Simplify query to avoid composite index requirement
       q = query(
         collection(db, 'teacher_planning'),
-        where('teacherId', '==', currentUser.id),
-        where('startTime', '>=', Timestamp.fromDate(startLimit)),
-        orderBy('startTime', 'asc')
+        where('teacherId', '==', currentUser.id)
       );
     }
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const items = snapshot.docs.map(doc => ({
+      let items = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
       })) as PlanningItem[];
+
+      // Filter by startTime in memory to avoid needing a composite index
+      items = items.filter(item => {
+        const itemDate = item.startTime?.toDate?.() || new Date(0);
+        return itemDate >= startLimit;
+      });
+
+      // Sort in memory since we removed the orderBy from the teacher query
+      items.sort((a, b) => {
+        const timeA = a.startTime?.toDate?.().getTime() || 0;
+        const timeB = b.startTime?.toDate?.().getTime() || 0;
+        return timeA - timeB;
+      });
+
       setPlanning(items);
       setLoading(false);
     }, (error) => {
@@ -198,9 +220,9 @@ const TeacherPlanning: React.FC = () => {
       className: '',
       subject: '',
       startDate: new Date().toISOString().split('T')[0],
-      startTime: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+      startTime: getCurrentTime(),
       endDate: new Date().toISOString().split('T')[0],
-      endTime: new Date(Date.now() + 3600000).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
+      endTime: getOneHourLater()
     });
   };
 
@@ -218,6 +240,11 @@ const TeacherPlanning: React.FC = () => {
     setEditingItem(item);
     const start = item.startTime?.toDate?.() || new Date();
     const end = item.endTime?.toDate?.() || new Date();
+    
+    const formatTime = (date: Date) => {
+      return `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
+    };
+
     setFormData({
       title: item.title,
       description: item.description || '',
@@ -226,9 +253,9 @@ const TeacherPlanning: React.FC = () => {
       className: item.className || '',
       subject: item.subject || '',
       startDate: start.toISOString().split('T')[0],
-      startTime: start.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+      startTime: formatTime(start),
       endDate: end.toISOString().split('T')[0],
-      endTime: end.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
+      endTime: formatTime(end)
     });
     setShowAddModal(true);
   };
