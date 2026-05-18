@@ -161,7 +161,7 @@ function AppContent() {
       case 'reports': 
         return ['admin', 'enseignant', 'personnel administratif'].includes(role) ? <Reports /> : <StudentDashboard onNavigate={handleNavigate} />;
       case 'classes': 
-        return role === 'admin' ? <Classes /> : <Dashboard onNavigate={handleNavigate} />;
+        return role === 'admin' ? <Classes /> : <Classroom initialClassName={tabParams?.className} />;
       case 'settings': 
         return <Settings />;
       case 'scanner': 
@@ -173,7 +173,7 @@ function AppContent() {
       case 'leaderboard': return <Leaderboard />;
       case 'houses': return <Houses />;
       case 'classroom': 
-        return ['admin', 'enseignant', 'élève'].includes(role) ? <Classroom /> : <Dashboard onNavigate={handleNavigate} />;
+        return ['admin', 'enseignant', 'élève'].includes(role) ? <Classroom initialClassName={tabParams?.className} /> : <Dashboard onNavigate={handleNavigate} />;
       case 'courses_subjects':
         return ['admin', 'enseignant', 'élève'].includes(role) ? <CoursesSubjects initialPrepId={tabParams?.prepId} /> : <Dashboard onNavigate={handleNavigate} />;
       case 'planning':

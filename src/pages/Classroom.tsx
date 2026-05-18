@@ -96,7 +96,11 @@ const compressImage = (file: File): Promise<Blob> => {
   });
 };
 
-export default function Classroom() {
+interface ClassroomProps {
+  initialClassName?: string;
+}
+
+export default function Classroom({ initialClassName }: ClassroomProps) {
   const { currentUser } = useAuth();
   const { t } = useLanguage();
   const { notifySuccess, notifyError, notifyDelete } = useNotification();
@@ -107,7 +111,7 @@ export default function Classroom() {
   const [points, setPoints] = useState<BehaviorPoint[]>([]);
   const [resources, setResources] = useState<Resource[]>([]);
   const [teacherClasses, setTeacherClasses] = useState<string[]>([]);
-  const [selectedClass, setSelectedClass] = useState<string>('');
+  const [selectedClass, setSelectedClass] = useState<string>(initialClassName || '');
 
   // Modals
   const [showPointModal, setShowPointModal] = useState(false);
@@ -140,7 +144,7 @@ export default function Classroom() {
           const allTeacherClasses = Array.from(new Set([...principalClasses, ...profileClasses]));
           
           setTeacherClasses(allTeacherClasses);
-          if (allTeacherClasses.length > 0) {
+          if (allTeacherClasses.length > 0 && !selectedClass) {
             setSelectedClass(allTeacherClasses[0]);
           }
         } else if (currentUser.role === 'élève') {

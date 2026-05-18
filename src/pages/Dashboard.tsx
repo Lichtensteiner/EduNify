@@ -722,7 +722,7 @@ const TeacherDashboard = ({ currentUser, t, tData, onNavigate }: any) => {
                   {t('my_classes')}
                 </h3>
                 <button 
-                  onClick={() => onNavigate('classes')}
+                  onClick={() => onNavigate('classroom')}
                   className="text-xs font-bold text-blue-600 hover:underline"
                 >
                   {t('see_all')}
@@ -736,9 +736,9 @@ const TeacherDashboard = ({ currentUser, t, tData, onNavigate }: any) => {
                      <span className="text-[10px] font-black text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full uppercase">{t('active_status')}</span>
                    </div>
                    <h4 className="font-bold text-gray-900 mb-1">{cls.nom}</h4>
-                   <p className="text-xs text-gray-500 mb-4">{studentCounts[cls.nom] || 0} {t('enrolled_students')}</p>
+
                    <button 
-                     onClick={() => onNavigate('classes', { classId: cls.id })}
+                     onClick={() => onNavigate('classroom', { className: cls.nom })}
                      className="w-full py-2 bg-white border border-gray-200 rounded-xl text-xs font-bold text-gray-700 group-hover:bg-blue-600 group-hover:text-white group-hover:border-blue-600 transition-all font-inter"
                     >
                      {t('class_tracking')}
@@ -930,11 +930,7 @@ const TeacherDashboard = ({ currentUser, t, tData, onNavigate }: any) => {
                   )}
                 </div>
 
-                {schedule.length === 0 && personalPlanning.length === 0 && (
-                  <div className="text-center py-6 text-gray-400 text-xs italic">
-                    {t('no_class_today')}
-                  </div>
-                )}
+
              </div>
            </div>
 

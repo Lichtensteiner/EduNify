@@ -1004,7 +1004,8 @@ const translations: Translations = {
   'professional_email': { fr: 'Email professionnel', en: 'Professional Email', es: 'Correo profesional', zh: '专业电子邮件', ja: 'プロフェッショナルメール' },
   'average': { fr: 'Moyenne', en: 'Average', es: 'Promedio', zh: '平均分', ja: '平均' },
   'not_enough_data_chart': { fr: 'Pas assez de données pour générer le graphique', en: 'Not enough data to generate the chart', es: 'No hay suficientes datos para generar el gráfico', zh: '数据不足以生成图表', ja: 'チャートを生成するためのデータが不足しています' },
-  'new_message_in': { fr: 'Nouveau message dans', en: 'New message in', es: 'Nuevo mensaje en', zh: '新消息在', ja: '新しいメッセージ:' },
+  'new_message_in': { fr: 'Nouveau message dans', en: 'New message in', es: 'Nuevo message en', zh: '新消息在', ja: '新しいメッセージ:' },
+  'class_tracking': { fr: 'Suivre_Classe', en: 'Track Class', es: 'Seguir Clase', zh: '跟踪班级', ja: 'クラスを追跡' },
 };
 
 interface LanguageContextType {
