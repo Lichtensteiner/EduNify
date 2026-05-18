@@ -2,9 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useNotification } from '../contexts/NotificationContext';
-import { collection, query, where, getDocs, onSnapshot, addDoc, serverTimestamp, doc, getDoc, updateDoc, increment, setDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, onSnapshot, addDoc, serverTimestamp, doc, getDoc, updateDoc, increment, setDoc, deleteDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
-import { Search, Users, User, Megaphone, Send, Clock, Image, Video, Paperclip, Smile, ChevronRight, MessageCircle } from 'lucide-react';
+import { Search, Users, User, Megaphone, Send, Clock, Image, Video, Paperclip, Smile, ChevronRight, MessageCircle, MoreVertical, Trash2, LogOut, Eye, X } from 'lucide-react';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import Chat from './Chat';
@@ -41,6 +41,8 @@ export default function Messaging({ initialChatTargetId, onClearTarget }: Messag
   const [announcementText, setAnnouncementText] = useState('');
   const [isSubmittingAnnouncement, setIsSubmittingAnnouncement] = useState(false);
   const [activeTab, setActiveTab] = useState<'conversations' | 'monitoring'>('conversations');
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [viewingMembersGroup, setViewingMembersGroup] = useState<Conversation | null>(null);
 
   // Fetch all users for main list and modals
   useEffect(() => {
@@ -399,6 +401,45 @@ export default function Messaging({ initialChatTargetId, onClearTarget }: Messag
     );
   };
 
+  const handleLeaveGroup = async (conv: Conversation) => {
+    if (!currentUser || !conv.isGroup) return;
+    if (!window.confirm("Quitter ce groupe ?")) return;
+
+    try {
+      const convRef = doc(db, 'conversations', conv.id);
+      const newParticipants = conv.participants.filter(id => id !== currentUser.id);
+      
+      if (newParticipants.length === 0) {
+        await deleteDoc(convRef);
+      } else {
+        await updateDoc(convRef, {
+          participants: newParticipants,
+          lastMessage: `${currentUser.prenom || 'Un utilisateur'} a quitté le groupe`,
+          lastMessageTime: serverTimestamp()
+        });
+      }
+      notifySuccess("Vous avez quitté le groupe.");
+      setOpenMenuId(null);
+    } catch (error) {
+      console.error("Error leaving group:", error);
+      notifyError("Erreur lors de la sortie du groupe.");
+    }
+  };
+
+  const handleDeleteGroup = async (convId: string) => {
+    if (!currentUser || currentUser.role !== 'admin') return;
+    if (!window.confirm("Supprimer ce groupe définitivement pour tous ?")) return;
+
+    try {
+      await deleteDoc(doc(db, 'conversations', convId));
+      notifySuccess("Le groupe a été supprimé.");
+      setOpenMenuId(null);
+    } catch (error) {
+      console.error("Error deleting group:", error);
+      notifyError("Erreur lors de la suppression du groupe.");
+    }
+  };
+
   if (selectedConversationId) {
     return <Chat conversationId={selectedConversationId} onBack={handleBackFromChat} />;
   }
@@ -476,7 +517,7 @@ export default function Messaging({ initialChatTargetId, onClearTarget }: Messag
                   {groupConversations.map((conv) => (
                     <div 
                       key={conv.id} 
-                      className="p-4 hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors cursor-pointer flex items-center justify-between group"
+                      className="p-4 hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors cursor-pointer flex items-center justify-between group relative"
                       onClick={() => {
                         setSelectedConversationId(conv.id);
                         window.history.pushState({ modal: 'chat' }, '');
@@ -504,15 +545,65 @@ export default function Messaging({ initialChatTargetId, onClearTarget }: Messag
                           </p>
                         </div>
                       </div>
-                      <div className="flex flex-col items-end gap-1">
-                        <span className="text-xs text-gray-400">
-                          {conv.lastMessageTime ? format(conv.lastMessageTime.toDate(), 'HH:mm', { locale: fr }) : ''}
-                        </span>
-                        {conv.unreadCounts?.[currentUser.id] ? (
-                          <span className="bg-indigo-600 text-white text-xs font-bold px-2 py-0.5 rounded-full">
-                            {conv.unreadCounts[currentUser.id]}
+                      <div className="flex items-center gap-2">
+                        <div className="flex flex-col items-end gap-1">
+                          <span className="text-xs text-gray-400">
+                            {conv.lastMessageTime ? format(conv.lastMessageTime.toDate(), 'HH:mm', { locale: fr }) : ''}
                           </span>
-                        ) : null}
+                          {conv.unreadCounts?.[currentUser.id] ? (
+                            <span className="bg-indigo-600 text-white text-xs font-bold px-2 py-0.5 rounded-full">
+                              {conv.unreadCounts[currentUser.id]}
+                            </span>
+                          ) : null}
+                        </div>
+                        <div className="relative">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setOpenMenuId(openMenuId === conv.id ? null : conv.id);
+                            }}
+                            className="p-2 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-full text-gray-500 transition-colors"
+                          >
+                            <MoreVertical size={18} />
+                          </button>
+                          {openMenuId === conv.id && (
+                            <div className="absolute right-0 top-full mt-1 w-48 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 overflow-hidden z-50 py-1">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setViewingMembersGroup(conv);
+                                  setOpenMenuId(null);
+                                }}
+                                className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-2"
+                              >
+                                <Eye size={16} />
+                                Voir les membres
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleLeaveGroup(conv);
+                                }}
+                                className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2"
+                              >
+                                <LogOut size={16} />
+                                Quitter le groupe
+                              </button>
+                              {currentUser?.role === 'admin' && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleDeleteGroup(conv.id);
+                                  }}
+                                  className="w-full text-left px-4 py-2 text-sm text-red-600 font-bold hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2"
+                                >
+                                  <Trash2 size={16} />
+                                  Supprimer le groupe
+                                </button>
+                              )}
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -830,6 +921,46 @@ export default function Messaging({ initialChatTargetId, onClearTarget }: Messag
                 <Send size={18} />
                 {isSubmittingAnnouncement ? t('sending') : t('publish_announcement')}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {viewingMembersGroup && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl w-full max-w-sm overflow-hidden animate-in fade-in zoom-in duration-200">
+            <div className="p-4 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center">
+              <h3 className="font-bold text-gray-900 dark:text-white">Membres du groupe</h3>
+              <button onClick={() => setViewingMembersGroup(null)} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-colors">
+                <X size={20} className="text-gray-400" />
+              </button>
+            </div>
+            <div className="max-h-[60vh] overflow-y-auto p-2 space-y-1">
+              {viewingMembersGroup.participants.map((pId) => {
+                const user = pId === currentUser?.id ? currentUser : usersInfo[pId];
+                if (!user) return (
+                  <div key={pId} className="p-3 text-xs text-gray-500 italic">
+                    ID: {pId} (Chargement...)
+                  </div>
+                );
+                return (
+                  <div key={pId} className="flex items-center gap-3 p-3 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-xl transition-colors">
+                    <div className="w-10 h-10 rounded-full bg-indigo-100 dark:bg-indigo-900/50 flex items-center justify-center text-indigo-600 dark:text-indigo-400 font-bold overflow-hidden shadow-sm uppercase">
+                      {user.photo ? (
+                        <img src={user.photo} alt="" className="w-full h-full object-cover" />
+                      ) : (
+                        `${user.prenom?.[0] || ''}${user.nom?.[0] || user.email?.[0] || 'U'}`
+                      )}
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-sm font-bold dark:text-white">{user.prenom} {user.nom}</p>
+                      <p className="text-[10px] text-gray-500 uppercase font-black">{tData(user.role)}</p>
+                    </div>
+                    {pId === currentUser?.id && (
+                      <span className="text-[9px] font-black text-indigo-600 bg-indigo-50 px-2 py-1 rounded-lg uppercase">Moi</span>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>

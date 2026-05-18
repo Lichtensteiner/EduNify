@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
-import { collection, query, where, getDocs, orderBy, onSnapshot, addDoc, serverTimestamp, doc, getDoc, updateDoc, increment, setDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, orderBy, onSnapshot, addDoc, serverTimestamp, doc, getDoc, updateDoc, increment, setDoc, deleteDoc } from 'firebase/firestore';
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '../lib/firebase';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
-import { ArrowLeft, Image, Video, Paperclip, Smile, Send, Clock, Camera, MoreVertical, X, Users, User, ChevronDown, Trash2, Ban } from 'lucide-react';
+import { ArrowLeft, Image, Video, Paperclip, Smile, Send, Clock, Camera, MoreVertical, X, Users, User, ChevronDown, Trash2, Ban, LogOut } from 'lucide-react';
 import EmojiPicker, { Theme } from 'emoji-picker-react';
 import { createNotification } from '../services/NotificationService';
 import { useNotification } from '../contexts/NotificationContext';
@@ -368,11 +368,10 @@ export default function Chat({ conversationId, onBack }: ChatProps) {
 
     try {
       const convRef = doc(db, 'conversations', conversationId);
-      const newParticipants = conversationData.participants.filter((id: string) => id !== currentUser.id);
+      const newParticipants = (conversationData.participants || []).filter((id: string) => id !== currentUser.id);
       
       if (newParticipants.length === 0) {
-        // Delete conversation if no one left
-        // (In a real app, maybe mark as inactive)
+        await deleteDoc(convRef);
       } else {
         await updateDoc(convRef, {
           participants: newParticipants,
@@ -380,10 +379,12 @@ export default function Chat({ conversationId, onBack }: ChatProps) {
           lastMessageTime: serverTimestamp()
         });
       }
+      notifySuccess("Vous avez quitté le groupe.");
       setShowOptions(false);
       onBack();
     } catch (error) {
       console.error("Error leaving group:", error);
+      notifyError("Une erreur est survenue lors de la sortie du groupe.");
     }
   };
 
@@ -405,6 +406,27 @@ export default function Chat({ conversationId, onBack }: ChatProps) {
       onBack();
     } catch (error) {
       console.error("Error deleting conversation:", error);
+    }
+  };
+
+  const handleDeleteGroup = async () => {
+    if (!conversationId || !currentUser || currentUser.role !== 'admin' || !conversationData?.isGroup) return;
+    if (!window.confirm("Supprimer ce groupe définitivement pour TOUS les participants ? Cette action est irréversible.")) return;
+
+    try {
+      // Delete the conversation document
+      await deleteDoc(doc(db, 'conversations', conversationId));
+      
+      // In a real app, we might also want to delete all messages in a subcollection
+      // but Firestore doesn't support recursive deletion easily from the client.
+      // However, for this project, deleting the parent doc is the primary goal.
+      
+      setShowOptions(false);
+      onBack();
+      notifySuccess("Le groupe a été supprimé.");
+    } catch (error) {
+      console.error("Error deleting group:", error);
+      notifyError("Une erreur est survenue lors de la suppression du groupe.");
     }
   };
 
@@ -599,15 +621,28 @@ export default function Chat({ conversationId, onBack }: ChatProps) {
 
               <div className="h-px bg-gray-100 dark:bg-gray-700 my-1"></div>
               
-              {conversationData?.isGroup ? (
-                <button 
-                  onClick={handleLeaveGroup}
-                  className="w-full text-left px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors flex items-center gap-2"
-                >
-                  <ArrowLeft size={16} />
-                  Quitter le groupe
-                </button>
-              ) : (
+              {conversationData?.isGroup && (
+                <>
+                  <button 
+                    onClick={handleLeaveGroup}
+                    className="w-full text-left px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors flex items-center gap-2"
+                  >
+                    <LogOut size={16} />
+                    Quitter le groupe
+                  </button>
+                  {currentUser?.role === 'admin' && (
+                    <button 
+                      onClick={handleDeleteGroup}
+                      className="w-full text-left px-4 py-2.5 text-sm text-red-600 font-bold hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors flex items-center gap-2"
+                    >
+                      <Trash2 size={16} />
+                      Supprimer le groupe
+                    </button>
+                  )}
+                </>
+              )}
+
+              {!conversationData?.isGroup && (
                 <>
                   <button 
                     onClick={handleBlockUser}
