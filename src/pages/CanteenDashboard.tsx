@@ -40,6 +40,7 @@ export default function CanteenDashboard({ onNavigate }: { onNavigate?: (tab: st
   const { t } = useLanguage();
   const [meals, setMeals] = useState<any[]>([]);
   const [stock, setStock] = useState<any[]>([]);
+  const [feedbacks, setFeedbacks] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddMenu, setShowAddMenu] = useState(false);
   const [showAddStock, setShowAddStock] = useState(false);
@@ -76,9 +77,21 @@ export default function CanteenDashboard({ onNavigate }: { onNavigate?: (tab: st
       setStock(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     });
 
+    // Listen to student feedbacks
+    const unsubFeedbacks = onSnapshot(collection(db, 'canteen_feedbacks'), (snapshot) => {
+      const fbList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as any[];
+      fbList.sort((a, b) => {
+        const tA = a.timestamp?.seconds || 0;
+        const tB = b.timestamp?.seconds || 0;
+        return tB - tA;
+      });
+      setFeedbacks(fbList);
+    });
+
     return () => {
       unsubMeals();
       unsubStock();
+      unsubFeedbacks();
     };
   }, []);
 
@@ -234,10 +247,10 @@ export default function CanteenDashboard({ onNavigate }: { onNavigate?: (tab: st
       {/* Dynamic Summary Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
         {[
-          { label: 'Menu du jour', val: menuForToday?.title || 'Non défini', icon: Utensils, color: 'rose', trend: menuForToday?.calories + ' kcal' },
+          { label: 'Menu du jour', val: menuForToday?.title || 'Non défini', icon: Utensils, color: 'rose', trend: menuForToday?.calories ? `${menuForToday.calories} kcal` : 'Aucune calorie définie' },
           { label: 'Alertes Stock', val: alertCount, icon: AlertCircle, color: 'amber', trend: alertCount > 0 ? 'Réapprovisionnement nécessaire' : 'Stock optimal', warning: alertCount > 0 },
-          { label: 'Articles suivis', val: stock.length, icon: Package, color: 'indigo', trend: categories.length + ' catégories' },
-          { label: 'Participation', val: '450', icon: Users, color: 'sky', trend: '+12% vs hier' },
+          { label: 'Articles suivis', val: stock.length, icon: Package, color: 'indigo', trend: `${categories.length} catégories` },
+          { label: 'Alertes de Santé', val: feedbacks.filter(f => f.isHealthAlarm).length, icon: AlertCircle, color: 'red', trend: `Signalements actifs`, warning: feedbacks.filter(f => f.isHealthAlarm).length > 0 },
         ].map((stat, i) => (
           <motion.div
             key={i}
@@ -418,6 +431,97 @@ export default function CanteenDashboard({ onNavigate }: { onNavigate?: (tab: st
                   </div>
                 )}
               </div>
+            </div>
+          </div>
+
+          {/* Student Feedbacks & Health Alarms Board */}
+          <div className="bg-white dark:bg-gray-800 rounded-[3rem] border border-gray-100 dark:border-gray-700 p-8 shadow-sm">
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h3 className="text-xl font-black text-gray-900 dark:text-white flex items-center gap-3">
+                  <AlertCircle className="text-rose-600" size={24} />
+                  Retours d'Avis & Pathologies Élèves
+                </h3>
+                <p className="text-xs text-gray-400 font-medium mt-1">Alertes nutritionnelles de santé et opinions des élèves</p>
+              </div>
+              <span className="px-3 py-1 bg-red-100 dark:bg-red-950 text-red-700 dark:text-red-300 text-xs font-extrabold rounded-xl animate-pulse">
+                {feedbacks.filter(f => f.isHealthAlarm).length} Alerte{(feedbacks.filter(f => f.isHealthAlarm).length) !== 1 ? 's' : ''} santé
+              </span>
+            </div>
+
+            <div className="space-y-4 max-h-[450px] overflow-y-auto pr-2 custom-scrollbar">
+              {feedbacks.length > 0 ? (
+                feedbacks.map((fb) => (
+                  <div 
+                    key={fb.id} 
+                    className={`p-5 rounded-3xl border transition-all ${
+                      fb.isHealthAlarm 
+                        ? 'bg-red-50/40 dark:bg-red-950/10 border-red-200 dark:border-red-900/40' 
+                        : 'bg-gray-50/50 dark:bg-gray-900/20 border-gray-100 dark:border-gray-800'
+                    }`}
+                  >
+                    <div className="flex justify-between items-start gap-3 flex-wrap sm:flex-nowrap mb-3 pb-3 border-b border-gray-100 dark:border-gray-700/60">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-black text-sm text-gray-950 dark:text-white">{fb.userName}</span>
+                          <span className="px-2 py-0.5 bg-gray-100 dark:bg-gray-800 text-[10px] text-gray-500 font-bold rounded">
+                            {fb.userClass || 'N/A'}
+                          </span>
+                        </div>
+                        <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mt-1">Saisi le {new Date(fb.timestamp?.seconds * 1000 || Date.now()).toLocaleDateString()}</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-wider ${
+                          fb.isHealthAlarm 
+                            ? 'bg-red-600 text-white animate-pulse' 
+                            : 'bg-emerald-100 text-emerald-700'
+                        }`}>
+                          {fb.isHealthAlarm ? '🚨 ALERTE SANTE / ALLERGIE' : '🍏 AVIS NUTRITION'}
+                        </span>
+                        
+                        {currentUser?.role === 'admin' && (
+                          <button 
+                            onClick={async () => {
+                              if (window.confirm("Supprimer ce retour d'élève ?")) {
+                                try {
+                                  await deleteDoc(doc(db, 'canteen_feedbacks', fb.id));
+                                } catch (err) {
+                                  console.error("Error deleting feedback:", err);
+                                }
+                              }
+                            }}
+                            className="p-1 text-gray-400 hover:text-red-500 rounded transition-colors"
+                            title="Supprimer"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <p className="text-sm font-semibold text-gray-800 dark:text-gray-200">
+                        <span className="px-2 py-0.5 bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 font-black rounded-md mr-2 text-xs">
+                          {fb.day}
+                        </span>
+                        {fb.comment}
+                      </p>
+                      {fb.rating > 0 && (
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-xs text-gray-400 font-bold">Appréciation:</span>
+                          <div className="flex text-amber-500 font-bold text-xs">
+                            {'★'.repeat(fb.rating)}{'☆'.repeat(5 - fb.rating)}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="text-center py-16 text-gray-400 italic font-medium">
+                  Aucun avis ni alerte de santé n'a été soumis par les élèves pour l'instant.
+                </div>
+              )}
             </div>
           </div>
         </div>

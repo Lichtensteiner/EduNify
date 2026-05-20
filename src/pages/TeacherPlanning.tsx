@@ -401,7 +401,7 @@ const TeacherPlanning: React.FC = () => {
                         )}
                       </div>
                       
-                      {isAdmin && (
+                      {(!isTeacher || item.teacherId !== currentUser.id) && item.teacherName && (
                         <div className="mt-4 pt-3 border-t border-dashed border-gray-100 dark:border-gray-700 flex items-center justify-between">
                            <span className="text-[10px] text-gray-400 uppercase font-medium">{t('teacher')}</span>
                            <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">{item.teacherName}</span>
