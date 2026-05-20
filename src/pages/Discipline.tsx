@@ -17,7 +17,8 @@ import {
   Trash2,
   FileText,
   CheckCircle2,
-  XCircle
+  XCircle,
+  Sparkles
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import SuccessModal from '../components/SuccessModal';
@@ -35,6 +36,140 @@ interface Sanction {
   recordedByName: string;
 }
 
+// Real-time French Keyword and Gravity scoring engine for School Discipline
+const analyzeIncident = (reason: string) => {
+  const text = reason.toLowerCase();
+  
+  // Keyword databases curated by severity
+  const criticalKeywords = ['agression', 'drogue', 'arme', 'couteau', 'voler', 'vols', 'racisme', 'harcèlement', 'raciste', 'violences', 'frapper', 'frappé', 'frappe', 'violence', 'physique', 'menace de mort', 'menacer de mort'];
+  const highKeywords = ['tricherie', 'triche', 'tricher', 'bagarre', 'injures', 'insulter', 'insulte', 'vandalisme', 'dégradation', 'dégrader', 'fumer', 'menaces', 'menace', 'complot', 'vandaliser', 'mensonge grave'];
+  const mediumKeywords = ['insolence', 'dispute', 'insolent', 'absence', 'bruit', 'chahut', 'bavardages', 'non-respect', 'respect', 'téléphone', 'portable', 'copier', 'copie', 'menacer', 'désobéissance', 'désobéir'];
+  const lowKeywords = ['retard', 'bavardage', 'oublis', 'oubli', 'matériel', 'devoir', 'devoirs', 'sommeil', 'dormir', 'distrait', 'distraction', 'bavarder', 'discuter'];
+
+  let score = 0;
+  let matches: string[] = [];
+
+  criticalKeywords.forEach(k => {
+    if (text.includes(k)) {
+      score += 45;
+      if (!matches.includes(k)) matches.push(k);
+    }
+  });
+
+  highKeywords.forEach(k => {
+    if (text.includes(k)) {
+      score += 25;
+      if (!matches.includes(k)) matches.push(k);
+    }
+  });
+
+  mediumKeywords.forEach(k => {
+    if (text.includes(k)) {
+      score += 15;
+      if (!matches.includes(k)) matches.push(k);
+    }
+  });
+
+  lowKeywords.forEach(k => {
+    if (text.includes(k)) {
+      score += 5;
+      if (!matches.includes(k)) matches.push(k);
+    }
+  });
+
+  // Base score for simply writing extensively
+  if (text.length > 15 && score === 0) {
+    score = 5;
+  }
+  if (text.length > 50 && score < 15) {
+    score = 15;
+  }
+
+  score = Math.min(100, score);
+
+  let recommendation: {
+    type: 'warning' | 'detention' | 'exclusion' | 'expulsion' | 'other';
+    duration: string;
+    gravity: 'Minime' | 'Moyenne' | 'Élevée' | 'Critique';
+    color: string;
+    bgColor: string;
+    textColor: string;
+    description: string;
+  };
+
+  if (score >= 60) {
+    recommendation = {
+      type: 'expulsion',
+      duration: 'Dossier Conseil Discipline',
+      gravity: 'Critique',
+      color: 'bg-red-600',
+      bgColor: 'bg-red-50/70 dark:bg-red-950/25',
+      textColor: 'text-red-700 dark:text-red-400',
+      description: 'Atteinte physique, harcèlement ou danger grave. Exclusion définitive fortement recommandée.'
+    };
+  } else if (score >= 30) {
+    recommendation = {
+      type: 'exclusion',
+      duration: '3 jours',
+      gravity: 'Élevée',
+      color: 'bg-orange-500',
+      bgColor: 'bg-orange-50/70 dark:bg-orange-950/25',
+      textColor: 'text-orange-700 dark:text-orange-400',
+      description: 'Tricherie, bagarre, insulte ou vandalisme. Suggère une exclusion temporaire.'
+    };
+  } else if (score >= 12) {
+    recommendation = {
+      type: 'detention',
+      duration: '2 heures',
+      gravity: 'Moyenne',
+      color: 'bg-amber-500',
+      bgColor: 'bg-amber-50/70 dark:bg-amber-950/25',
+      textColor: 'text-amber-700 dark:text-amber-400',
+      description: 'Insolence récurrente, chahut ou désobéissance obstinée. Suggère des heures de retenue.'
+    };
+  } else {
+    recommendation = {
+      type: 'warning',
+      duration: 'Aucune',
+      gravity: 'Minime',
+      color: 'bg-teal-500',
+      bgColor: 'bg-teal-50/70 dark:bg-teal-950/25',
+      textColor: 'text-teal-700 dark:text-teal-400',
+      description: 'Bavardage, oubli ponctuel ou retard. Un avertissement formel ou rappel à l\'ordre suffit.'
+    };
+  }
+
+  return { score, recommendation, matches };
+};
+
+const SANCTION_RULES = {
+  warning: {
+    title: "Avertissement / Rappel à l'ordre",
+    guidelines: "Sanctionne les fautes légères (bavardages fréquents, retards récurrents, premier oubli de matériel, ou distraction passagère).",
+    consequence: "Enregistré au registre de vie scolaire. Sert d'alerte pédagogique formelle à destination des parents."
+  },
+  detention: {
+    title: "Heure(s) de Retenue / Heure de colle",
+    guidelines: "S'applique en cas de manquements répétés aux avertissements précédents, insolence caractérisée ou refus caractérisé d'accomplir un travail scolaire.",
+    consequence: "Heures supplémentaires gratuites planifiées en dehors du temps habituel des cours. Travail écrit ou révision obligatoire exigé."
+  },
+  exclusion: {
+    title: "Exclusion Temporaire (1 à 8 jours)",
+    guidelines: "Sanctionne les infractions graves (tricheries avérées aux examens, dégradation ou vandalisme de matériel, altercation physique moyenne ou disrespect grave).",
+    consequence: "L'élève est privé d'accès à sa classe. Devoirs à distance obligatoires et évaluation au retour. Passage possible en commission éducative."
+  },
+  expulsion: {
+    title: "Exclusion Définitive / Conseil de Discipline",
+    guidelines: "Réservé aux atteintes criminelles ou d'une gravité absolue (agression corporelle, vandalisme majeur volontaire, port d'objet dangereux ou harcèlement systématique).",
+    consequence: "Convocation immédiate devant le Conseil de discipline souverain de l'établissement. Exclusion totale définitive possible."
+  },
+  other: {
+    title: "Mesure Alternative Éducative",
+    guidelines: "Sanction réparatrice visant la responsabilisation (travaux d'intérêt collectif au sein de l'école, excuses rédigées ou réparation de matériel).",
+    consequence: "Visée purement éducative visant à faire prendre conscience des conséquences de ses actes de manière active."
+  }
+};
+
 const Discipline: React.FC = () => {
   const { currentUser } = useAuth();
   const { t, language } = useLanguage();
@@ -47,9 +182,14 @@ const Discipline: React.FC = () => {
   const [showSuccess, setShowSuccess] = useState(false);
   const [successInfo, setSuccessInfo] = useState({ title: '', message: '' });
   const [isSaving, setIsSaving] = useState(false);
-  const [newSanction, setNewSanction] = useState({
+  const [newSanction, setNewSanction] = useState<{
+    studentId: string;
+    type: 'warning' | 'detention' | 'exclusion' | 'expulsion' | 'other';
+    reason: string;
+    duration: string;
+  }>({
     studentId: '',
-    type: 'warning' as const,
+    type: 'warning',
     reason: '',
     duration: '',
   });
@@ -353,6 +493,23 @@ const Discipline: React.FC = () => {
                     />
                   </div>
                 </div>
+
+                {/* Display official rules for the selected discipline/sanction type */}
+                <div className="p-4 bg-indigo-50/60 dark:bg-indigo-950/20 border border-indigo-100/50 dark:border-indigo-900/40 rounded-2xl space-y-2 transition-all duration-300">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-indigo-500 animate-pulse shrink-0"></span>
+                    <p className="font-extrabold text-indigo-800 dark:text-indigo-300 text-xs uppercase tracking-wider">
+                      Règlement & Barème : {SANCTION_RULES[newSanction.type].title}
+                    </p>
+                  </div>
+                  <p className="text-[12px] text-gray-600 dark:text-gray-300 leading-relaxed font-semibold">
+                    {SANCTION_RULES[newSanction.type].guidelines}
+                  </p>
+                  <div className="pt-1.5 border-t border-indigo-100/30 dark:border-indigo-900/30 flex items-start gap-1 text-[11px] text-gray-500 dark:text-gray-400">
+                    <span className="font-bold text-indigo-700 dark:text-indigo-400 uppercase text-[9px] mt-0.5 shrink-0">Conséquence :</span>
+                    <span className="leading-relaxed font-medium">{SANCTION_RULES[newSanction.type].consequence}</span>
+                  </div>
+                </div>
                 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('reason_detailed_label')}</label>
@@ -361,11 +518,77 @@ const Discipline: React.FC = () => {
                     rows={4}
                     value={newSanction.reason}
                     onChange={(e) => setNewSanction({...newSanction, reason: e.target.value})}
-                    className="w-full px-4 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all resize-none"
+                    className="w-full px-4 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all resize-none mb-3"
                     placeholder={t('reason_placeholder')}
                   />
                 </div>
-                
+
+                {newSanction.reason.trim().length > 0 && (() => {
+                  const { score, recommendation, matches } = analyzeIncident(newSanction.reason);
+                  return (
+                    <div className={`p-4 rounded-2xl border ${recommendation.bgColor} border-black/5 dark:border-white/5 transition-all duration-300 space-y-3`}>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1.5 text-xs font-black uppercase tracking-wider text-gray-500">
+                          <Sparkles size={14} className="text-indigo-600 dark:text-indigo-400 animate-pulse shrink-0" />
+                          <span>Moteur d'Évaluation de Gravité</span>
+                        </div>
+                        <span className={`px-2.5 py-0.5 text-[9px] font-black uppercase tracking-widest text-white rounded-md ${recommendation.color}`}>
+                          {recommendation.gravity}
+                        </span>
+                      </div>
+
+                      {/* Gravity Progress bar */}
+                      <div className="space-y-1">
+                        <div className="flex justify-between text-[10px] text-gray-400 font-bold">
+                          <span>Niveau de sévérité</span>
+                          <span>{score}/100</span>
+                        </div>
+                        <div className="h-2 w-full bg-gray-200/50 dark:bg-gray-700/50 rounded-full overflow-hidden">
+                          <div 
+                            className={`h-full ${recommendation.color} transition-all duration-500`}
+                            style={{ width: `${score}%` }}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="text-xs space-y-2">
+                        <p className="font-semibold text-gray-700 dark:text-gray-300">
+                          <span className="font-extrabold text-gray-900 dark:text-white mr-1">Sanction Suggérée :</span>
+                          {t(`${recommendation.type}_type`)} {recommendation.duration ? `(${recommendation.duration})` : ''}
+                        </p>
+                        <p className="text-[11px] text-gray-500/90 leading-relaxed font-semibold">
+                          {recommendation.description}
+                        </p>
+                        {matches.length > 0 && (
+                          <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                            <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Mots clés :</span>
+                            {matches.map((m, id) => (
+                              <span key={id} className="px-1.5 py-0.5 bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/5 text-[9px] text-gray-600 dark:text-gray-300 font-mono rounded font-bold">
+                                {m}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setNewSanction(prev => ({
+                            ...prev,
+                            type: recommendation.type,
+                            duration: recommendation.duration
+                          }));
+                        }}
+                        className="w-full py-2.5 bg-white dark:bg-gray-950 text-gray-950 dark:text-white hover:bg-gray-50 dark:hover:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 hover:scale-[1.01] active:scale-[0.99] shadow-sm"
+                      >
+                        <CheckCircle2 size={13} className="text-emerald-500 animate-bounce" />
+                        Appliquer la recommandation
+                      </button>
+                    </div>
+                  );
+                })()}
+
                 <div className="flex gap-3 pt-4">
                   <button
                     type="button"

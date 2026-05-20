@@ -363,7 +363,7 @@ export default function Settings() {
   ];
 
   return (
-    <div className="max-w-6xl mx-auto space-y-8 pb-12">
+    <div className="w-full max-w-7xl mx-auto space-y-8 pb-12 px-4 sm:px-6 lg:px-8">
       {/* Header with Connection Status */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
@@ -969,7 +969,7 @@ export default function Settings() {
                       </div>
                       
                       <div className="bg-gray-50 dark:bg-gray-900/50 rounded-3xl border border-gray-100 dark:border-gray-700 overflow-hidden">
-                        <div className="overflow-x-auto lg:overflow-visible">
+                        <div className="overflow-x-auto">
                           {/* Desktop Table View */}
                           <table className="hidden md:table w-full text-left border-collapse">
                             <thead>

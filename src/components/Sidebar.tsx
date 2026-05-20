@@ -80,7 +80,7 @@ export default function Sidebar({ activeTab, setActiveTab, isMobileOpen, setIsMo
         { id: 'clubs', labelKey: 'clubs', icon: Award, roles: ['admin', 'enseignant', 'élève', 'parent'] },
         { id: 'leaderboard', labelKey: 'leaderboard', icon: Trophy, roles: ['admin', 'enseignant', 'élève', 'parent'] },
         { id: 'library', labelKey: 'library', icon: Library, roles: ['admin', 'enseignant', 'élève', 'parent'] },
-        { id: 'canteen', labelKey: 'canteen', icon: Utensils, roles: ['admin', 'élève', 'parent', 'cuisinier'] },
+        { id: 'canteen', labelKey: 'canteen', icon: Utensils, roles: ['admin', 'enseignant', 'élève', 'parent', 'cuisinier', 'personnel administratif'] },
         { id: 'surveys', labelKey: 'surveys', icon: Vote, roles: ['admin', 'enseignant', 'élève', 'parent'] },
       ]
     },

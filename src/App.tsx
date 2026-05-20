@@ -200,7 +200,7 @@ function AppContent() {
       case 'library':
         return <Library />;
       case 'canteen':
-        return ['admin', 'élève', 'parent', 'cuisinier', 'personnel administratif'].includes(role) ? <Canteen /> : <Dashboard onNavigate={handleNavigate} />;
+        return ['admin', 'enseignant', 'élève', 'parent', 'cuisinier', 'personnel administratif'].includes(role) ? <Canteen /> : <Dashboard onNavigate={handleNavigate} />;
       case 'surveys':
         return <Surveys />;
       case 'document_generator':
