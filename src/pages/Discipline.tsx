@@ -18,7 +18,8 @@ import {
   FileText,
   CheckCircle2,
   XCircle,
-  Sparkles
+  Sparkles,
+  ChevronDown
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import SuccessModal from '../components/SuccessModal';
@@ -193,6 +194,7 @@ const Discipline: React.FC = () => {
     reason: '',
     duration: '',
   });
+  const [showTypeDropdown, setShowTypeDropdown] = useState(false);
 
   useEffect(() => {
     if (!currentUser || !['admin', 'enseignant', 'personnel administratif'].includes(currentUser.role)) return;
@@ -437,170 +439,235 @@ const Discipline: React.FC = () => {
       {/* Add Sanction Modal */}
       <AnimatePresence>
         {showAddModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm overflow-hidden">
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl max-w-lg w-full overflow-hidden"
+              className="bg-white dark:bg-gray-800 rounded-3xl shadow-2xl max-w-lg w-full max-h-[90vh] md:max-h-[85vh] flex flex-col overflow-hidden border border-gray-100 dark:border-gray-700"
             >
-              <div className="p-6 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between">
-                <h2 className="text-xl font-bold text-gray-900 dark:text-white">{t('new_sanction')}</h2>
-                <button onClick={() => setShowAddModal(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
-                  <Plus className="rotate-45" size={24} />
+              {/* Static Header */}
+              <div className="p-6 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between shrink-0">
+                <h2 className="text-xl font-black text-gray-900 dark:text-white tracking-tight">{t('new_sanction')}</h2>
+                <button 
+                  onClick={() => {
+                    setShowAddModal(false);
+                    setShowTypeDropdown(false);
+                  }} 
+                  className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                >
+                  <Plus className="rotate-45" size={20} />
                 </button>
               </div>
               
-              <form onSubmit={handleAddSanction} className="p-6 space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('student_label')}</label>
-                  <select
-                    required
-                    value={newSanction.studentId}
-                    onChange={(e) => setNewSanction({...newSanction, studentId: e.target.value})}
-                    className="w-full px-4 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
-                  >
-                    <option value="">{t('select_student')}</option>
-                    {students.map(s => (
-                      <option key={s.id} value={s.id}>{s.prenom} {s.nom} ({s.classe})</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
+              {/* Form container with static footer */}
+              <form onSubmit={handleAddSanction} className="flex-1 flex flex-col overflow-hidden">
+                
+                {/* Scrollable Body */}
+                <div className="flex-1 overflow-y-auto p-6 space-y-4 custom-scrollbar pb-16">
+                  
+                  {/* Student Select */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('type_label')}</label>
+                    <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-1.5">{t('student_label')}</label>
                     <select
-                      value={newSanction.type}
-                      onChange={(e) => setNewSanction({...newSanction, type: e.target.value as any})}
-                      className="w-full px-4 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                      required
+                      value={newSanction.studentId}
+                      onChange={(e) => setNewSanction({...newSanction, studentId: e.target.value})}
+                      className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-sm font-semibold"
                     >
-                      <option value="warning">{t('warning_type')}</option>
-                      <option value="detention">{t('detention_type')}</option>
-                      <option value="exclusion">{t('exclusion_type')}</option>
-                      <option value="expulsion">{t('expulsion_type')}</option>
-                      <option value="other">{t('other_type')}</option>
+                      <option value="">{t('select_student')}</option>
+                      {students.map(s => (
+                        <option key={s.id} value={s.id}>{s.prenom} {s.nom} ({s.classe})</option>
+                      ))}
                     </select>
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('duration_label')}</label>
-                    <input
-                      type="text"
-                      value={newSanction.duration}
-                      onChange={(e) => setNewSanction({...newSanction, duration: e.target.value})}
-                      className="w-full px-4 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
-                      placeholder={t('duration_placeholder')}
-                    />
-                  </div>
-                </div>
 
-                {/* Display official rules for the selected discipline/sanction type */}
-                <div className="p-4 bg-indigo-50/60 dark:bg-indigo-950/20 border border-indigo-100/50 dark:border-indigo-900/40 rounded-2xl space-y-2 transition-all duration-300">
-                  <div className="flex items-center gap-2">
-                    <span className="w-2.5 h-2.5 rounded-full bg-indigo-500 animate-pulse shrink-0"></span>
-                    <p className="font-extrabold text-indigo-800 dark:text-indigo-300 text-xs uppercase tracking-wider">
-                      Règlement & Barème : {SANCTION_RULES[newSanction.type].title}
-                    </p>
-                  </div>
-                  <p className="text-[12px] text-gray-600 dark:text-gray-300 leading-relaxed font-semibold">
-                    {SANCTION_RULES[newSanction.type].guidelines}
-                  </p>
-                  <div className="pt-1.5 border-t border-indigo-100/30 dark:border-indigo-900/30 flex items-start gap-1 text-[11px] text-gray-500 dark:text-gray-400">
-                    <span className="font-bold text-indigo-700 dark:text-indigo-400 uppercase text-[9px] mt-0.5 shrink-0">Conséquence :</span>
-                    <span className="leading-relaxed font-medium">{SANCTION_RULES[newSanction.type].consequence}</span>
-                  </div>
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('reason_detailed_label')}</label>
-                  <textarea
-                    required
-                    rows={4}
-                    value={newSanction.reason}
-                    onChange={(e) => setNewSanction({...newSanction, reason: e.target.value})}
-                    className="w-full px-4 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all resize-none mb-3"
-                    placeholder={t('reason_placeholder')}
-                  />
-                </div>
-
-                {newSanction.reason.trim().length > 0 && (() => {
-                  const { score, recommendation, matches } = analyzeIncident(newSanction.reason);
-                  return (
-                    <div className={`p-4 rounded-2xl border ${recommendation.bgColor} border-black/5 dark:border-white/5 transition-all duration-300 space-y-3`}>
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-1.5 text-xs font-black uppercase tracking-wider text-gray-500">
-                          <Sparkles size={14} className="text-indigo-600 dark:text-indigo-400 animate-pulse shrink-0" />
-                          <span>Moteur d'Évaluation de Gravité</span>
-                        </div>
-                        <span className={`px-2.5 py-0.5 text-[9px] font-black uppercase tracking-widest text-white rounded-md ${recommendation.color}`}>
-                          {recommendation.gravity}
-                        </span>
-                      </div>
-
-                      {/* Gravity Progress bar */}
-                      <div className="space-y-1">
-                        <div className="flex justify-between text-[10px] text-gray-400 font-bold">
-                          <span>Niveau de sévérité</span>
-                          <span>{score}/100</span>
-                        </div>
-                        <div className="h-2 w-full bg-gray-200/50 dark:bg-gray-700/50 rounded-full overflow-hidden">
-                          <div 
-                            className={`h-full ${recommendation.color} transition-all duration-500`}
-                            style={{ width: `${score}%` }}
-                          />
-                        </div>
-                      </div>
-
-                      <div className="text-xs space-y-2">
-                        <p className="font-semibold text-gray-700 dark:text-gray-300">
-                          <span className="font-extrabold text-gray-900 dark:text-white mr-1">Sanction Suggérée :</span>
-                          {t(`${recommendation.type}_type`)} {recommendation.duration ? `(${recommendation.duration})` : ''}
-                        </p>
-                        <p className="text-[11px] text-gray-500/90 leading-relaxed font-semibold">
-                          {recommendation.description}
-                        </p>
-                        {matches.length > 0 && (
-                          <div className="flex flex-wrap items-center gap-1.5 pt-1">
-                            <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Mots clés :</span>
-                            {matches.map((m, id) => (
-                              <span key={id} className="px-1.5 py-0.5 bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/5 text-[9px] text-gray-600 dark:text-gray-300 font-mono rounded font-bold">
-                                {m}
-                              </span>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-
+                  {/* High Quality Custom dropdown and duration controls */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    
+                    {/* Custom Type Dropdown with Rule descriptions at choices level */}
+                    <div className="relative">
+                      <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-1.5">{t('type_label')}</label>
+                      
                       <button
                         type="button"
-                        onClick={() => {
-                          setNewSanction(prev => ({
-                            ...prev,
-                            type: recommendation.type,
-                            duration: recommendation.duration
-                          }));
-                        }}
-                        className="w-full py-2.5 bg-white dark:bg-gray-950 text-gray-950 dark:text-white hover:bg-gray-50 dark:hover:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 hover:scale-[1.01] active:scale-[0.99] shadow-sm"
+                        onClick={() => setShowTypeDropdown(!showTypeDropdown)}
+                        className="w-full flex items-center justify-between px-4 py-2.5 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-left text-sm font-bold text-gray-900 dark:text-white"
                       >
-                        <CheckCircle2 size={13} className="text-emerald-500 animate-bounce" />
-                        Appliquer la recommandation
+                        <span className="flex items-center gap-2">
+                          {getTypeIcon(newSanction.type)}
+                          {t(`${newSanction.type}_type`)}
+                        </span>
+                        <ChevronDown size={16} className={`text-gray-400 transition-all ${showTypeDropdown ? 'rotate-180 text-indigo-600' : ''}`} />
                       </button>
-                    </div>
-                  );
-                })()}
 
-                <div className="flex gap-3 pt-4">
+                      {showTypeDropdown && (
+                        <div className="absolute left-0 right-0 mt-2 z-50 bg-white dark:bg-gray-800 border border-gray-150 dark:border-gray-700 rounded-2xl shadow-2xl max-h-72 overflow-y-auto p-1.5 space-y-1 custom-scrollbar">
+                          {(['warning', 'detention', 'exclusion', 'expulsion', 'other'] as const).map((typeVal) => {
+                            const rule = SANCTION_RULES[typeVal];
+                            const isSelected = newSanction.type === typeVal;
+                            return (
+                              <button
+                                key={typeVal}
+                                type="button"
+                                onClick={() => {
+                                  setNewSanction(prev => ({ ...prev, type: typeVal }));
+                                  setShowTypeDropdown(false);
+                                }}
+                                className={`w-full text-left p-2.5 rounded-xl transition-all flex flex-col gap-1 border ${
+                                  isSelected 
+                                    ? 'bg-indigo-50/75 dark:bg-indigo-950/40 border-indigo-200/80 dark:border-indigo-800 text-indigo-950 dark:text-indigo-100' 
+                                    : 'hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200 border-transparent'
+                                }`}
+                              >
+                                <div className="flex items-center justify-between w-full">
+                                  <div className="flex items-center gap-2">
+                                    <span className="p-1 rounded bg-black/5 dark:bg-white/5">{getTypeIcon(typeVal)}</span>
+                                    <span className="font-extrabold text-xs">{t(`${typeVal}_type`)} - {rule.title}</span>
+                                  </div>
+                                  {isSelected && <span className="w-1.5 h-1.5 rounded-full bg-indigo-600" />}
+                                </div>
+                                <p className="text-[10px] text-gray-500 dark:text-gray-400 leading-relaxed font-semibold">
+                                  <span className="font-bold underline text-gray-600 dark:text-gray-300">Règle :</span> {rule.guidelines}
+                                </p>
+                                <p className="text-[9px] text-gray-400 dark:text-gray-500 italic">
+                                  <span className="font-bold">Effet :</span> {rule.consequence}
+                                </p>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Duration input */}
+                    <div>
+                      <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-1.5">{t('duration_label')}</label>
+                      <input
+                        type="text"
+                        value={newSanction.duration}
+                        onChange={(e) => setNewSanction({...newSanction, duration: e.target.value})}
+                        className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-sm font-semibold"
+                        placeholder={t('duration_placeholder')}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Selected Rules Panel - Always visible reference card */}
+                  <div className="p-4 bg-indigo-50/40 dark:bg-indigo-950/20 border border-indigo-100/50 dark:border-indigo-900/40 rounded-2xl space-y-2 transition-all duration-300">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-indigo-500 shrink-0"></span>
+                      <p className="font-extrabold text-indigo-800 dark:text-indigo-300 text-[11px] uppercase tracking-wider">
+                        Règlement actif : {SANCTION_RULES[newSanction.type].title}
+                      </p>
+                    </div>
+                    <p className="text-[11.5px] text-gray-600 dark:text-gray-300 leading-relaxed font-semibold">
+                      {SANCTION_RULES[newSanction.type].guidelines}
+                    </p>
+                    <div className="pt-1.5 border-t border-indigo-100/30 dark:border-indigo-900/10 flex items-start gap-1 text-[10.5px] text-gray-500 dark:text-gray-400">
+                      <span className="font-bold text-indigo-700 dark:text-indigo-400 uppercase text-[9px] mt-0.5 shrink-0">Conséquence :</span>
+                      <span className="leading-relaxed font-medium">{SANCTION_RULES[newSanction.type].consequence}</span>
+                    </div>
+                  </div>
+                  
+                  {/* Reason Textarea */}
+                  <div>
+                    <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-1.5">{t('reason_detailed_label')}</label>
+                    <textarea
+                      required
+                      rows={3}
+                      value={newSanction.reason}
+                      onChange={(e) => setNewSanction({...newSanction, reason: e.target.value})}
+                      className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all resize-none mb-1 text-sm font-semibold"
+                      placeholder={t('reason_placeholder')}
+                    />
+                  </div>
+
+                  {/* AI Evaluation panel */}
+                  {newSanction.reason.trim().length > 0 && (() => {
+                    const { score, recommendation, matches } = analyzeIncident(newSanction.reason);
+                    return (
+                      <div className={`p-4 rounded-2xl border ${recommendation.bgColor} border-black/5 dark:border-white/5 transition-all duration-300 space-y-3`}>
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-1.5 text-xs font-black uppercase tracking-wider text-gray-500">
+                            <Sparkles size={14} className="text-indigo-600 dark:text-indigo-400 animate-pulse shrink-0" />
+                            <span>Moteur d'Évaluation de Gravité</span>
+                          </div>
+                          <span className={`px-2.5 py-0.5 text-[9px] font-black uppercase tracking-widest text-white rounded-md ${recommendation.color}`}>
+                            {recommendation.gravity}
+                          </span>
+                        </div>
+
+                        {/* Gravity Progress bar */}
+                        <div className="space-y-1">
+                          <div className="flex justify-between text-[10px] text-gray-400 font-bold">
+                            <span>Niveau de sévérité</span>
+                            <span>{score}/100</span>
+                          </div>
+                          <div className="h-2 w-full bg-gray-200/50 dark:bg-gray-700/50 rounded-full overflow-hidden">
+                            <div 
+                              className={`h-full ${recommendation.color} transition-all duration-500`}
+                              style={{ width: `${score}%` }}
+                            />
+                          </div>
+                        </div>
+
+                        <div className="text-xs space-y-2">
+                          <p className="font-semibold text-gray-700 dark:text-gray-300">
+                            <span className="font-extrabold text-gray-900 dark:text-white mr-1 flex-shrink-0">Sensation Suggérée :</span>
+                            {t(`${recommendation.type}_type`)} {recommendation.duration ? `(${recommendation.duration})` : ''}
+                          </p>
+                          <p className="text-[11px] text-gray-500/90 leading-relaxed font-semibold">
+                            {recommendation.description}
+                          </p>
+                          {matches.length > 0 && (
+                            <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                              <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Mots clés :</span>
+                              {matches.map((m, id) => (
+                                <span key={id} className="px-1.5 py-0.5 bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/5 text-[9px] text-gray-600 dark:text-gray-300 font-mono rounded font-bold">
+                                  {m}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setNewSanction(prev => ({
+                              ...prev,
+                              type: recommendation.type,
+                              duration: recommendation.duration
+                            }));
+                          }}
+                          className="w-full py-2 bg-white dark:bg-gray-950 text-gray-950 dark:text-white hover:bg-gray-50 dark:hover:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 hover:scale-[1.01] active:scale-[0.99] shadow-sm"
+                        >
+                          <CheckCircle2 size={13} className="text-emerald-500" />
+                          Appliquer la recommandation
+                        </button>
+                      </div>
+                    );
+                  })()}
+
+                </div>
+
+                {/* Static Footer */}
+                <div className="p-6 border-t border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/80 shrink-0 flex gap-3">
                   <button
                     type="button"
-                    onClick={() => setShowAddModal(false)}
-                    className="flex-1 py-2 text-gray-700 dark:text-gray-300 font-medium hover:bg-gray-100 dark:hover:bg-gray-700 rounded-xl transition-colors"
+                    onClick={() => {
+                      setShowAddModal(false);
+                      setShowTypeDropdown(false);
+                    }}
+                    className="flex-1 py-2.5 text-gray-700 dark:text-gray-300 text-sm font-bold hover:bg-gray-100 dark:hover:bg-gray-700 rounded-xl transition-colors border border-gray-200 dark:border-gray-650"
                   >
                     {t('cancel')}
                   </button>
                   <button
                     type="submit"
                     disabled={isSaving}
-                    className="flex-1 py-2 bg-red-600 text-white font-bold rounded-xl hover:bg-red-700 transition-colors shadow-lg shadow-red-500/20 disabled:opacity-50"
+                    className="flex-1 py-2.5 bg-red-600 text-white text-sm font-extrabold rounded-xl hover:bg-red-700 transition-colors shadow-lg shadow-red-500/20 disabled:opacity-50"
                   >
                     {isSaving ? t('saving_status') : t('save_sanction')}
                   </button>
