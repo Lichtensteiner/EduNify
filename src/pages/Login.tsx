@@ -49,6 +49,8 @@ export default function Login() {
   const [matricule, setMatricule] = useState('');
   const [houseId, setHouseId] = useState('');
   const [houses, setHouses] = useState<any[]>([]);
+  const [classes, setClasses] = useState<any[]>([]);
+  const [position, setPosition] = useState('');
 
   useEffect(() => {
     const unsubscribe = onSnapshot(collection(db, 'houses'), (snapshot) => {
@@ -56,6 +58,16 @@ export default function Login() {
       setHouses(housesData);
     }, (err) => {
       console.error("Erreur onSnapshot houses:", err);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    const unsubscribe = onSnapshot(collection(db, 'classes'), (snapshot) => {
+      const classesData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setClasses(classesData);
+    }, (err) => {
+      console.error("Erreur onSnapshot classes:", err);
     });
     return () => unsubscribe();
   }, []);
@@ -89,7 +101,8 @@ export default function Login() {
           role,
           matricule,
           ...(role === 'élève' && houseId ? { house_id: houseId } : {}),
-          ...(role === 'élève' ? { classe } : {})
+          ...(role === 'élève' ? { classe } : {}),
+          ...(role === 'personnel administratif' ? { position, department: 'Administration' } : {})
         }, password);
       } else {
         if (!email || !password) {
@@ -199,14 +212,17 @@ export default function Login() {
                   <>
                     <div>
                       <label className="block text-sm font-medium text-gray-700">{t('class')}</label>
-                      <input
-                        type="text"
+                      <select
                         required
                         value={classe}
                         onChange={(e) => setClasse(e.target.value)}
-                        placeholder="Ex: Terminale S1"
-                        className="mt-1 appearance-none block w-full px-4 py-3 border border-gray-300 rounded-xl shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                      />
+                        className="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm bg-white"
+                      >
+                        <option value="">{t('select_class') || 'Sélectionner une classe'}</option>
+                        {classes.map(cls => (
+                          <option key={cls.id} value={cls.nom}>{cls.nom}</option>
+                        ))}
+                      </select>
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700">{t('house_optional')}</label>
@@ -222,6 +238,28 @@ export default function Login() {
                       </select>
                     </div>
                   </>
+                )}
+
+                {role === 'personnel administratif' && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Responsabilité / Poste</label>
+                    <select
+                      required
+                      value={position}
+                      onChange={(e) => setPosition(e.target.value)}
+                      className="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm bg-white"
+                    >
+                      <option value="">Sélectionner une responsabilité</option>
+                      <option value="responsable collège">Responsable collège</option>
+                      <option value="responsable primaire">Responsable primaire</option>
+                      <option value="responsable maternelle">Responsable maternelle</option>
+                      <option value="secrétaire générale">Secrétaire générale</option>
+                      <option value="secrétaire adjoint">Secrétaire adjoint</option>
+                      <option value="surveillant">Surveillant</option>
+                      <option value="comptable">Comptable</option>
+                      <option value="chargé pédagogique">Chargé pédagogique</option>
+                    </select>
+                  </div>
                 )}
               </>
             )}

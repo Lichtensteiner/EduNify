@@ -34,6 +34,8 @@ export interface User {
   face_id?: string | null;
   fingerprint_id?: string | null;
   house_id?: string;
+  position?: string;
+  department?: string;
   biographie?: string;
   status?: 'online' | 'offline';
   lastSeen?: any;

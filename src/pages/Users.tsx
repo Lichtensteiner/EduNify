@@ -57,6 +57,7 @@ export default function Users() {
     experience_years: '',
     age: '',
     house_id: '',
+    position: '',
     photo: '',
     cover: ''
   });
@@ -232,6 +233,8 @@ export default function Users() {
         experience_years: newUser.experience_years ? parseInt(newUser.experience_years as string) : null,
         age: newUser.age ? parseInt(newUser.age as string) : null,
         house_id: newUser.role === 'élève' && newUser.house_id ? newUser.house_id : null,
+        position: finalRole === 'personnel administratif' ? (newUser.position || null) : null,
+        department: finalRole === 'personnel administratif' ? 'Administration' : null,
         photo: newUser.photo || null,
         cover: newUser.cover || null,
         date_creation: new Date().toISOString()
@@ -269,6 +272,7 @@ export default function Users() {
         experience_years: '', 
         age: '', 
         house_id: '',
+        position: '',
         photo: '',
         cover: ''
       });
@@ -325,7 +329,9 @@ export default function Users() {
         age: editUser.age ? parseInt(editUser.age.toString()) : null,
         photo: editUser.photo || null,
         cover: editUser.cover || null,
-        house_id: editUser.role === 'élève' && editUser.house_id ? editUser.house_id : null
+        house_id: editUser.role === 'élève' && editUser.house_id ? editUser.house_id : null,
+        position: finalRole === 'personnel administratif' ? (editUser.position || null) : null,
+        department: finalRole === 'personnel administratif' ? 'Administration' : null
       });
 
       await recordAuditLog({
@@ -1310,6 +1316,28 @@ export default function Users() {
                       </div>
                     )}
 
+                    {editUser.role === 'personnel administratif' && (
+                      <div>
+                        <label className="block text-xs font-medium text-gray-500 mb-1.5 ml-1 uppercase">Responsabilité / Poste</label>
+                        <select
+                          required
+                          value={editUser.position || ''}
+                          onChange={(e) => setEditUser({...editUser, position: e.target.value})}
+                          className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-sm"
+                        >
+                          <option value="">Sélectionner une responsabilité</option>
+                          <option value="responsable collège">Responsable collège</option>
+                          <option value="responsable primaire">Responsable primaire</option>
+                          <option value="responsable maternelle">Responsable maternelle</option>
+                          <option value="secrétaire générale">Secrétaire générale</option>
+                          <option value="secrétaire adjoint">Secrétaire adjoint</option>
+                          <option value="surveillant">Surveillant</option>
+                          <option value="comptable">Comptable</option>
+                          <option value="chargé pédagogique">Chargé pédagogique</option>
+                        </select>
+                      </div>
+                    )}
+
                     {editUser.role === 'enseignant' && (
                       <div className="col-span-1 md:col-span-2 space-y-4">
                         <div>
@@ -1855,6 +1883,28 @@ export default function Users() {
                               ))}
                             </select>
                           </div>
+                        </div>
+                      )}
+
+                      {newUser.role === 'personnel administratif' && (
+                        <div>
+                          <label className="block text-xs font-medium text-gray-500 mb-1.5 ml-1 uppercase">Responsabilité / Poste</label>
+                          <select
+                            required
+                            value={newUser.position}
+                            onChange={(e) => setNewUser({...newUser, position: e.target.value})}
+                            className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-sm"
+                          >
+                            <option value="">Sélectionner une responsabilité</option>
+                            <option value="responsable collège">Responsable collège</option>
+                            <option value="responsable primaire">Responsable primaire</option>
+                            <option value="responsable maternelle">Responsable maternelle</option>
+                            <option value="secrétaire générale">Secrétaire générale</option>
+                            <option value="secrétaire adjoint">Secrétaire adjoint</option>
+                            <option value="surveillant">Surveillant</option>
+                            <option value="comptable">Comptable</option>
+                            <option value="chargé pédagogique">Chargé pédagogique</option>
+                          </select>
                         </div>
                       )}
 
