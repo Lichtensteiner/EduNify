@@ -11,7 +11,7 @@ interface Translations {
 const translations: Translations = {
   // Sidebar
   'library': { fr: 'Bibliothèque', en: 'Library', es: 'Biblioteca', zh: '图书馆', ja: '図書館' },
-  'responsibility_zones': { fr: 'Responsabilités & Direction', en: 'Responsibilities & Direction', es: 'Responsabilidades y Dirección', zh: '职责与方向', ja: '職責と方向' },
+  'responsibility_zones': { fr: 'Bureau Direction', en: 'Directorate Office', es: 'Oficina de Dirección', zh: '处室方向', ja: '役員室方向' },
   'strategic_optimizations': { fr: 'Optimisations IA', en: 'AI Optimizations', es: 'Optimizaciones IA', zh: 'AI 优化', ja: 'AI最適化' },
   'strategic_optimizations_desc': { fr: 'Journal des optimisations stratégiques du système d\'apprentissage en temps réel.', en: 'Real-time strategic optimizations log for the learning ecosystem.', es: 'Registro de optimizaciones estratégicas en tiempo real.', zh: '实时战略优化日志', ja: 'リアルタイムの戦略最適化ログ' },
   'canteen': { fr: 'Cantine', en: 'Canteen', es: 'Cantina', zh: '食堂', ja: '食堂' },

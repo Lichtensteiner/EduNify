@@ -32,6 +32,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useNotification } from '../contexts/NotificationContext';
 import { db } from '../lib/firebase';
+import { collection, onSnapshot, addDoc, updateDoc, doc, deleteDoc } from 'firebase/firestore';
 import { administrativeResponsibilities } from './Staff';
 
 export default function ResponsibilityZones() {
@@ -40,202 +41,491 @@ export default function ResponsibilityZones() {
   const { notifySuccess, notifyError } = useNotification();
 
   // All administrative responsibility IDs that are available
-  const availableResponsibilityIds = administrativeResponsibilities.map(r => r.id);
+  const availableResponsibilityIds = React.useMemo(() => {
+    return administrativeResponsibilities.map(r => r.id);
+  }, []);
 
   // Check which responsibilities are active for the logged-in user
-  // If admin, they can manage and view ALL responsibilities.
+  // If admin, they can manage and view ALL responsibilities EXCEPT 'responsable_maternelle' (Gestion de la Maternelle is removed from admin's Bureau Direction tabs)
   const isGlobalAdmin = currentUser?.role === 'admin';
   const userResponsibilities = currentUser?.responsibilities || [];
   
-  const accessibleResponsibilityIds = isGlobalAdmin 
-    ? availableResponsibilityIds 
-    : userResponsibilities;
+  const accessibleResponsibilityIds = React.useMemo(() => {
+    return isGlobalAdmin 
+      ? availableResponsibilityIds.filter(id => id !== 'responsable_maternelle') 
+      : userResponsibilities;
+  }, [isGlobalAdmin, availableResponsibilityIds, userResponsibilities]);
 
   const [activeRespId, setActiveRespId] = useState<string>('');
 
   useEffect(() => {
     if (accessibleResponsibilityIds.length > 0) {
-      setActiveRespId(accessibleResponsibilityIds[0]);
+      if (!activeRespId || !accessibleResponsibilityIds.includes(activeRespId)) {
+        setActiveRespId(accessibleResponsibilityIds[0]);
+      }
+    } else {
+      setActiveRespId('');
     }
-  }, [currentUser]);
+  }, [accessibleResponsibilityIds, activeRespId]);
 
-  // LOCAL STATE DIRECTORY PERSISTENCE (Simulation of operational tools or load from local storage to keep state across flips)
-  // 1. Maternelle Siestas state
-  const [siestas, setSiestas] = useState<Array<{id: string, name: string, classroom: string, status: 'awake' | 'sleeping' | 'resting'}>>(() => {
-    const saved = localStorage.getItem('resp_siestas');
-    return saved ? JSON.parse(saved) : [
-      { id: '1', name: 'Léo Martin', classroom: 'Petite Section A', status: 'resting' },
-      { id: '2', name: 'Mia Kouao', classroom: 'Moyenne Section B', status: 'sleeping' },
-      { id: '3', name: 'Noé Dupont', classroom: 'Petite Section A', status: 'awake' },
-    ];
-  });
+  // Real-time states for Maternelle
+  const [siestas, setSiestas] = useState<Array<{id: string, name: string, classroom: string, status: 'awake' | 'sleeping' | 'resting'}>>([]);
+  const [maternelleTransmissions, setMaternelleTransmissions] = useState<Array<{id: string, kidName: string, notes: string, bottles: number, date: string}>>([]);
 
-  const [maternelleTransmissions, setMaternelleTransmissions] = useState<Array<{id: string, kidName: string, notes: string, bottles: number, date: string}>>(() => {
-    const saved = localStorage.getItem('resp_mat_trans');
-    return saved ? JSON.parse(saved) : [
-      { id: '1', kidName: 'Léo Martin', notes: 'A bien mangé à midi. Sieste calme de 1h30.', bottles: 2, date: 'Aujourd\'hui' }
-    ];
-  });
+  // Subscribe to real-time Firestore updates for Maternelle
+  useEffect(() => {
+    const unsubSiestas = onSnapshot(collection(db, 'maternelle_siestas'), (snapshot) => {
+      if (snapshot.empty) {
+        // Bootstrap default siestas if collection is empty
+        const defaults = [
+          { name: 'Léo Martin', classroom: 'Petite Section A', status: 'resting' },
+          { name: 'Mia Kouao', classroom: 'Moyenne Section B', status: 'sleeping' },
+          { name: 'Noé Dupont', classroom: 'Petite Section A', status: 'awake' },
+        ];
+        defaults.forEach(async (item) => {
+          await addDoc(collection(db, 'maternelle_siestas'), item);
+        });
+      } else {
+        const data = snapshot.docs.map(doc => ({
+          id: doc.id,
+          name: doc.data().name,
+          classroom: doc.data().classroom,
+          status: doc.data().status as 'awake' | 'sleeping' | 'resting'
+        }));
+        setSiestas(data);
+      }
+    }, (error) => {
+      console.error("Firestore siestas error:", error);
+    });
+
+    const unsubTransmissions = onSnapshot(collection(db, 'maternelle_transmissions'), (snapshot) => {
+      if (snapshot.empty) {
+        // Bootstrap default transmissions if collection is empty
+        const defaults = [
+          { kidName: 'Léo Martin', notes: 'A bien mangé à midi. Sieste calme de 1h30.', bottles: 2, date: 'Aujourd\'hui' }
+        ];
+        defaults.forEach(async (item) => {
+          await addDoc(collection(db, 'maternelle_transmissions'), item);
+        });
+      } else {
+        const data = snapshot.docs.map(doc => ({
+          id: doc.id,
+          kidName: doc.data().kidName,
+          notes: doc.data().notes,
+          bottles: Number(doc.data().bottles || 0),
+          date: doc.data().date
+        }));
+        setMaternelleTransmissions(data);
+      }
+    }, (error) => {
+      console.error("Firestore transmissions error:", error);
+    });
+
+    return () => {
+      unsubSiestas();
+      unsubTransmissions();
+    };
+  }, []);
 
   // 2. Reading Challenge (Primaire) state
-  const [readingProgress, setReadingProgress] = useState<Array<{id: string, name: string, booksRead: number, goal: number, rating: string}>>(() => {
-    const saved = localStorage.getItem('resp_reading_progress');
-    return saved ? JSON.parse(saved) : [
-      { id: '1', name: 'Arthur Durand', booksRead: 4, goal: 8, rating: 'Excellent' },
-      { id: '2', name: 'Chloé Konan', booksRead: 6, goal: 8, rating: 'Championne' },
-      { id: '3', name: 'Sébastien Diallo', booksRead: 2, goal: 8, rating: 'En progrès' },
-    ];
-  });
-
-  const [primaryFieldTrips, setPrimaryFieldTrips] = useState<Array<{id: string, destination: string, date: string, status: 'approved' | 'pending' | 'rejected'}>>(() => {
-    const saved = localStorage.getItem('resp_field_trips');
-    return saved ? JSON.parse(saved) : [
-      { id: '1', destination: 'Musée d\'Histoire Naturelle', date: '25 Mai 2026', status: 'pending' },
-      { id: '2', destination: 'Parc Botanique National', date: '12 Juin 2026', status: 'approved' }
-    ];
-  });
+  const [readingProgress, setReadingProgress] = useState<Array<{id: string, name: string, booksRead: number, goal: number, rating: string}>>([]);
+  const [primaryFieldTrips, setPrimaryFieldTrips] = useState<Array<{id: string, destination: string, date: string, status: 'approved' | 'pending' | 'rejected'}>>([]);
 
   // 3. College (Detentions & Brevet Chapters)
-  const [collegeDetentions, setCollegeDetentions] = useState<Array<{id: string, student: string, reason: string, teacher: string, date: string, hour: string, proctor: string}>>(() => {
-    const saved = localStorage.getItem('resp_detentions');
-    return saved ? JSON.parse(saved) : [
-      { id: '1', student: 'Marc Ehua', reason: 'Absences répétées non justifiées aux évaluations', teacher: 'M. Ella', date: '22 Mai 2026', hour: '14:00 - 16:00', proctor: 'M. Kouamé' }
-    ];
-  });
-
-  const [brevetChapters, setBrevetChapters] = useState<Array<{id: string, subject: string, topic: string, status: 'ready' | 'pending'}>>(() => {
-    const saved = localStorage.getItem('resp_brevet_chapters');
-    return saved ? JSON.parse(saved) : [
-      { id: '1', subject: 'Mathématiques', topic: 'Arithmétique & PGCD', status: 'ready' },
-      { id: '2', subject: 'Histoire', topic: 'La Première Guerre Mondiale', status: 'ready' },
-      { id: '3', subject: 'Sciences', topic: 'Génétique & Évolution', status: 'pending' },
-    ];
-  });
+  const [collegeDetentions, setCollegeDetentions] = useState<Array<{id: string, student: string, reason: string, teacher: string, date: string, hour: string, proctor: string}>>([]);
+  const [brevetChapters, setBrevetChapters] = useState<Array<{id: string, subject: string, topic: string, status: 'ready' | 'pending'}>>([]);
 
   // 4. Comptabilité Ledger Flow (Cash Flow ledger)
-  const [accountingFlows, setAccountingFlows] = useState<Array<{id: string, type: 'inflow' | 'outflow', category: string, amount: number, description: string, date: string}>>(() => {
-    const saved = localStorage.getItem('resp_accounting_flows');
-    return saved ? JSON.parse(saved) : [
-      { id: '1', type: 'inflow', category: 'Écolages', amount: 480000, description: 'Scolarité Trimestre 3 - Classe de 3ème', date: 'Aujourd\'hui, 10:15' },
-      { id: '2', type: 'outflow', category: 'Fournitures', amount: 85000, description: 'Achat de craies et rames de papier', date: 'Hier, 16:30' },
-      { id: '3', type: 'inflow', category: 'Cantine', amount: 120000, description: 'Recharge cartes cantine - Parent Koné', date: 'Aujourd\'hui, 08:45' }
-    ];
-  });
+  const [accountingFlows, setAccountingFlows] = useState<Array<{id: string, type: 'inflow' | 'outflow', category: string, amount: number, description: string, date: string}>>([]);
 
   // 5. Pedagogique checks
-  const [remedialGroups, setRemedialGroups] = useState<Array<{id: string, studentName: string, subject: string, level: string, date: string}>>(() => {
-    const saved = localStorage.getItem('resp_remedial_groups');
-    return saved ? JSON.parse(saved) : [
-      { id: '1', studentName: 'Inès Bamba', subject: 'Physique-Chimie', level: '4ème A', date: 'Mercredi 15h' },
-      { id: '2', studentName: 'Arnaud Yao', subject: 'Mathématiques', level: '3ème B', date: 'Samedi 09h' }
-    ];
-  });
-
-  const [syllabusRates, setSyllabusRates] = useState<Array<{id: string, course: string, teacher: string, rate: number}>>(() => {
-    const saved = localStorage.getItem('resp_syllabus_rates');
-    return saved ? JSON.parse(saved) : [
-      { id: '1', course: 'Mathématiques 3e', teacher: 'Armand Ella', rate: 82 },
-      { id: '2', course: 'Français 4e', teacher: 'Mme Touré', rate: 75 },
-      { id: '3', course: 'Anglais 5e', teacher: 'Ludovic Dev', rate: 90 },
-    ];
-  });
+  const [remedialGroups, setRemedialGroups] = useState<Array<{id: string, studentName: string, subject: string, level: string, date: string}>>([]);
+  const [syllabusRates, setSyllabusRates] = useState<Array<{id: string, course: string, teacher: string, rate: number}>>([]);
 
   // 6. Surveillant Général
-  const [lateSlips, setLateSlips] = useState<Array<{id: string, studentName: string, duration: number, reason: string, date: string, hasTicket: boolean}>>(() => {
-    const saved = localStorage.getItem('resp_lateslips');
-    return saved ? JSON.parse(saved) : [
-      { id: '1', studentName: 'Hervé Assi', duration: 25, reason: 'Panne de bus de ramassage', date: '21 Mai, 08:35', hasTicket: true }
-    ];
-  });
+  const [lateSlips, setLateSlips] = useState<Array<{id: string, studentName: string, duration: number, reason: string, date: string, hasTicket: boolean}>>([]);
 
   // 7. Surveillant Adjoint
-  const [visitorsLog, setVisitorsLog] = useState<Array<{id: string, visitorName: string, reason: string, targetPerson: string, entryTime: string, status: 'inside' | 'left'}>>(() => {
-    const saved = localStorage.getItem('resp_visitors');
-    return saved ? JSON.parse(saved) : [
-      { id: '1', visitorName: 'M. Koffi Kouamé (Parent)', reason: 'Rendez-vous Principal', targetPerson: 'Mme le Proviseur', entryTime: '09:45', status: 'inside' },
-      { id: '2', visitorName: 'Technicien Orange CI', reason: 'Paneth Internet', targetPerson: 'Responsable IT', entryTime: '08:15', status: 'left' }
-    ];
-  });
-
-  const [lockerKeys, setLockerKeys] = useState<Array<{id: string, lockerNo: string, student: string, date: string, returned: boolean}>>(() => {
-    const saved = localStorage.getItem('resp_locker_keys');
-    return saved ? JSON.parse(saved) : [
-      { id: '1', lockerNo: 'C-42', student: 'Ismaël Cissé', date: '21 Mai', returned: false },
-      { id: '2', lockerNo: 'A-108', student: 'Mariam Sidibé', date: '19 Mai', returned: true }
-    ];
-  });
+  const [visitorsLog, setVisitorsLog] = useState<Array<{id: string, visitorName: string, reason: string, targetPerson: string, entryTime: string, status: 'inside' | 'left'}>>([]);
+  const [lockerKeys, setLockerKeys] = useState<Array<{id: string, lockerNo: string, student: string, date: string, returned: boolean}>>([]);
 
   // 8. Dame de ménage
-  const [cleanZones, setCleanZones] = useState<Array<{id: string, zone: string, frequency: string, lastCleaned: string, status: 'cleaned' | 'pending'}>>(() => {
-    const saved = localStorage.getItem('resp_clean_zones');
-    return saved ? JSON.parse(saved) : [
-      { id: '1', zone: 'Bloc Sanitaire Maternelle', frequency: 'Toutes les 2h', lastCleaned: '10:00 (Aujourd\'hui)', status: 'cleaned' },
-      { id: '2', zone: 'Réfectoire Cantine', frequency: 'Quotidien', lastCleaned: '14:30 (Hier)', status: 'pending' },
-      { id: '3', zone: 'Bibliothèque Centrale', frequency: 'Hebdomadaire', lastCleaned: '20 Mai, 16:00', status: 'cleaned' }
-    ];
-  });
-
-  const [cleaningSupplies, setCleaningSupplies] = useState<Array<{id: string, item: string, stock: number, limit: number}>>(() => {
-    const saved = localStorage.getItem('resp_supplies');
-    return saved ? JSON.parse(saved) : [
-      { id: '1', item: 'Savon liquide mains', stock: 12, limit: 5 },
-      { id: '2', item: 'Eau de Javel (bidons 5L)', stock: 2, limit: 4 }, // Low stock Alert!
-      { id: '3', item: 'Papier essuie-tout', stock: 45, limit: 10 }
-    ];
-  });
+  const [cleanZones, setCleanZones] = useState<Array<{id: string, zone: string, frequency: string, lastCleaned: string, status: 'cleaned' | 'pending'}>>([]);
+  const [cleaningSupplies, setCleaningSupplies] = useState<Array<{id: string, item: string, stock: number, limit: number}>>([]);
 
   // 9. Secrétaire Générale
-  const [dossiers, setDossiers] = useState<Array<{id: string, name: string, level: string, originSchool: string, status: 'pending' | 'accepted' | 'rejected'}>>(() => {
-    const saved = localStorage.getItem('resp_dossiers');
-    return saved ? JSON.parse(saved) : [
-      { id: '1', name: 'Alix Koné', level: 'Classe de Seconde C', originSchool: 'Collège Moderne Bouaké', status: 'pending' },
-      { id: '2', name: 'Sarah Beugré', level: 'Classe de 6ème', originSchool: 'EPP Plateau', status: 'accepted' }
-    ];
-  });
+  const [dossiers, setDossiers] = useState<Array<{id: string, name: string, level: string, originSchool: string, status: 'pending' | 'accepted' | 'rejected'}>>([]);
 
   // 10. Secrétaire Adjointe
-  const [phoneCalls, setPhoneCalls] = useState<Array<{id: string, caller: string, message: string, targetStudent: string, status: 'noted' | 'relayed'}>>(() => {
-    const saved = localStorage.getItem('resp_calls');
-    return saved ? JSON.parse(saved) : [
-      { id: '1', caller: 'Mme Martin (Maman de Léo)', message: 'Sera en retard de 15 minutes ce soir pour la sieste maternelle.', targetStudent: 'Léo Martin', status: 'noted' }
-    ];
-  });
+  const [phoneCalls, setPhoneCalls] = useState<Array<{id: string, caller: string, message: string, targetStudent: string, status: 'noted' | 'relayed'}>>([]);
 
   // 11. IT Admin
-  const [itLoans, setItLoans] = useState<Array<{id: string, cartId: string, classTarget: string, duration: string, status: 'borrowed' | 'returned'}>>(() => {
-    const saved = localStorage.getItem('resp_it_loans');
-    return saved ? JSON.parse(saved) : [
-      { id: '1', cartId: 'Chariot Tablettes Android #2', classTarget: 'Terminales S-B', duration: 'Aujourd\'hui 08h - 12h', status: 'borrowed' }
-    ];
-  });
+  const [itLoans, setItLoans] = useState<Array<{id: string, cartId: string, classTarget: string, duration: string, status: 'borrowed' | 'returned'}>>([]);
+  const [itTickets, setItTickets] = useState<Array<{id: string, item: string, description: string, severity: 'minor' | 'critical', status: 'open' | 'investigating' | 'resolved'}>>([]);
 
-  const [itTickets, setItTickets] = useState<Array<{id: string, item: string, description: string, severity: 'minor' | 'critical', status: 'open' | 'investigating' | 'resolved'}>>(() => {
-    const saved = localStorage.getItem('resp_it_tickets');
-    return saved ? JSON.parse(saved) : [
-      { id: '1', item: 'Vidéo-projecteur Salle Informatique 1', description: 'Lampe décolorée ou bruit de ventilation excessif', severity: 'minor', status: 'investigating' },
-      { id: '2', item: 'Borne Wifi Récréation Cour A', description: 'Pas de signal DHCP pour les badges biométriques', severity: 'critical', status: 'open' }
-    ];
-  });
+  // Synchronize all Responsibility tables with Firebase Firestore
+  useEffect(() => {
+    const unsubs: Array<() => void> = [];
 
-  // Auto-saver utility to update in-memory tables
-  useEffect(() => { localStorage.setItem('resp_siestas', JSON.stringify(siestas)); }, [siestas]);
-  useEffect(() => { localStorage.setItem('resp_mat_trans', JSON.stringify(maternelleTransmissions)); }, [maternelleTransmissions]);
-  useEffect(() => { localStorage.setItem('resp_reading_progress', JSON.stringify(readingProgress)); }, [readingProgress]);
-  useEffect(() => { localStorage.setItem('resp_field_trips', JSON.stringify(primaryFieldTrips)); }, [primaryFieldTrips]);
-  useEffect(() => { localStorage.setItem('resp_detentions', JSON.stringify(collegeDetentions)); }, [collegeDetentions]);
-  useEffect(() => { localStorage.setItem('resp_brevet_chapters', JSON.stringify(brevetChapters)); }, [brevetChapters]);
-  useEffect(() => { localStorage.setItem('resp_accounting_flows', JSON.stringify(accountingFlows)); }, [accountingFlows]);
-  useEffect(() => { localStorage.setItem('resp_remedial_groups', JSON.stringify(remedialGroups)); }, [remedialGroups]);
-  useEffect(() => { localStorage.setItem('resp_syllabus_rates', JSON.stringify(syllabusRates)); }, [syllabusRates]);
-  useEffect(() => { localStorage.setItem('resp_lateslips', JSON.stringify(lateSlips)); }, [lateSlips]);
-  useEffect(() => { localStorage.setItem('resp_visitors', JSON.stringify(visitorsLog)); }, [visitorsLog]);
-  useEffect(() => { localStorage.setItem('resp_locker_keys', JSON.stringify(lockerKeys)); }, [lockerKeys]);
-  useEffect(() => { localStorage.setItem('resp_clean_zones', JSON.stringify(cleanZones)); }, [cleanZones]);
-  useEffect(() => { localStorage.setItem('resp_supplies', JSON.stringify(cleaningSupplies)); }, [cleaningSupplies]);
-  useEffect(() => { localStorage.setItem('resp_dossiers', JSON.stringify(dossiers)); }, [dossiers]);
-  useEffect(() => { localStorage.setItem('resp_calls', JSON.stringify(phoneCalls)); }, [phoneCalls]);
-  useEffect(() => { localStorage.setItem('resp_it_loans', JSON.stringify(itLoans)); }, [itLoans]);
-  useEffect(() => { localStorage.setItem('resp_it_tickets', JSON.stringify(itTickets)); }, [itTickets]);
+    // 2. Reading Challenge progress
+    const unsubRp = onSnapshot(collection(db, 'resp_reading_progress'), (snapshot) => {
+      if (snapshot.empty) {
+        const defaults = [
+          { name: 'Arthur Durand', booksRead: 4, goal: 8, rating: 'Excellent' },
+          { name: 'Chloé Konan', booksRead: 6, goal: 8, rating: 'Championne' },
+          { name: 'Sébastien Diallo', booksRead: 2, goal: 8, rating: 'En progrès' },
+        ];
+        defaults.forEach(async (item) => {
+          await addDoc(collection(db, 'resp_reading_progress'), item);
+        });
+      } else {
+        setReadingProgress(snapshot.docs.map(doc => ({
+          id: doc.id,
+          name: doc.data().name || '',
+          booksRead: Number(doc.data().booksRead || 0),
+          goal: Number(doc.data().goal || 8),
+          rating: doc.data().rating || 'En progrès'
+        })));
+      }
+    }, (err) => console.error("Reading progress unsub error:", err));
+    unsubs.push(unsubRp);
+
+    // Primary Field Trips
+    const unsubFt = onSnapshot(collection(db, 'resp_field_trips'), (snapshot) => {
+      if (snapshot.empty) {
+        const defaults = [
+          { destination: 'Musée d\'Histoire Naturelle', date: '25 Mai 2026', status: 'pending' },
+          { destination: 'Parc Botanique National', date: '12 Juin 2026', status: 'approved' }
+        ];
+        defaults.forEach(async (item) => {
+          await addDoc(collection(db, 'resp_field_trips'), item);
+        });
+      } else {
+        setPrimaryFieldTrips(snapshot.docs.map(doc => ({
+          id: doc.id,
+          destination: doc.data().destination || '',
+          date: doc.data().date || '',
+          status: doc.data().status as any
+        })));
+      }
+    }, (err) => console.error("Field trips error:", err));
+    unsubs.push(unsubFt);
+
+    // College Detentions
+    const unsubDet = onSnapshot(collection(db, 'resp_college_detentions'), (snapshot) => {
+      if (snapshot.empty) {
+        const defaults = [
+          { student: 'Marc Ehua', reason: 'Absences répétées non justifiées aux évaluations', teacher: 'M. Ella', date: '22 Mai 2026', hour: '14:00 - 16:00', proctor: 'M. Kouamé' }
+        ];
+        defaults.forEach(async (item) => {
+          await addDoc(collection(db, 'resp_college_detentions'), item);
+        });
+      } else {
+        setCollegeDetentions(snapshot.docs.map(doc => ({
+          id: doc.id,
+          student: doc.data().student || '',
+          reason: doc.data().reason || '',
+          teacher: doc.data().teacher || '',
+          date: doc.data().date || '',
+          hour: doc.data().hour || '',
+          proctor: doc.data().proctor || ''
+        })));
+      }
+    }, (err) => console.error("Detentions error:", err));
+    unsubs.push(unsubDet);
+
+    // Brevet Chapters
+    const unsubChapters = onSnapshot(collection(db, 'resp_brevet_chapters'), (snapshot) => {
+      if (snapshot.empty) {
+        const defaults = [
+          { subject: 'Mathématiques', topic: 'Arithmétique & PGCD', status: 'ready' },
+          { subject: 'Histoire', topic: 'La Première Guerre Mondiale', status: 'ready' },
+          { subject: 'Sciences', topic: 'Génétique & Évolution', status: 'pending' },
+        ];
+        defaults.forEach(async (item) => {
+          await addDoc(collection(db, 'resp_brevet_chapters'), item);
+        });
+      } else {
+        setBrevetChapters(snapshot.docs.map(doc => ({
+          id: doc.id,
+          subject: doc.data().subject || '',
+          topic: doc.data().topic || '',
+          status: doc.data().status as any
+        })));
+      }
+    }, (err) => console.error("Brevet chapters error:", err));
+    unsubs.push(unsubChapters);
+
+    // Accounting Flows
+    const unsubFlows = onSnapshot(collection(db, 'resp_accounting_flows'), (snapshot) => {
+      if (snapshot.empty) {
+        const defaults = [
+          { type: 'inflow', category: 'Écolages', amount: 480000, description: 'Scolarité Trimestre 3 - Classe de 3ème', date: 'Aujourd\'hui, 10:15' },
+          { type: 'outflow', category: 'Fournitures', amount: 85000, description: 'Achat de craies et rames de papier', date: 'Hier, 16:30' },
+          { type: 'inflow', category: 'Cantine', amount: 120000, description: 'Recharge cartes cantine - Parent Koné', date: 'Aujourd\'hui, 08:45' }
+        ];
+        defaults.forEach(async (item) => {
+          await addDoc(collection(db, 'resp_accounting_flows'), item);
+        });
+      } else {
+        setAccountingFlows(snapshot.docs.map(doc => ({
+          id: doc.id,
+          type: doc.data().type as any,
+          category: doc.data().category || '',
+          amount: Number(doc.data().amount || 0),
+          description: doc.data().description || '',
+          date: doc.data().date || ''
+        })));
+      }
+    }, (err) => console.error("Accounting flows error:", err));
+    unsubs.push(unsubFlows);
+
+    // Remedial Groups
+    const unsubRem = onSnapshot(collection(db, 'resp_remedial_groups'), (snapshot) => {
+      if (snapshot.empty) {
+        const defaults = [
+          { studentName: 'Inès Bamba', subject: 'Physique-Chimie', level: '4ème A', date: 'Mercredi 15h' },
+          { studentName: 'Arnaud Yao', subject: 'Mathématiques', level: '3ème B', date: 'Samedi 09h' }
+        ];
+        defaults.forEach(async (item) => {
+          await addDoc(collection(db, 'resp_remedial_groups'), item);
+        });
+      } else {
+        setRemedialGroups(snapshot.docs.map(doc => ({
+          id: doc.id,
+          studentName: doc.data().studentName || '',
+          subject: doc.data().subject || '',
+          level: doc.data().level || '',
+          date: doc.data().date || ''
+        })));
+      }
+    }, (err) => console.error("Remedial groups error:", err));
+    unsubs.push(unsubRem);
+
+    // Syllabus Rates
+    const unsubSyllabus = onSnapshot(collection(db, 'resp_syllabus_rates'), (snapshot) => {
+      if (snapshot.empty) {
+        const defaults = [
+          { course: 'Mathématiques 3e', teacher: 'Armand Ella', rate: 82 },
+          { course: 'Français 4e', teacher: 'Mme Touré', rate: 75 },
+          { course: 'Anglais 5e', teacher: 'Ludovic Dev', rate: 90 },
+        ];
+        defaults.forEach(async (item) => {
+          await addDoc(collection(db, 'resp_syllabus_rates'), item);
+        });
+      } else {
+        setSyllabusRates(snapshot.docs.map(doc => ({
+          id: doc.id,
+          course: doc.data().course || '',
+          teacher: doc.data().teacher || '',
+          rate: Number(doc.data().rate || 0)
+        })));
+      }
+    }, (err) => console.error("Syllabus rates error:", err));
+    unsubs.push(unsubSyllabus);
+
+    // Late Slips
+    const unsubLates = onSnapshot(collection(db, 'resp_late_slips'), (snapshot) => {
+      if (snapshot.empty) {
+        const defaults = [
+          { studentName: 'Hervé Assi', duration: 25, reason: 'Panne de bus de ramassage', date: '21 Mai, 08:35', hasTicket: true }
+        ];
+        defaults.forEach(async (item) => {
+          await addDoc(collection(db, 'resp_late_slips'), item);
+        });
+      } else {
+        setLateSlips(snapshot.docs.map(doc => ({
+          id: doc.id,
+          studentName: doc.data().studentName || '',
+          duration: Number(doc.data().duration || 0),
+          reason: doc.data().reason || '',
+          date: doc.data().date || '',
+          hasTicket: !!doc.data().hasTicket
+        })));
+      }
+    }, (err) => console.error("Late slips error:", err));
+    unsubs.push(unsubLates);
+
+    // Visitors Log
+    const unsubVisitors = onSnapshot(collection(db, 'resp_visitors_log'), (snapshot) => {
+      if (snapshot.empty) {
+        const defaults = [
+          { visitorName: 'M. Koffi Kouamé (Parent)', reason: 'Rendez-vous Principal', targetPerson: 'Mme le Proviseur', entryTime: '09:45', status: 'inside' },
+          { visitorName: 'Technicien Orange CI', reason: 'Paneth Internet', targetPerson: 'Responsable IT', entryTime: '08:15', status: 'left' }
+        ];
+        defaults.forEach(async (item) => {
+          await addDoc(collection(db, 'resp_visitors_log'), item);
+        });
+      } else {
+        setVisitorsLog(snapshot.docs.map(doc => ({
+          id: doc.id,
+          visitorName: doc.data().visitorName || '',
+          reason: doc.data().reason || '',
+          targetPerson: doc.data().targetPerson || '',
+          entryTime: doc.data().entryTime || '',
+          status: doc.data().status as any
+        })));
+      }
+    }, (err) => console.error("Visitors log error:", err));
+    unsubs.push(unsubVisitors);
+
+    // Locker Keys
+    const unsubLocker = onSnapshot(collection(db, 'resp_locker_keys'), (snapshot) => {
+      if (snapshot.empty) {
+        const defaults = [
+          { lockerNo: 'C-42', student: 'Ismaël Cissé', date: '21 Mai', returned: false },
+          { lockerNo: 'A-108', student: 'Mariam Sidibé', date: '19 Mai', returned: true }
+        ];
+        defaults.forEach(async (item) => {
+          await addDoc(collection(db, 'resp_locker_keys'), item);
+        });
+      } else {
+        setLockerKeys(snapshot.docs.map(doc => ({
+          id: doc.id,
+          lockerNo: doc.data().lockerNo || '',
+          student: doc.data().student || '',
+          date: doc.data().date || '',
+          returned: !!doc.data().returned
+        })));
+      }
+    }, (err) => console.error("Locker keys error:", err));
+    unsubs.push(unsubLocker);
+
+    // Clean zones
+    const unsubClean = onSnapshot(collection(db, 'resp_clean_zones'), (snapshot) => {
+      if (snapshot.empty) {
+        const defaults = [
+          { zone: 'Bloc Sanitaire Maternelle', frequency: 'Toutes les 2h', lastCleaned: '10:00 (Aujourd\'hui)', status: 'cleaned' },
+          { zone: 'Réfectoire Cantine', frequency: 'Quotidien', lastCleaned: '14:30 (Hier)', status: 'pending' },
+          { zone: 'Bibliothèque Centrale', frequency: 'Hebdomadaire', lastCleaned: '20 Mai, 16:00', status: 'cleaned' }
+        ];
+        defaults.forEach(async (item) => {
+          await addDoc(collection(db, 'resp_clean_zones'), item);
+        });
+      } else {
+        setCleanZones(snapshot.docs.map(doc => ({
+          id: doc.id,
+          zone: doc.data().zone || '',
+          frequency: doc.data().frequency || '',
+          lastCleaned: doc.data().lastCleaned || '',
+          status: doc.data().status as any
+        })));
+      }
+    }, (err) => console.error("Clean zones error:", err));
+    unsubs.push(unsubClean);
+
+    // Cleaning Supplies
+    const unsubSupplies = onSnapshot(collection(db, 'resp_cleaning_supplies'), (snapshot) => {
+      if (snapshot.empty) {
+        const defaults = [
+          { item: 'Savon liquide mains', stock: 12, limit: 5 },
+          { item: 'Eau de Javel (bidons 5L)', stock: 2, limit: 4 },
+          { item: 'Papier essuie-tout', stock: 45, limit: 10 }
+        ];
+        defaults.forEach(async (item) => {
+          await addDoc(collection(db, 'resp_cleaning_supplies'), item);
+        });
+      } else {
+        setCleaningSupplies(snapshot.docs.map(doc => ({
+          id: doc.id,
+          item: doc.data().item || '',
+          stock: Number(doc.data().stock || 0),
+          limit: Number(doc.data().limit || 0)
+        })));
+      }
+    }, (err) => console.error("Supplies error:", err));
+    unsubs.push(unsubSupplies);
+
+    // Dossiers (Secrétaire Générale)
+    const unsubDos = onSnapshot(collection(db, 'resp_dossiers'), (snapshot) => {
+      if (snapshot.empty) {
+        const defaults = [
+          { name: 'Alix Koné', level: 'Classe de Seconde C', originSchool: 'Collège Moderne Bouaké', status: 'pending' },
+          { name: 'Sarah Beugré', level: 'Classe de 6ème', originSchool: 'EPP Plateau', status: 'accepted' }
+        ];
+        defaults.forEach(async (item) => {
+          await addDoc(collection(db, 'resp_dossiers'), item);
+        });
+      } else {
+        setDossiers(snapshot.docs.map(doc => ({
+          id: doc.id,
+          name: doc.data().name || '',
+          level: doc.data().level || '',
+          originSchool: doc.data().originSchool || '',
+          status: doc.data().status as any
+        })));
+      }
+    }, (err) => console.error("Dossiers error:", err));
+    unsubs.push(unsubDos);
+
+    // Phone Calls (Secrétaire Adjointe)
+    const unsubCalls = onSnapshot(collection(db, 'resp_phone_calls'), (snapshot) => {
+      if (snapshot.empty) {
+        const defaults = [
+          { caller: 'Mme Martin (Maman de Léo)', message: 'Sera en retard de 15 minutes ce soir pour la sieste maternelle.', targetStudent: 'Léo Martin', status: 'noted' }
+        ];
+        defaults.forEach(async (item) => {
+          await addDoc(collection(db, 'resp_phone_calls'), item);
+        });
+      } else {
+        setPhoneCalls(snapshot.docs.map(doc => ({
+          id: doc.id,
+          caller: doc.data().caller || '',
+          message: doc.data().message || '',
+          targetStudent: doc.data().targetStudent || '',
+          status: doc.data().status as any
+        })));
+      }
+    }, (err) => console.error("Phone calls error:", err));
+    unsubs.push(unsubCalls);
+
+    // IT Loans
+    const unsubLoans = onSnapshot(collection(db, 'resp_it_loans'), (snapshot) => {
+      if (snapshot.empty) {
+        const defaults = [
+          { cartId: 'Chariot Tablettes Android #2', classTarget: 'Terminales S-B', duration: 'Aujourd\'hui 08h - 12h', status: 'borrowed' }
+        ];
+        defaults.forEach(async (item) => {
+          await addDoc(collection(db, 'resp_it_loans'), item);
+        });
+      } else {
+        setItLoans(snapshot.docs.map(doc => ({
+          id: doc.id,
+          cartId: doc.data().cartId || '',
+          classTarget: doc.data().classTarget || '',
+          duration: doc.data().duration || '',
+          status: doc.data().status as any
+        })));
+      }
+    }, (err) => console.error("IT loans error:", err));
+    unsubs.push(unsubLoans);
+
+    // IT Tickets
+    const unsubTickets = onSnapshot(collection(db, 'resp_it_tickets'), (snapshot) => {
+      if (snapshot.empty) {
+        const defaults = [
+          { item: 'Vidéo-projecteur Salle Informatique 1', description: 'Lampe décolorée ou bruit de ventilation excessif', severity: 'minor', status: 'investigating' },
+          { item: 'Borne Wifi Récréation Cour A', description: 'Pas de signal DHCP pour les badges biométriques', severity: 'critical', status: 'open' }
+        ];
+        defaults.forEach(async (item) => {
+          await addDoc(collection(db, 'resp_it_tickets'), item);
+        });
+      } else {
+        setItTickets(snapshot.docs.map(doc => ({
+          id: doc.id,
+          item: doc.data().item || '',
+          description: doc.data().description || '',
+          severity: doc.data().severity as any,
+          status: doc.data().status as any
+        })));
+      }
+    }, (err) => console.error("IT tickets error:", err));
+    unsubs.push(unsubTickets);
+
+    return () => {
+      unsubs.forEach(cleanup => cleanup());
+    };
+  }, []);
 
   // Form states
   const [formKidName, setFormKidName] = useState('');
@@ -309,7 +599,7 @@ export default function ResponsibilityZones() {
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
           <div>
             <span className="text-[10px] font-black uppercase text-indigo-600 dark:text-indigo-400 tracking-widest bg-indigo-50 dark:bg-indigo-950/30 px-3 py-1 rounded-xl">
-              Portail Direction & Responsables
+              Bureau Direction
             </span>
             <h1 className="text-2xl font-black text-gray-900 dark:text-white mt-1">
               Tableaux de Pilotage Métiers
@@ -407,9 +697,13 @@ export default function ResponsibilityZones() {
                           {(['awake', 'resting', 'sleeping'] as const).map(st => (
                             <button
                               key={st}
-                              onClick={() => {
-                                setSiestas(prev => prev.map(s => s.id === kid.id ? { ...s, status: st } : s));
-                                notifySuccess(`Sommeil de ${kid.name} modifié !`);
+                              onClick={async () => {
+                                try {
+                                  await updateDoc(doc(db, 'maternelle_siestas', kid.id), { status: st });
+                                  notifySuccess(`Sommeil de ${kid.name} modifié !`);
+                                } catch (error) {
+                                  console.error("Error updating sleep status:", error);
+                                }
                               }}
                               className={`px-2.5 py-1 text-[9px] font-black uppercase tracking-wider rounded-lg transition-all cursor-pointer ${
                                 kid.status === st 
@@ -445,7 +739,14 @@ export default function ResponsibilityZones() {
                           </span>
                         </div>
                         <button 
-                          onClick={() => setMaternelleTransmissions(p => p.filter(t => t.id !== trans.id))}
+                          onClick={async () => {
+                            try {
+                              await deleteDoc(doc(db, 'maternelle_transmissions', trans.id));
+                              notifySuccess("Transmission supprimée !");
+                            } catch (error) {
+                              console.error("Error deleting transmission:", error);
+                            }
+                          }}
                           className="absolute right-3 bottom-3 text-gray-400 hover:text-red-500"
                         >
                           <Trash2 size={12} />
@@ -491,12 +792,22 @@ export default function ResponsibilityZones() {
                             {student.rating}
                           </span>
                           <button
-                            onClick={() => {
-                              const newRead = Math.min(student.booksRead + 1, student.goal);
-                              setReadingProgress(prev => prev.map(s => s.id === student.id ? { ...s, booksRead: newRead, rating: newRead >= student.goal ? 'Légende' : 'En progrès' } : s));
-                              notifySuccess(`Livre validé pour ${student.name} !`);
+                            onClick={async () => {
+                              try {
+                                const currentBooksRead = Number(student.booksRead || 0);
+                                const currentGoal = Number(student.goal || 8);
+                                const newRead = Math.min(currentBooksRead + 1, currentGoal);
+                                const newRating = newRead >= currentGoal ? 'Légende' : 'En progrès';
+                                await updateDoc(doc(db, 'resp_reading_progress', student.id), {
+                                  booksRead: newRead,
+                                  rating: newRating
+                                });
+                                notifySuccess(`Livre validé pour ${student.name} !`);
+                              } catch (error) {
+                                console.error("Error updating reading progress:", error);
+                              }
                             }}
-                            className="p-1.5 bg-white hover:bg-sky-50 dark:bg-gray-800 border border-gray-150 rounded-xl"
+                            className="p-1.5 bg-white hover:bg-sky-50 dark:bg-gray-800 border border-gray-150 rounded-xl cursor-pointer"
                             title="Ajouter un livre lu"
                           >
                             <Plus size={12} />
@@ -528,11 +839,17 @@ export default function ResponsibilityZones() {
                           {trip.status === 'pending' && (
                             <div className="flex gap-1">
                               <button
-                                onClick={() => {
-                                  setPrimaryFieldTrips(p => p.map(t => t.id === trip.id ? { ...t, status: 'approved' } : t));
-                                  notifySuccess("Sortie de classe validée !");
+                                onClick={async () => {
+                                  try {
+                                    await updateDoc(doc(db, 'resp_field_trips', trip.id), {
+                                      status: 'approved'
+                                    });
+                                    notifySuccess("Sortie de classe validée !");
+                                  } catch (error) {
+                                    console.error("Error approving field trip:", error);
+                                  }
                                 }}
-                                className="p-1 bg-white hover:bg-emerald-50 text-emerald-600 rounded-lg border border-gray-150"
+                                className="p-1 bg-white hover:bg-emerald-50 text-emerald-600 rounded-lg border border-gray-150 cursor-pointer"
                               >
                                 <Check size={12} />
                               </button>
@@ -574,12 +891,18 @@ export default function ResponsibilityZones() {
                             {chap.status === 'ready' ? 'Prêt' : 'En attente'}
                           </span>
                           <button
-                            onClick={() => {
-                              const updatedStatus = chap.status === 'ready' ? 'pending' : 'ready';
-                              setBrevetChapters(prev => prev.map(c => c.id === chap.id ? { ...c, status: updatedStatus } : c));
-                              notifySuccess("Statut du programme actualisé !");
+                            onClick={async () => {
+                              try {
+                                const updatedStatus = chap.status === 'ready' ? 'pending' : 'ready';
+                                await updateDoc(doc(db, 'resp_brevet_chapters', chap.id), {
+                                  status: updatedStatus
+                                });
+                                notifySuccess("Statut du programme actualisé !");
+                              } catch (error) {
+                                console.error("Error updating chapter status:", error);
+                              }
                             }}
-                            className={`p-1 rounded-lg border text-[9px] font-black uppercase ${
+                            className={`p-1 rounded-lg border text-[9px] font-black uppercase cursor-pointer ${
                               chap.status === 'ready' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-gray-50 border-gray-150'
                             }`}
                           >
@@ -613,8 +936,15 @@ export default function ResponsibilityZones() {
                         <div className="mt-2.5 flex justify-between items-center text-[10px] text-gray-450 dark:text-gray-400">
                           <span>Surveillant : <strong>{det.proctor}</strong></span>
                           <button 
-                            onClick={() => setCollegeDetentions(p => p.filter(d => d.id !== det.id))}
-                            className="text-gray-400 hover:text-red-500 hover:bg-red-50 p-1.5 rounded-lg transition-all"
+                            onClick={async () => {
+                              try {
+                                await deleteDoc(doc(db, 'resp_college_detentions', det.id));
+                                notifySuccess("Ordre de retenue supprimé");
+                              } catch (error) {
+                                console.error("Error deleting detention:", error);
+                              }
+                            }}
+                            className="text-gray-400 hover:text-red-500 hover:bg-red-50 p-1.5 rounded-lg transition-all cursor-pointer"
                           >
                             Annuler l'ordre
                           </button>
@@ -667,8 +997,15 @@ export default function ResponsibilityZones() {
                             {flow.type === 'inflow' ? '+' : '-'}{flow.amount.toLocaleString()} F
                           </span>
                           <button
-                            onClick={() => setAccountingFlows(p => p.filter(f => f.id !== flow.id))}
-                            className="p-1 text-gray-450 hover:text-red-500 rounded-md"
+                            onClick={async () => {
+                              try {
+                                await deleteDoc(doc(db, 'resp_accounting_flows', flow.id));
+                                notifySuccess("Écriture comptable supprimée !");
+                              } catch (error) {
+                                console.error("Error deleting flow:", error);
+                              }
+                            }}
+                            className="p-1 text-gray-450 hover:text-red-500 rounded-md cursor-pointer"
                           >
                             <Trash2 size={12} />
                           </button>
@@ -691,7 +1028,7 @@ export default function ResponsibilityZones() {
                     onClick={() => {
                       notifySuccess("Lettre de relance type simulée et prête pour le publipostage !");
                     }}
-                    className="mt-3 px-3 py-1.5 bg-amber-655 hover:bg-amber-705 bg-amber-600 text-white font-black text-[9px] uppercase tracking-wider rounded-lg transition-all"
+                    className="mt-3 px-3 py-1.5 bg-amber-655 hover:bg-amber-705 bg-amber-600 text-white font-black text-[9px] uppercase tracking-wider rounded-lg transition-all cursor-pointer"
                   >
                     Simuler un publipostage de relance
                   </button>
@@ -732,7 +1069,27 @@ export default function ResponsibilityZones() {
                               const val = Number(e.target.value);
                               setSyllabusRates(p => p.map(s => s.id === rateObj.id ? { ...s, rate: val } : s));
                             }}
-                            className="flex-1 accent-indigo-600"
+                            onMouseUp={async (e) => {
+                              const val = Number((e.target as HTMLInputElement).value);
+                              try {
+                                await updateDoc(doc(db, 'resp_syllabus_rates', rateObj.id), {
+                                  rate: val
+                                });
+                              } catch (error) {
+                                console.error("Error updating syllabus rate:", error);
+                              }
+                            }}
+                            onTouchEnd={async (e) => {
+                              const val = Number((e.target as HTMLInputElement).value);
+                              try {
+                                await updateDoc(doc(db, 'resp_syllabus_rates', rateObj.id), {
+                                  rate: val
+                                });
+                              } catch (error) {
+                                console.error("Error updating syllabus rate:", error);
+                              }
+                            }}
+                            className="flex-1 accent-indigo-600 cursor-pointer"
                           />
                           <span className="text-[10px] text-indigo-505 font-black">{rateObj.rate >= 90 ? '🌟 Parfait' : '⏳ En cours'}</span>
                         </div>
@@ -749,15 +1106,22 @@ export default function ResponsibilityZones() {
                       <div key={rem.id} className="p-3 bg-gray-50 dark:bg-gray-900/40 rounded-xl border border-gray-100 flex justify-between items-center text-xs">
                         <div>
                           <p className="font-bold text-gray-900 dark:text-white">{rem.studentName}</p>
-                          <p className="text-[10px] text-gray-450 dark:text-gray-400">Soutien {rem.subject} | Niveau: {rem.level}</p>
+                          <p className="text-[10px] text-gray-455 dark:text-gray-400">Soutien {rem.subject} | Niveau: {rem.level}</p>
                         </div>
                         <div className="flex items-center gap-2">
                           <span className="text-[10px] font-mono text-gray-400 font-bold bg-white dark:bg-gray-800 border border-gray-105 px-2 py-0.5 rounded-lg">
                             {rem.date}
                           </span>
                           <button
-                            onClick={() => setRemedialGroups(p => p.filter(r => r.id !== rem.id))}
-                            className="text-gray-400 hover:text-red-500"
+                            onClick={async () => {
+                              try {
+                                await deleteDoc(doc(db, 'resp_remedial_groups', rem.id));
+                                notifySuccess("Groupe de soutien annulé !");
+                              } catch (error) {
+                                console.error("Error deleting remedial group:", error);
+                              }
+                            }}
+                            className="text-gray-400 hover:text-red-500 cursor-pointer"
                           >
                             <Trash2 size={12} />
                           </button>
@@ -804,13 +1168,20 @@ export default function ResponsibilityZones() {
                             onClick={() => {
                               notifySuccess(`Billet d'entrée ré-imprimé pour ${slip.studentName} !`);
                             }}
-                            className="text-[9px] font-black uppercase tracking-wider text-gray-500 bg-white border px-2 py-0.5 rounded-md"
+                            className="text-[9px] font-black uppercase tracking-wider text-gray-500 bg-white border px-2 py-0.5 rounded-md cursor-pointer"
                           >
                             Imprimer
                           </button>
                           <button
-                            onClick={() => setLateSlips(p => p.filter(s => s.id !== slip.id))}
-                            className="text-gray-400 hover:text-red-500"
+                            onClick={async () => {
+                              try {
+                                await deleteDoc(doc(db, 'resp_late_slips', slip.id));
+                                notifySuccess("Billet de retard supprimé !");
+                              } catch (error) {
+                                console.error("Error deleting late slip:", error);
+                              }
+                            }}
+                            className="text-gray-400 hover:text-red-500 cursor-pointer"
                           >
                             <Trash2 size={12} />
                           </button>
@@ -831,7 +1202,7 @@ export default function ResponsibilityZones() {
                   </div>
                   <div>
                     <h2 className="text-lg font-black text-gray-900 dark:text-white">Surveillance de Proximité & Portails</h2>
-                    <p className="text-xs text-gray-400">Contrôle d'accès des visiteurs de l'école et consignes des clefs de casiers.</p>
+                    <p className="text-xs text-gray-405">Contrôle d'accès des visiteurs de l'école et consignes des clefs de casiers.</p>
                   </div>
                 </div>
 
@@ -853,11 +1224,17 @@ export default function ResponsibilityZones() {
                           </span>
                           {vis.status === 'inside' && (
                             <button
-                              onClick={() => {
-                                setVisitorsLog(p => p.map(v => v.id === vis.id ? { ...v, status: 'left' } : v));
-                                notifySuccess("Heure de sortie enregistrée !");
+                              onClick={async () => {
+                                try {
+                                  await updateDoc(doc(db, 'resp_visitors_log', vis.id), {
+                                    status: 'left'
+                                  });
+                                  notifySuccess("Heure de sortie enregistrée !");
+                                } catch (error) {
+                                  console.error("Error leaving visitor:", error);
+                                }
                               }}
-                              className="text-[9px] bg-white text-gray-600 border px-2 py-0.5 rounded"
+                              className="text-[9px] bg-white text-gray-600 border px-2 py-0.5 rounded cursor-pointer"
                             >
                               Valider Sortie
                             </button>
@@ -879,10 +1256,16 @@ export default function ResponsibilityZones() {
                           <p className="text-[9px] text-gray-450 dark:text-gray-400">Attribué à: {lock.student}</p>
                         </div>
                         <button
-                          onClick={() => {
-                            const updatedRet = !lock.returned;
-                            setLockerKeys(p => p.map(l => l.id === lock.id ? { ...l, returned: updatedRet } : l));
-                            notifySuccess(updatedRet ? "Clef restituée !" : "Clef prêtée à nouveau !");
+                          onClick={async () => {
+                            try {
+                              const updatedRet = !lock.returned;
+                              await updateDoc(doc(db, 'resp_locker_keys', lock.id), {
+                                returned: updatedRet
+                              });
+                              notifySuccess(updatedRet ? "Clef restituée !" : "Clef prêtée à nouveau !");
+                            } catch (error) {
+                              console.error("Error updating locker key:", error);
+                            }
                           }}
                           className={`px-2 py-1.5 text-[9px] font-black uppercase tracking-widest rounded-lg border cursor-pointer ${
                             lock.returned 
@@ -923,7 +1306,7 @@ export default function ResponsibilityZones() {
                   <div className="p-4 bg-red-50/50 dark:bg-red-950/10 rounded-2xl border border-red-105/30 text-left">
                     <p className="text-[10px] uppercase font-black tracking-wider text-red-500">Alertes Ruptures Produits</p>
                     <p className="text-xl font-black text-red-750 dark:text-red-400 mt-1">
-                      {cleaningSupplies.filter(s => s.stock <= s.limit).length} Alerter
+                      {cleaningSupplies.filter(s => s.stock <= s.limit).length} Alerte(s)
                     </p>
                   </div>
                 </div>
@@ -936,13 +1319,20 @@ export default function ResponsibilityZones() {
                       <div key={zoneObj.id} className="p-4 flex items-center justify-between">
                         <div>
                           <p className="text-xs font-extrabold text-gray-850 dark:text-gray-300">{zoneObj.zone}</p>
-                          <p className="text-[9px] text-gray-450 dark:text-gray-400">Dernier passage : {zoneObj.lastCleaned} | Fréquence : {zoneObj.frequency}</p>
+                          <p className="text-[9px] text-gray-455 dark:text-gray-400">Dernier passage : {zoneObj.lastCleaned} | Fréquence : {zoneObj.frequency}</p>
                         </div>
                         <button
-                          onClick={() => {
-                            const updatedSt = zoneObj.status === 'cleaned' ? 'pending' : 'cleaned';
-                            setCleanZones(p => p.map(z => z.id === zoneObj.id ? { ...z, status: updatedSt, lastCleaned: 'À l\'instant' } : z));
-                            notifySuccess("Passage validé !");
+                          onClick={async () => {
+                            try {
+                              const updatedSt = zoneObj.status === 'cleaned' ? 'pending' : 'cleaned';
+                              await updateDoc(doc(db, 'resp_clean_zones', zoneObj.id), {
+                                status: updatedSt,
+                                lastCleaned: 'À l\'instant'
+                              });
+                              notifySuccess("Passage validé !");
+                            } catch (error) {
+                              console.error("Error updating clean zone:", error);
+                            }
                           }}
                           className={`px-3 py-1.5 rounded-xl text-[9px] font-black uppercase border transition-all cursor-pointer ${
                             zoneObj.status === 'cleaned' 
@@ -968,13 +1358,20 @@ export default function ResponsibilityZones() {
                           isLow ? 'bg-red-50/50 border-red-150' : 'bg-gray-50 dark:bg-gray-900/40 border-gray-100'
                         }`}>
                           <p className="text-[11px] font-extrabold text-gray-800 dark:text-gray-300">{supp.item}</p>
-                          <p className="text-[10px] text-gray-400 mt-0.5">Stock: <strong>{supp.stock}</strong> (Minimum: {supp.limit})</p>
+                          <p className="text-[10px] text-gray-405 mt-0.5">Stock: <strong>{supp.stock}</strong> (Minimum: {supp.limit})</p>
                           <button
-                            onClick={() => {
-                              setCleaningSupplies(p => p.map(s => s.id === supp.id ? { ...s, stock: s.stock + 10 } : s));
-                              notifySuccess("Dotation de stock commandée !");
+                            onClick={async () => {
+                              try {
+                                const currentStock = Number(supp.stock || 0);
+                                await updateDoc(doc(db, 'resp_cleaning_supplies', supp.id), {
+                                  stock: currentStock + 10
+                                });
+                                notifySuccess("Dotation de stock commandée !");
+                              } catch (error) {
+                                console.error("Error updating stock supply:", error);
+                              }
                             }}
-                            className={`w-full mt-2.5 py-1 text-[8px] font-black uppercase tracking-widest rounded-lg border text-center ${
+                            className={`w-full mt-2.5 py-1 text-[8px] font-black uppercase tracking-widest rounded-lg border text-center cursor-pointer ${
                               isLow ? 'bg-red-655 bg-red-600 text-white' : 'bg-white text-gray-600'
                             }`}
                           >
@@ -1022,20 +1419,32 @@ export default function ResponsibilityZones() {
                           {dos.status === 'pending' && (
                             <div className="flex gap-1">
                               <button
-                                onClick={() => {
-                                  setDossiers(p => p.map(d => d.id === dos.id ? { ...d, status: 'accepted' } : d));
-                                  notifySuccess("Dossier de candidature validé et inscrit !");
+                                onClick={async () => {
+                                  try {
+                                    await updateDoc(doc(db, 'resp_dossiers', dos.id), {
+                                      status: 'accepted'
+                                    });
+                                    notifySuccess("Dossier de candidature validé et inscrit !");
+                                  } catch (error) {
+                                    console.error("Error accepting dossier:", error);
+                                  }
                                 }}
-                                className="px-2 py-1 bg-white hover:bg-emerald-50 text-emerald-700 rounded-lg text-[9px] font-bold border"
+                                className="px-2 py-1 bg-white hover:bg-emerald-50 text-emerald-700 rounded-lg text-[9px] font-bold border cursor-pointer"
                               >
                                 Accepter
                               </button>
                               <button
-                                onClick={() => {
-                                  setDossiers(p => p.map(d => d.id === dos.id ? { ...d, status: 'rejected' } : d));
-                                  notifySuccess("Candidature rejetée.");
+                                onClick={async () => {
+                                  try {
+                                    await updateDoc(doc(db, 'resp_dossiers', dos.id), {
+                                      status: 'rejected'
+                                    });
+                                    notifySuccess("Candidature rejetée.");
+                                  } catch (error) {
+                                    console.error("Error rejecting dossier:", error);
+                                  }
                                 }}
-                                className="px-2 py-1 bg-white hover:bg-red-50 text-red-700 rounded-lg text-[9px] font-bold border"
+                                className="px-2 py-1 bg-white hover:bg-red-50 text-red-700 rounded-lg text-[9px] font-bold border cursor-pointer"
                               >
                                 Rejeter
                               </button>
@@ -1086,18 +1495,31 @@ export default function ResponsibilityZones() {
                         <div className="mt-2 text-right">
                           {call.status === 'noted' && (
                             <button
-                              onClick={() => {
-                                setPhoneCalls(p => p.map(c => c.id === call.id ? { ...c, status: 'relayed' } : c));
-                                notifySuccess("Statut du message : Transmis à l'enseignant !");
+                              onClick={async () => {
+                                try {
+                                  await updateDoc(doc(db, 'resp_phone_calls', call.id), {
+                                    status: 'relayed'
+                                  });
+                                  notifySuccess("Statut du message : Transmis à l'enseignant !");
+                                } catch (error) {
+                                  console.error("Error relaying phone call:", error);
+                                }
                               }}
-                              className="text-[9px] font-black uppercase tracking-wider text-white bg-fuchsia-600 px-3 py-1 rounded-lg"
+                              className="text-[9px] font-black uppercase tracking-wider text-white bg-fuchsia-600 px-3 py-1 rounded-lg cursor-pointer"
                             >
                               Marquer Transmis
                             </button>
                           )}
                           <button
-                            onClick={() => setPhoneCalls(p => p.filter(c => c.id !== call.id))}
-                            className="text-gray-400 hover:text-red-500 ml-2 text-xs"
+                            onClick={async () => {
+                              try {
+                                await deleteDoc(doc(db, 'resp_phone_calls', call.id));
+                                notifySuccess("Message supprimé !");
+                              } catch (error) {
+                                console.error("Error deleting phone call:", error);
+                              }
+                            }}
+                            className="text-gray-400 hover:text-red-500 ml-2 text-xs cursor-pointer"
                           >
                             Supprimer
                           </button>
@@ -1133,10 +1555,16 @@ export default function ResponsibilityZones() {
                           <p className="text-[10px] text-gray-450 dark:text-gray-400">Classe cible : {loan.classTarget} | Période : {loan.duration}</p>
                         </div>
                         <button
-                          onClick={() => {
-                            const newStatus = loan.status === 'borrowed' ? 'returned' : 'borrowed';
-                            setItLoans(p => p.map(l => l.id === loan.id ? { ...l, status: newStatus } : l));
-                            notifySuccess(newStatus === 'returned' ? "Chariot de tablettes restitué au labo IT !" : "Chariot marqué sorti !");
+                          onClick={async () => {
+                            try {
+                              const newStatus = loan.status === 'borrowed' ? 'returned' : 'borrowed';
+                              await updateDoc(doc(db, 'resp_it_loans', loan.id), {
+                                status: newStatus
+                              });
+                              notifySuccess(newStatus === 'returned' ? "Chariot de tablettes restitué au labo IT !" : "Chariot marqué sorti !");
+                            } catch (error) {
+                              console.error("Error updating IT loan:", error);
+                            }
                           }}
                           className={`px-3 py-1.5 rounded-xl text-[9px] font-black uppercase border transition-all cursor-pointer ${
                             loan.status === 'returned' 
@@ -1160,7 +1588,7 @@ export default function ResponsibilityZones() {
                         <div className="flex justify-between items-start">
                           <div>
                             <p className="text-xs font-black text-gray-850 dark:text-gray-300">{tick.item}</p>
-                            <p className="text-[10px] text-gray-450 mt-0.5 leading-snug">{tick.description}</p>
+                            <p className="text-[10px] text-gray-455 mt-0.5 leading-snug">{tick.description}</p>
                           </div>
                           <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase ${
                             tick.severity === 'critical' ? 'bg-red-105 bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'
@@ -1173,11 +1601,17 @@ export default function ResponsibilityZones() {
                           <span>Statut : <strong>{tick.status.toUpperCase()}</strong></span>
                           <div className="flex gap-1">
                             <button
-                              onClick={() => {
-                                setItTickets(p => p.map(t => t.id === tick.id ? { ...t, status: 'resolved' } : t));
-                                notifySuccess("Ticket marqué Résolu !");
+                              onClick={async () => {
+                                try {
+                                  await updateDoc(doc(db, 'resp_it_tickets', tick.id), {
+                                    status: 'resolved'
+                                  });
+                                  notifySuccess("Ticket marqué Résolu !");
+                                } catch (error) {
+                                  console.error("Error resolving IT ticket:", error);
+                                }
                               }}
-                              className="px-2 py-1 bg-white hover:bg-emerald-50 text-emerald-600 border rounded-lg text-[9px]"
+                              className="px-2 py-1 bg-white hover:bg-emerald-50 text-emerald-600 border rounded-lg text-[9px] cursor-pointer"
                             >
                               Marquer Résolu
                             </button>
@@ -1207,19 +1641,24 @@ export default function ResponsibilityZones() {
               {/* Form 1: Maternelle */}
               {activeRespId === 'responsable_maternelle' && (
                 <form 
-                  onSubmit={(e) => {
+                  onSubmit={async (e) => {
                     e.preventDefault();
                     if (!formKidName.trim()) return;
                     
-                    const newTransId = String(maternelleTransmissions.length + 1);
-                    setMaternelleTransmissions([
-                      ...maternelleTransmissions,
-                      { id: newTransId, kidName: formKidName, notes: formNotesText || 'Enfant calme et joyeux.', bottles: 2, date: 'À l\'instant' }
-                    ]);
-                    
-                    setFormKidName('');
-                    setFormNotesText('');
-                    notifySuccess("Note de transmission parents enregistrée !");
+                    try {
+                      await addDoc(collection(db, 'maternelle_transmissions'), {
+                        kidName: formKidName,
+                        notes: formNotesText || 'Enfant calme et joyeux.',
+                        bottles: 2,
+                        date: 'À l\'instant'
+                      });
+                      
+                      setFormKidName('');
+                      setFormNotesText('');
+                      notifySuccess("Note de transmission parents enregistrée !");
+                    } catch (error) {
+                      console.error("Error adding transmission:", error);
+                    }
                   }}
                   className="space-y-3 text-xs"
                 >
@@ -1257,18 +1696,22 @@ export default function ResponsibilityZones() {
               {/* Form 2: Primaire */}
               {activeRespId === 'responsable_primaire' && (
                 <form 
-                  onSubmit={(e) => {
+                  onSubmit={async (e) => {
                     e.preventDefault();
                     if (!formReadingName.trim()) return;
                     
-                    const nextId = String(readingProgress.length + 1);
-                    setReadingProgress([
-                      ...readingProgress,
-                      { id: nextId, name: formReadingName, booksRead: 0, goal: 8, rating: formReadingLevel }
-                    ]);
-                    
-                    setFormReadingName('');
-                    notifySuccess("Élève inscrit au Challenge Lecture !");
+                    try {
+                      await addDoc(collection(db, 'resp_reading_progress'), {
+                        name: formReadingName,
+                        booksRead: 0,
+                        goal: 8,
+                        rating: formReadingLevel
+                      });
+                      setFormReadingName('');
+                      notifySuccess("Élève inscrit au Challenge Lecture !");
+                    } catch (error) {
+                      console.error("Error adding reading progress:", error);
+                    }
                   }}
                   className="space-y-3 text-xs"
                 >
@@ -1298,7 +1741,7 @@ export default function ResponsibilityZones() {
 
                   <button 
                     type="submit"
-                    className="w-full py-2.5 bg-sky-600 hover:bg-sky-700 text-white rounded-xl font-black uppercase text-[10px] tracking-wider transition-all"
+                    className="w-full py-2.5 bg-sky-600 hover:bg-sky-700 text-white rounded-xl font-black uppercase text-[10px] tracking-wider transition-all cursor-pointer"
                   >
                     Inscrire au Challenge
                   </button>
@@ -1308,27 +1751,25 @@ export default function ResponsibilityZones() {
               {/* Form 3: College */}
               {activeRespId === 'responsable_college' && (
                 <form
-                  onSubmit={(e) => {
+                  onSubmit={async (e) => {
                     e.preventDefault();
                     if (!formDetStudent.trim() || !formDetReason.trim()) return;
 
-                    const newId = String(collegeDetentions.length + 1);
-                    setCollegeDetentions([
-                      ...collegeDetentions,
-                      {
-                        id: newId,
+                    try {
+                      await addDoc(collection(db, 'resp_college_detentions'), {
                         student: formDetStudent,
                         reason: formDetReason,
                         teacher: currentUser?.prenom || 'Direction',
                         date: '23 Mai 2026',
                         hour: '13h30 - 15h30',
                         proctor: formDetProctor
-                      }
-                    ]);
-
-                    setFormDetStudent('');
-                    setFormDetReason('');
-                    notifySuccess("Ordre de retenue officiellement émis !");
+                      });
+                      setFormDetStudent('');
+                      setFormDetReason('');
+                      notifySuccess("Ordre de retenue officiellement émis !");
+                    } catch (error) {
+                      console.error("Error adding college detention:", error);
+                    }
                   }}
                   className="space-y-3 text-xs"
                 >
@@ -1369,7 +1810,7 @@ export default function ResponsibilityZones() {
 
                   <button 
                     type="submit"
-                    className="w-full py-2.5 bg-indigo-655 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-black uppercase text-[10px] tracking-wider transition-all"
+                    className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-black uppercase text-[10px] tracking-wider transition-all cursor-pointer"
                   >
                     Générer et Imprimer
                   </button>
@@ -1379,26 +1820,24 @@ export default function ResponsibilityZones() {
               {/* Form 4: Comptabilité */}
               {activeRespId === 'gestionnaire_comptable' && (
                 <form 
-                  onSubmit={(e) => {
+                  onSubmit={async (e) => {
                     e.preventDefault();
                     if (!formLedgerDesc.trim() || !formLedgerPrice) return;
                     
-                    const nextId = String(accountingFlows.length + 1);
-                    setAccountingFlows([
-                      ...accountingFlows,
-                      {
-                        id: nextId,
+                    try {
+                      await addDoc(collection(db, 'resp_accounting_flows'), {
                         type: formLedgerType,
                         category: formLedgerCategory,
                         amount: Number(formLedgerPrice),
                         description: formLedgerDesc,
                         date: 'À l\'instant'
-                      }
-                    ]);
-                    
-                    setFormLedgerDesc('');
-                    setFormLedgerPrice('');
-                    notifySuccess("Ligne comptable consignée !");
+                      });
+                      setFormLedgerDesc('');
+                      setFormLedgerPrice('');
+                      notifySuccess("Ligne comptable consignée !");
+                    } catch (error) {
+                      console.error("Error adding accounting flow:", error);
+                    }
                   }}
                   className="space-y-3 text-xs"
                 >
@@ -1464,7 +1903,7 @@ export default function ResponsibilityZones() {
 
                   <button 
                     type="submit"
-                    className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-705 text-white rounded-xl font-black uppercase text-[10px]"
+                    className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-black uppercase text-[10px] cursor-pointer"
                   >
                     Valider Écriture Ledger
                   </button>
@@ -1474,24 +1913,22 @@ export default function ResponsibilityZones() {
               {/* Form 5: Pedagogique */}
               {activeRespId === 'responsable_pedagogique' && (
                 <form 
-                  onSubmit={(e) => {
+                  onSubmit={async (e) => {
                     e.preventDefault();
                     if (!formRemedialStudent.trim()) return;
 
-                    const nextId = String(remedialGroups.length + 1);
-                    setRemedialGroups([
-                      ...remedialGroups,
-                      {
-                        id: nextId,
+                    try {
+                      await addDoc(collection(db, 'resp_remedial_groups'), {
                         studentName: formRemedialStudent,
                         subject: formRemedialSubject,
                         level: formRemedialLevel,
                         date: 'Mercredi 14h30'
-                      }
-                    ]);
-
-                    setFormRemedialStudent('');
-                    notifySuccess("Élève inscrit au soutien scolaire !");
+                      });
+                      setFormRemedialStudent('');
+                      notifySuccess("Élève inscrit au soutien scolaire !");
+                    } catch (error) {
+                      console.error("Error adding remedial group:", error);
+                    }
                   }}
                   className="space-y-3 text-xs"
                 >
@@ -1521,7 +1958,7 @@ export default function ResponsibilityZones() {
 
                   <button 
                     type="submit"
-                    className="w-full py-2.5 bg-amber-600 text-white rounded-xl font-black text-[10px] uppercase"
+                    className="w-full py-2.5 bg-amber-600 text-white rounded-xl font-black text-[10px] uppercase cursor-pointer"
                   >
                     Ouvrir un groupe de soutien
                   </button>
@@ -1531,26 +1968,24 @@ export default function ResponsibilityZones() {
               {/* Form 6: Surveillant General */}
               {activeRespId === 'surveillant_general' && (
                 <form
-                  onSubmit={(e) => {
+                  onSubmit={async (e) => {
                     e.preventDefault();
                     if (!formLateName.trim() || !formLateReason.trim()) return;
 
-                    const nextId = String(lateSlips.length + 1);
-                    setLateSlips([
-                      ...lateSlips,
-                      {
-                        id: nextId,
+                    try {
+                      await addDoc(collection(db, 'resp_late_slips'), {
                         studentName: formLateName,
                         duration: Number(formLateDuration),
                         reason: formLateReason,
                         date: 'Aujourd\'hui',
                         hasTicket: true
-                      }
-                    ]);
-
-                    setFormLateName('');
-                    setFormLateReason('');
-                    notifySuccess("Billet de retard officiel généré !");
+                      });
+                      setFormLateName('');
+                      setFormLateReason('');
+                      notifySuccess("Billet de retard officiel généré !");
+                    } catch (error) {
+                      console.error("Error adding late slip:", error);
+                    }
                   }}
                   className="space-y-3 text-xs"
                 >
@@ -1591,7 +2026,7 @@ export default function ResponsibilityZones() {
 
                   <button 
                     type="submit"
-                    className="w-full py-2.5 bg-red-600 text-white rounded-xl font-black uppercase tracking-wider text-[10px] transition-all"
+                    className="w-full py-2.5 bg-red-600 text-white rounded-xl font-black uppercase tracking-wider text-[10px] transition-all cursor-pointer"
                   >
                     Émettre le Billet
                   </button>
@@ -1601,27 +2036,25 @@ export default function ResponsibilityZones() {
               {/* Form 7: Surveillant Adjoint */}
               {activeRespId === 'surveillant_adjoint' && (
                 <form
-                  onSubmit={(e) => {
+                  onSubmit={async (e) => {
                     e.preventDefault();
                     if (!formVisitorName.trim() || !formVisitorReason.trim()) return;
 
-                    const nextId = String(visitorsLog.length + 1);
-                    setVisitorsLog([
-                      ...visitorsLog,
-                      {
-                        id: nextId,
+                    try {
+                      await addDoc(collection(db, 'resp_visitors_log'), {
                         visitorName: formVisitorName,
                         reason: formVisitorReason,
                         targetPerson: formVisitorTarget || 'Direction',
                         entryTime: 'À l\'instant',
                         status: 'inside'
-                      }
-                    ]);
-
-                    setFormVisitorName('');
-                    setFormVisitorReason('');
-                    setFormVisitorTarget('');
-                    notifySuccess("Enregistrement du visiteur portail avec succès !");
+                      });
+                      setFormVisitorName('');
+                      setFormVisitorReason('');
+                      setFormVisitorTarget('');
+                      notifySuccess("Enregistrement du visiteur portail avec succès !");
+                    } catch (error) {
+                      console.error("Error adding visitor:", error);
+                    }
                   }}
                   className="space-y-3 text-xs"
                 >
@@ -1649,7 +2082,7 @@ export default function ResponsibilityZones() {
 
                   <button 
                     type="submit"
-                    className="w-full py-2.5 bg-orange-600 hover:bg-orange-705 text-white rounded-xl font-black text-[10px] uppercase"
+                    className="w-full py-2.5 bg-orange-600 hover:bg-orange-700 text-white rounded-xl font-black text-[10px] uppercase cursor-pointer"
                   >
                     Ouvrir Accès Barrière
                   </button>
@@ -1662,10 +2095,20 @@ export default function ResponsibilityZones() {
                   <p className="text-xs font-bold text-teal-700">Audit de salubrité</p>
                   <p className="text-[10px] text-gray-450 mt-1">Vous pouvez réclamer du matériel ou déclarer un dysfonctionnement de plomberie directement au service IT / Administrative de l'école.</p>
                   <button
-                    onClick={() => {
-                      notifySuccess("Alerte plomberie transmise de manière prévenante !");
+                    onClick={async () => {
+                      try {
+                        await addDoc(collection(db, 'resp_it_tickets'), {
+                          item: 'Incident Plomberie (Sanitaires ou blocs)',
+                          description: 'Dysfonctionnement de plomberie signalé par la Dame de Ménage.',
+                          severity: 'minor',
+                          status: 'open'
+                        });
+                        notifySuccess("Alerte plomberie transmise de manière prévenante !");
+                      } catch (error) {
+                        console.error("Error declaring plomberie incident:", error);
+                      }
                     }}
-                    className="w-full mt-3 py-2 bg-teal-600 text-white rounded-xl font-black text-[10px] uppercase"
+                    className="w-full mt-3 py-2 bg-teal-600 text-white rounded-xl font-black text-[10px] uppercase cursor-pointer"
                   >
                     Déclarer un Incident Plomberie
                   </button>
@@ -1675,19 +2118,23 @@ export default function ResponsibilityZones() {
               {/* Form 9: Secretaire Generale */}
               {activeRespId === 'secretaire_generale' && (
                 <form 
-                  onSubmit={(e) => {
+                  onSubmit={async (e) => {
                     e.preventDefault();
                     if (!formDocName.trim() || !formDocOrigin.trim()) return;
 
-                    const nextId = String(dossiers.length + 1);
-                    setDossiers([
-                      ...dossiers,
-                      { id: nextId, name: formDocName, level: formDocLevel, originSchool: formDocOrigin, status: 'pending' }
-                    ]);
-
-                    setFormDocName('');
-                    setFormDocOrigin('');
-                    notifySuccess("Candidature encodée sur le registre !");
+                    try {
+                      await addDoc(collection(db, 'resp_dossiers'), {
+                        name: formDocName,
+                        level: formDocLevel,
+                        originSchool: formDocOrigin,
+                        status: 'pending'
+                      });
+                      setFormDocName('');
+                      setFormDocOrigin('');
+                      notifySuccess("Candidature encodée sur le registre !");
+                    } catch (error) {
+                      console.error("Error adding dossier:", error);
+                    }
                   }}
                   className="space-y-3 text-xs"
                 >
@@ -1715,7 +2162,7 @@ export default function ResponsibilityZones() {
 
                   <button 
                     type="submit"
-                    className="w-full py-2.5 bg-purple-600 text-white rounded-xl font-black text-[10px] uppercase"
+                    className="w-full py-2.5 bg-purple-600 text-white rounded-xl font-black text-[10px] uppercase cursor-pointer"
                   >
                     Enregistrer Candidature
                   </button>
@@ -1725,20 +2172,24 @@ export default function ResponsibilityZones() {
               {/* Form 10: Secretaire Adjointe */}
               {activeRespId === 'secretaire_adjointe' && (
                 <form 
-                  onSubmit={(e) => {
+                  onSubmit={async (e) => {
                     e.preventDefault();
                     if (!formCallCaller.trim() || !formCallMsg.trim()) return;
 
-                    const nextId = String(phoneCalls.length + 1);
-                    setPhoneCalls([
-                      ...phoneCalls,
-                      { id: nextId, caller: formCallCaller, message: formCallMsg, targetStudent: formCallStudent || 'Néant', status: 'noted' }
-                    ]);
-
-                    setFormCallCaller('');
-                    setFormCallMsg('');
-                    setFormCallStudent('');
-                    notifySuccess("Message téléphonique consigné !");
+                    try {
+                      await addDoc(collection(db, 'resp_phone_calls'), {
+                        caller: formCallCaller,
+                        message: formCallMsg,
+                        targetStudent: formCallStudent || 'Néant',
+                        status: 'noted'
+                      });
+                      setFormCallCaller('');
+                      setFormCallMsg('');
+                      setFormCallStudent('');
+                      notifySuccess("Message téléphonique consigné !");
+                    } catch (error) {
+                      console.error("Error adding phone call:", error);
+                    }
                   }}
                   className="space-y-3 text-xs"
                 >
@@ -1766,7 +2217,7 @@ export default function ResponsibilityZones() {
 
                   <button 
                     type="submit"
-                    className="w-full py-2.5 bg-fuchsia-600 text-white rounded-xl font-black text-[10px] uppercase"
+                    className="w-full py-2.5 bg-fuchsia-600 text-white rounded-xl font-black text-[10px] uppercase cursor-pointer"
                   >
                     Consigner Appel
                   </button>
@@ -1776,25 +2227,23 @@ export default function ResponsibilityZones() {
               {/* Form 11: IT Material */}
               {activeRespId === 'responsable_it' && (
                 <form 
-                  onSubmit={(e) => {
+                  onSubmit={async (e) => {
                     e.preventDefault();
                     if (!formITItem.trim() || !formITDesc.trim()) return;
 
-                    const nextId = String(itTickets.length + 1);
-                    setItTickets([
-                      ...itTickets,
-                      {
-                        id: nextId,
+                    try {
+                      await addDoc(collection(db, 'resp_it_tickets'), {
                         item: formITItem,
                         description: formITDesc,
                         severity: formITSeverity,
                         status: 'open'
-                      }
-                    ]);
-
-                    setFormITItem('');
-                    setFormITDesc('');
-                    notifySuccess("Incident informatique consigné !");
+                      });
+                      setFormITItem('');
+                      setFormITDesc('');
+                      notifySuccess("Incident informatique consigné !");
+                    } catch (error) {
+                      console.error("Error adding IT ticket:", error);
+                    }
                   }}
                   className="space-y-3 text-xs"
                 >
@@ -1834,7 +2283,7 @@ export default function ResponsibilityZones() {
 
                   <button 
                     type="submit"
-                    className="w-full py-2.5 bg-cyan-600 text-white rounded-xl font-black uppercase text-[10px] tracking-wider transition-all"
+                    className="w-full py-2.5 bg-cyan-600 text-white rounded-xl font-black uppercase text-[10px] tracking-wider transition-all cursor-pointer"
                   >
                     Créer Incident Ticket
                   </button>

@@ -282,5 +282,113 @@ service cloud.firestore {
       allow read: if isAuthenticated() && (isAdmin() || isTeacher() || isStaff());
       allow write: if isAuthenticated() && (isAdmin() || isStaff());
     }
+
+    // Maternelle siestas (sleep records)
+    match /maternelle_siestas/{siestaId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && (isAdmin() || isTeacher() || isStaff());
+    }
+
+    // Maternelle transmissions (news/reports feed)
+    match /maternelle_transmissions/{transmissionId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && (isAdmin() || isTeacher() || isStaff());
+    }
+
+    // Reading progress tracking (Primary challenge)
+    match /resp_reading_progress/{rpId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && (isAdmin() || isTeacher() || isStaff());
+    }
+
+    // Authorized field trips
+    match /resp_field_trips/{ftId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && (isAdmin() || isTeacher() || isStaff());
+    }
+
+    // College detentions
+    match /resp_college_detentions/{detId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && (isAdmin() || isTeacher() || isStaff());
+    }
+
+    // Brevet preparation chapters
+    match /resp_brevet_chapters/{chId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && (isAdmin() || isTeacher() || isStaff());
+    }
+
+    // Comptabilité auxiliary ledger flows
+    match /resp_accounting_flows/{flowId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && (isAdmin() || isTeacher() || isStaff());
+    }
+
+    // Pédagogique remedial classes roster
+    match /resp_remedial_groups/{remId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && (isAdmin() || isTeacher() || isStaff());
+    }
+
+    // Syllabus rates tracking
+    match /resp_syllabus_rates/{rateId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && (isAdmin() || isTeacher() || isStaff());
+    }
+
+    // Discipline retard tickets
+    match /resp_late_slips/{slipId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && (isAdmin() || isTeacher() || isStaff());
+    }
+
+    // Accès gates registry
+    match /resp_visitors_log/{visitorId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && (isAdmin() || isTeacher() || isStaff());
+    }
+
+    // Locker key loans
+    match /resp_locker_keys/{keyId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && (isAdmin() || isTeacher() || isStaff());
+    }
+
+    // Salubrité checklist
+    match /resp_clean_zones/{zoneId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && (isAdmin() || isTeacher() || isStaff());
+    }
+
+    // Cleaning supply stock status
+    match /resp_cleaning_supplies/{supId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && (isAdmin() || isTeacher() || isStaff());
+    }
+
+    // Candidate dossiers
+    match /resp_dossiers/{dosId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && (isAdmin() || isTeacher() || isStaff());
+    }
+
+    // Phone calls logs
+    match /resp_phone_calls/{callId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && (isAdmin() || isTeacher() || isStaff());
+    }
+
+    // Tablet cart loans
+    match /resp_it_loans/{loanId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && (isAdmin() || isTeacher() || isStaff());
+    }
+
+    // IT defect tickets
+    match /resp_it_tickets/{ticketId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && (isAdmin() || isTeacher() || isStaff());
+    }
   }
 }

@@ -206,6 +206,222 @@
         "mission": { "type": "string" },
         "lastUpdated": { "type": "string", "format": "date-time" }
       }
+    },
+    "maternelle_siestas": {
+      "title": "Maternelle Siestas",
+      "description": "Real-time sleep and rest monitoring for kindergarten children",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "classroom": { "type": "string" },
+        "status": { "type": "string", "enum": ["awake", "resting", "sleeping"] }
+      },
+      "required": ["name", "classroom", "status"]
+    },
+    "maternelle_transmissions": {
+      "title": "Maternelle Transmissions",
+      "description": "Daily notes and reports shared with kindergarten parents",
+      "type": "object",
+      "properties": {
+        "kidName": { "type": "string" },
+        "notes": { "type": "string" },
+        "bottles": { "type": "number" },
+        "date": { "type": "string" }
+      },
+      "required": ["kidName", "notes", "bottles", "date"]
+    },
+    "resp_reading_progress": {
+      "title": "Responsibility - Reading Progress",
+      "description": "Progress entries for primary school reading challenge",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "booksRead": { "type": "number" },
+        "goal": { "type": "number" },
+        "rating": { "type": "string" }
+      },
+      "required": ["name", "booksRead", "goal", "rating"]
+    },
+    "resp_field_trips": {
+      "title": "Responsibility - Primary Field Trips",
+      "description": "Educational outing authorization logs",
+      "type": "object",
+      "properties": {
+        "destination": { "type": "string" },
+        "date": { "type": "string" },
+        "status": { "type": "string", "enum": ["approved", "pending", "rejected"] }
+      },
+      "required": ["destination", "date", "status"]
+    },
+    "resp_college_detentions": {
+      "title": "Responsibility - College Detentions",
+      "description": "After-school or weekend detention logs for college students",
+      "type": "object",
+      "properties": {
+        "student": { "type": "string" },
+        "reason": { "type": "string" },
+        "teacher": { "type": "string" },
+        "date": { "type": "string" },
+        "hour": { "type": "string" },
+        "proctor": { "type": "string" }
+      },
+      "required": ["student", "reason", "teacher", "date", "hour", "proctor"]
+    },
+    "resp_brevet_chapters": {
+      "title": "Responsibility - Brevet Chapters Progress",
+      "description": "National exam preparation program checkpoints",
+      "type": "object",
+      "properties": {
+        "subject": { "type": "string" },
+        "topic": { "type": "string" },
+        "status": { "type": "string", "enum": ["ready", "pending"] }
+      },
+      "required": ["subject", "topic", "status"]
+    },
+    "resp_accounting_flows": {
+      "title": "Responsibility - Accounting Flows",
+      "description": "Daily real-time financial ledger receipts and expenses",
+      "type": "object",
+      "properties": {
+        "type": { "type": "string", "enum": ["inflow", "outflow"] },
+        "category": { "type": "string" },
+        "amount": { "type": "number" },
+        "description": { "type": "string" },
+        "date": { "type": "string" }
+      },
+      "required": ["type", "category", "amount", "description", "date"]
+    },
+    "resp_remedial_groups": {
+      "title": "Responsibility - Remedial Groups",
+      "description": "Syllabus remedial teaching and tutorial groups",
+      "type": "object",
+      "properties": {
+        "studentName": { "type": "string" },
+        "subject": { "type": "string" },
+        "level": { "type": "string" },
+        "date": { "type": "string" }
+      },
+      "required": ["studentName", "subject", "level", "date"]
+    },
+    "resp_syllabus_rates": {
+      "title": "Responsibility - Syllabus Rates",
+      "description": "Progress rates for academic syllabi completion",
+      "type": "object",
+      "properties": {
+        "course": { "type": "string" },
+        "teacher": { "type": "string" },
+        "rate": { "type": "number" }
+      },
+      "required": ["course", "teacher", "rate"]
+    },
+    "resp_late_slips": {
+      "title": "Responsibility - Late Slips",
+      "description": "Late arriving students tickets and delay parameters",
+      "type": "object",
+      "properties": {
+        "studentName": { "type": "string" },
+        "duration": { "type": "number" },
+        "reason": { "type": "string" },
+        "date": { "type": "string" },
+        "hasTicket": { "type": "boolean" }
+      },
+      "required": ["studentName", "duration", "reason", "date", "hasTicket"]
+    },
+    "resp_visitors_log": {
+      "title": "Responsibility - Visitors Log",
+      "description": "Gate registry for visitors and access logging",
+      "type": "object",
+      "properties": {
+        "visitorName": { "type": "string" },
+        "reason": { "type": "string" },
+        "targetPerson": { "type": "string" },
+        "entryTime": { "type": "string" },
+        "status": { "type": "string", "enum": ["inside", "left"] }
+      },
+      "required": ["visitorName", "reason", "targetPerson", "entryTime", "status"]
+    },
+    "resp_locker_keys": {
+      "title": "Responsibility - Locker Keys Consignation",
+      "description": "Locker key loans log for student lockers",
+      "type": "object",
+      "properties": {
+        "lockerNo": { "type": "string" },
+        "student": { "type": "string" },
+        "date": { "type": "string" },
+        "returned": { "type": "boolean" }
+      },
+      "required": ["lockerNo", "student", "date", "returned"]
+    },
+    "resp_clean_zones": {
+      "title": "Responsibility - Clean Zones",
+      "description": "Janitorial plan and hygiene checklist",
+      "type": "object",
+      "properties": {
+        "zone": { "type": "string" },
+        "frequency": { "type": "string" },
+        "lastCleaned": { "type": "string" },
+        "status": { "type": "string", "enum": ["cleaned", "pending"] }
+      },
+      "required": ["zone", "frequency", "lastCleaned", "status"]
+    },
+    "resp_cleaning_supplies": {
+      "title": "Responsibility - Cleaning Supplies",
+      "description": "Cleaning supply stock levels and reordering signals",
+      "type": "object",
+      "properties": {
+        "item": { "type": "string" },
+        "stock": { "type": "number" },
+        "limit": { "type": "number" }
+      },
+      "required": ["item", "stock", "limit"]
+    },
+    "resp_dossiers": {
+      "title": "Responsibility - Candidate Dossiers",
+      "description": "Candidate registrations and new student enrollments tracking",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "level": { "type": "string" },
+        "originSchool": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "accepted", "rejected"] }
+      },
+      "required": ["name", "level", "originSchool", "status"]
+    },
+    "resp_phone_calls": {
+      "title": "Responsibility - Phone Calls Log",
+      "description": "Adjoint secretariat telephone message logs",
+      "type": "object",
+      "properties": {
+        "caller": { "type": "string" },
+        "message": { "type": "string" },
+        "targetStudent": { "type": "string" },
+        "status": { "type": "string", "enum": ["noted", "relayed"] }
+      },
+      "required": ["caller", "message", "targetStudent", "status"]
+    },
+    "resp_it_loans": {
+      "title": "Responsibility - IT Resource Loans",
+      "description": "IT tablet carts, laptop or projector schoolroom rentals",
+      "type": "object",
+      "properties": {
+        "cartId": { "type": "string" },
+        "classTarget": { "type": "string" },
+        "duration": { "type": "string" },
+        "status": { "type": "string", "enum": ["borrowed", "returned"] }
+      },
+      "required": ["cartId", "classTarget", "duration", "status"]
+    },
+    "resp_it_tickets": {
+      "title": "Responsibility - IT Support Tickets",
+      "description": "IT infrastructure defects, outages and status",
+      "type": "object",
+      "properties": {
+        "item": { "type": "string" },
+        "description": { "type": "string" },
+        "severity": { "type": "string", "enum": ["minor", "critical"] },
+        "status": { "type": "string", "enum": ["open", "investigating", "resolved"] }
+      },
+      "required": ["item", "description", "severity", "status"]
     }
   },
   "firestore": {
@@ -221,6 +437,24 @@
     "/user_sessions/{sessionId}": { "schema": "user_sessions", "description": "Real-time user sessions" },
     "/teacher_planning/{planId}": { "schema": "teacher_planning", "description": "Daily planning for teachers" },
     "/strategic_optimizations/{optId}": { "schema": "strategic_optimizations", "description": "AI-guided optimizations list and structural logs." },
-    "/role_responsibilities/{respId}": { "schema": "role_responsibilities", "description": "Custom roles access and missions." }
+    "/role_responsibilities/{respId}": { "schema": "role_responsibilities", "description": "Custom roles access and missions." },
+    "/maternelle_siestas/{siestaId}": { "schema": "maternelle_siestas", "description": "Real-time sleep logs for toddlers." },
+    "/maternelle_transmissions/{transmissionId}": { "schema": "maternelle_transmissions", "description": "Liaison notes and daily transmissions for nursery parents." },
+    "/resp_reading_progress/{rpId}": { "schema": "resp_reading_progress", "description": "Reading progress tracking for primary challenge." },
+    "/resp_field_trips/{ftId}": { "schema": "resp_field_trips", "description": "Authorized field trips records." },
+    "/resp_college_detentions/{detId}": { "schema": "resp_college_detentions", "description": "College detentions log." },
+    "/resp_brevet_chapters/{chId}": { "schema": "resp_brevet_chapters", "description": "Brevet preparation chapters." },
+    "/resp_accounting_flows/{flowId}": { "schema": "resp_accounting_flows", "description": "Comptabilité auxiliary real-time ledger entries." },
+    "/resp_remedial_groups/{remId}": { "schema": "resp_remedial_groups", "description": "Pédagogique remedial classes roster." },
+    "/resp_syllabus_rates/{rateId}": { "schema": "resp_syllabus_rates", "description": "Syllabus rates tracking." },
+    "/resp_late_slips/{slipId}": { "schema": "resp_late_slips", "description": "Discipline retard tickets." },
+    "/resp_visitors_log/{visitorId}": { "schema": "resp_visitors_log", "description": "Accès registry." },
+    "/resp_locker_keys/{keyId}": { "schema": "resp_locker_keys", "description": "Key loans." },
+    "/resp_clean_zones/{zoneId}": { "schema": "resp_clean_zones", "description": "Salubrité checklist." },
+    "/resp_cleaning_supplies/{supId}": { "schema": "resp_cleaning_supplies", "description": "Cleaning supply stock status." },
+    "/resp_dossiers/{dosId}": { "schema": "resp_dossiers", "description": "Candidate files." },
+    "/resp_phone_calls/{callId}": { "schema": "resp_phone_calls", "description": "Phone call receipts." },
+    "/resp_it_loans/{loanId}": { "schema": "resp_it_loans", "description": "Tablet cart loans." },
+    "/resp_it_tickets/{ticketId}": { "schema": "resp_it_tickets", "description": "IT defect tickets." }
   }
 }
