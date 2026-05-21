@@ -178,6 +178,34 @@
         "subject": { "type": "string" },
         "createdAt": { "type": "string", "format": "date-time" }
       }
+    },
+    "strategic_optimizations": {
+      "title": "Strategic Optimizations",
+      "description": "Historical real-time optimization logs to store system corrections.",
+      "type": "object",
+      "properties": {
+        "timestamp": { "type": "string", "format": "date-time" },
+        "expiresAt": { "type": "string", "format": "date-time" },
+        "optimizedBy": { "type": "object" },
+        "recommendationText": { "type": "string" },
+        "actionsOptimized": { "type": "array", "items": { "type": "string" } },
+        "schoolStats": { "type": "object" }
+      }
+    },
+    "role_responsibilities": {
+      "title": "Role Responsibilities",
+      "description": "Page permissions, roles and tasks.",
+      "type": "object",
+      "properties": {
+        "pageId": { "type": "string" },
+        "pageLabel": { "type": "string" },
+        "role": { "type": "string" },
+        "canView": { "type": "boolean" },
+        "canEdit": { "type": "boolean" },
+        "canDelete": { "type": "boolean" },
+        "mission": { "type": "string" },
+        "lastUpdated": { "type": "string", "format": "date-time" }
+      }
     }
   },
   "firestore": {
@@ -191,6 +219,8 @@
     "/preparations/{prepId}": { "schema": "preparations", "description": "Lesson plans and courses" },
     "/notifications/{notifId}": { "schema": "notifications", "description": "User notifications" },
     "/user_sessions/{sessionId}": { "schema": "user_sessions", "description": "Real-time user sessions" },
-    "/teacher_planning/{planId}": { "schema": "teacher_planning", "description": "Daily planning for teachers" }
+    "/teacher_planning/{planId}": { "schema": "teacher_planning", "description": "Daily planning for teachers" },
+    "/strategic_optimizations/{optId}": { "schema": "strategic_optimizations", "description": "AI-guided optimizations list and structural logs." },
+    "/role_responsibilities/{respId}": { "schema": "role_responsibilities", "description": "Custom roles access and missions." }
   }
 }

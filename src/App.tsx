@@ -38,11 +38,13 @@ import Clubs from './pages/Clubs';
 import LudoAIPlus from './pages/LudoAIPlus';
 import TermsAndConditions from './pages/TermsAndConditions';
 import Staff from './pages/Staff';
+import ResponsibilityZones from './pages/ResponsibilityZones';
 import Library from './pages/Library';
 import Canteen from './pages/Canteen';
 import CanteenDashboard from './pages/CanteenDashboard';
 import Surveys from './pages/Surveys';
 import DocumentGenerator from './pages/DocumentGenerator';
+import StrategicOptimizations from './pages/StrategicOptimizations';
 import { runMaintenance } from './services/MaintenanceService';
 import { isFirebaseConfigured } from './lib/firebase';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
@@ -196,7 +198,9 @@ function AppContent() {
       case 'recent_connections': 
         return role === 'admin' ? <RecentConnections /> : <Dashboard onNavigate={handleNavigate} />;
       case 'staff':
-        return ['admin', 'personnel administratif'].includes(role) ? <Staff /> : <Dashboard onNavigate={handleNavigate} />;
+        return ['admin', 'personnel administratif', 'enseignant'].includes(role) ? <Staff /> : <Dashboard onNavigate={handleNavigate} />;
+      case 'responsibility_zones':
+        return ['admin', 'personnel administratif', 'enseignant'].includes(role) ? <ResponsibilityZones /> : <Dashboard onNavigate={handleNavigate} />;
       case 'library':
         return <Library />;
       case 'canteen':
@@ -205,6 +209,8 @@ function AppContent() {
         return <Surveys />;
       case 'document_generator':
         return ['admin', 'personnel administratif'].includes(role) ? <DocumentGenerator /> : <Dashboard onNavigate={handleNavigate} />;
+      case 'strategic_optimizations':
+        return ['admin', 'enseignant'].includes(role) ? <StrategicOptimizations /> : <Dashboard onNavigate={handleNavigate} />;
       case 'profile': return <Profile />;
       case 'about': return <About />;
       case 'terms': return <TermsAndConditions />;

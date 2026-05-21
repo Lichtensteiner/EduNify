@@ -15,6 +15,7 @@ export interface User {
   prenom: string;
   email: string;
   role: 'admin' | 'enseignant' | 'élève' | 'personnel administratif' | 'parent' | 'cuisinier';
+  responsibilities?: string[];
   children_ids?: string[];
   classe?: string;
   classes?: string[];

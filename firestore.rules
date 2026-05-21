@@ -271,5 +271,16 @@ service cloud.firestore {
       allow create: if isTeacher() && incoming().teacherId == request.auth.uid;
       allow update, delete: if isTeacher() && (existing().teacherId == request.auth.uid);
     }
+
+    // Strategic Optimizations Collection
+    match /strategic_optimizations/{optId} {
+      allow read, write: if isAuthenticated() && (isAdmin() || isTeacher());
+    }
+
+    // Role Responsibilities & Page Access Configuration Collection
+    match /role_responsibilities/{respId} {
+      allow read: if isAuthenticated() && (isAdmin() || isTeacher() || isStaff());
+      allow write: if isAuthenticated() && (isAdmin() || isStaff());
+    }
   }
 }

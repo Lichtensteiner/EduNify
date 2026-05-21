@@ -22,7 +22,11 @@ import {
   ListTodo,
   Plus,
   X,
-  Settings as SettingsIcon
+  Settings as SettingsIcon,
+  Download,
+  Trash2,
+  History,
+  FileJson
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { 
@@ -40,7 +44,7 @@ import {
   Pie, 
   Cell 
 } from 'recharts';
-import { collection, getDocs, query, where, onSnapshot, limit, orderBy, updateDoc, doc, serverTimestamp, addDoc, Timestamp } from 'firebase/firestore';
+import { collection, getDocs, query, where, onSnapshot, limit, orderBy, updateDoc, doc, serverTimestamp, addDoc, Timestamp, deleteDoc, writeBatch } from 'firebase/firestore';
 import { db, isFirebaseConfigured, handleFirestoreError, OperationType } from '../lib/firebase';
 import LiveClock from '../components/LiveClock';
 import { useAuth } from '../contexts/AuthContext';
@@ -91,7 +95,143 @@ const AdminDashboard = ({ stats, weeklyData, studentLevelData, userDistribution,
 
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [isOptimizeOpen, setIsOptimizeOpen] = useState(false);
+  const [detailTab, setDetailTab] = useState<'analysis' | 'file'>('analysis');
   const [teacherPlanning, setTeacherPlanning] = useState<any[]>([]);
+
+  // File-like storage for strategic recommendations optimizations with 48h expiration (Synchronized in real-time with Firestore)
+  const [optimizationsFile, setOptimizationsFile] = useState<{
+    fileName: string;
+    lastUpdated: string;
+    entries: any[];
+  }>({
+    fileName: "strategic_optimizations.json",
+    lastUpdated: new Date().toISOString(),
+    entries: []
+  });
+
+  // Setup real-time Firestore subscriber and handle clean up of aged-out values
+  useEffect(() => {
+    if (!isFirebaseConfigured) return;
+
+    const q = query(
+      collection(db, 'strategic_optimizations'),
+      orderBy('timestamp', 'desc')
+    );
+
+    const unsubscribe = onSnapshot(q, async (snap) => {
+      const rawEntries = snap.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      } as any));
+
+      const now = Date.now();
+      const expiredDocs: any[] = [];
+      const activeEntries: any[] = [];
+
+      rawEntries.forEach(entry => {
+        const expiresTime = new Date(entry.expiresAt).getTime();
+        if (now >= expiresTime) {
+          expiredDocs.push(entry);
+        } else {
+          activeEntries.push(entry);
+        }
+      });
+
+      // Purge old values from database asynchronously
+      if (expiredDocs.length > 0) {
+        try {
+          const batch = writeBatch(db);
+          expiredDocs.forEach(d => {
+            batch.delete(doc(db, 'strategic_optimizations', d.id));
+          });
+          await batch.commit();
+        } catch (err) {
+          console.error("Purge auto échec:", err);
+        }
+      }
+
+      setOptimizationsFile({
+        fileName: "strategic_optimizations.json",
+        lastUpdated: new Date().toISOString(),
+        entries: activeEntries
+      });
+    }, (error) => {
+      console.error("Erreur direct firestore optimizations:", error);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  const downloadJSONFile = () => {
+    if (optimizationsFile.entries.length === 0) return;
+    const jsonString = `data:text/json;charset=utf-8,${encodeURIComponent(
+      JSON.stringify(optimizationsFile, null, 2)
+    )}`;
+    const downloadAnchor = document.createElement('a');
+    downloadAnchor.setAttribute("href", jsonString);
+    downloadAnchor.setAttribute("download", optimizationsFile.fileName);
+    document.body.appendChild(downloadAnchor);
+    downloadAnchor.click();
+    downloadAnchor.remove();
+  };
+
+  const clearOptimizationsFile = async () => {
+    if (optimizationsFile.entries.length === 0) return;
+    if (!window.confirm("Voulez-vous vider tous les enregistrements d'optimisation en temps réel de Firestore ?")) {
+      return;
+    }
+
+    try {
+      const q = query(collection(db, 'strategic_optimizations'));
+      const snap = await getDocs(q);
+      const batch = writeBatch(db);
+      snap.docs.forEach((d) => {
+        batch.delete(doc(db, d.ref.path));
+      });
+      await batch.commit();
+      setOptimizationsFile(prev => ({ ...prev, entries: [] }));
+    } catch (error) {
+      console.error(error);
+      handleFirestoreError(error, OperationType.DELETE, 'strategic_optimizations');
+    }
+  };
+
+  const handleLaunchOptimization = async () => {
+    const textToSave = recommendation?.text || "Vos indicateurs montrent une corrélation forte entre la ponctualité matinale et les taux de réussite. Envisagez un programme d'encouragement ciblé.";
+    const now = new Date();
+    const newEntry = {
+      timestamp: now.toISOString(),
+      expiresAt: new Date(now.getTime() + 48 * 60 * 60 * 1000).toISOString(),
+      optimizedBy: {
+        id: currentUser?.id || 'unknown',
+        name: `${currentUser?.prenom || ''} ${currentUser?.nom || t('user')}`.trim(),
+        role: currentUser?.role || 'admin'
+      },
+      recommendationText: textToSave,
+      actionsOptimized: [
+        "Générer automatiquement des convocations pour les élèves à risque de décrochage",
+        "Ajuster les seuils de notifications pour les responsables légaux"
+      ],
+      schoolStats: {
+        presents: stats?.presents || 0,
+        absents: stats?.absents || 0,
+        retards: stats?.retards || 0,
+        total: stats?.total || 0
+      }
+    };
+
+    if (isFirebaseConfigured) {
+      try {
+        await addDoc(collection(db, 'strategic_optimizations'), newEntry);
+      } catch (error) {
+        console.error("Erreur lors de la persistance Firestore:", error);
+        handleFirestoreError(error, OperationType.CREATE, 'strategic_optimizations');
+      }
+    }
+
+    notifyOptimize();
+    setIsOptimizeOpen(false);
+  };
 
   useEffect(() => {
     if (!currentUser || (currentUser.role !== 'admin' && currentUser.role !== 'personnel administratif')) return;
@@ -131,30 +271,136 @@ const AdminDashboard = ({ stats, weeklyData, studentLevelData, userDistribution,
                 <div className="p-3 bg-indigo-50 dark:bg-indigo-900/50 rounded-2xl text-indigo-600 dark:text-indigo-400">
                   <Activity size={32} />
                 </div>
-                <button onClick={() => setIsDetailOpen(false)} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-xl transition-colors">
+                <button onClick={() => { setIsDetailOpen(false); setDetailTab('analysis'); }} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-xl transition-colors">
                   <X size={24} className="text-gray-400" />
                 </button>
               </div>
-              <h3 className="text-2xl font-black text-gray-900 dark:text-white mb-4">{t('admin_analysis_details')}</h3>
-              <div className="space-y-4 text-gray-600 dark:text-gray-400 leading-relaxed font-medium">
-                <p>
-                  {t('admin_insights_desc')}
-                </p>
-                <div className="p-4 bg-gray-50 dark:bg-gray-900/50 rounded-2xl border border-gray-100 dark:border-gray-800">
-                  <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-2">{t('data_sources')}</h4>
-                  <ul className="text-xs space-y-2 list-disc list-inside">
-                    <li>Historique d'assiduité (Journalier/Hebdomadaire)</li>
-                    <li>Évolution des points de maisons (Performance comportementale)</li>
-                    <li>Taux de ponctualité par classe et par heure</li>
-                  </ul>
-                </div>
-                <p className="text-sm">
-                  Le bouton <strong>Détails</strong> permet d'accéder au rapport complet généré par l'IA, décomposant chaque variable influençant la recommandation actuelle.
-                </p>
+
+              {/* Tab Navigation */}
+              <div className="flex border-b border-gray-100 dark:border-gray-700 mb-6">
+                <button
+                  type="button"
+                  onClick={() => setDetailTab('analysis')}
+                  className={`flex-1 pb-3 text-sm font-black uppercase tracking-wider transition-colors border-b-2 ${
+                    detailTab === 'analysis'
+                      ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400 font-black'
+                      : 'border-transparent text-gray-450 hover:text-gray-600 dark:text-gray-400 dark:hover:text-gray-300 font-medium'
+                  }`}
+                >
+                  Analyse IA
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDetailTab('file')}
+                  className={`flex-1 pb-3 text-sm font-black uppercase tracking-wider transition-colors border-b-2 flex items-center justify-center gap-1.5 ${
+                    detailTab === 'file'
+                      ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400 font-black'
+                      : 'border-transparent text-gray-450 hover:text-gray-600 dark:text-gray-400 dark:hover:text-gray-300 font-medium'
+                  }`}
+                >
+                  <FileJson size={15} />
+                  Journal JSON ({optimizationsFile.entries.length})
+                </button>
               </div>
+
+              <h3 className="text-2xl font-black text-gray-900 dark:text-white mb-4">
+                {detailTab === 'analysis' ? t('admin_analysis_details') : 'Fichier de Stockage'}
+              </h3>
+
+              {detailTab === 'analysis' ? (
+                <div className="space-y-4 text-gray-600 dark:text-gray-400 leading-relaxed font-medium">
+                  <p>
+                    {t('admin_insights_desc')}
+                  </p>
+                  <div className="p-4 bg-gray-50 dark:bg-gray-900/50 rounded-2xl border border-gray-100 dark:border-gray-800">
+                    <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-2">{t('data_sources')}</h4>
+                    <ul className="text-xs space-y-2 list-disc list-inside">
+                      <li>Historique d'assiduité (Journalier/Hebdomadaire)</li>
+                      <li>Évolution des points de maisons (Performance comportementale)</li>
+                      <li>Taux de ponctualité par classe et par heure</li>
+                    </ul>
+                  </div>
+                  <p className="text-sm">
+                    Le bouton <strong>Détails</strong> permet d'accéder au rapport complet généré par l'IA, décomposant chaque variable influençant la recommandation actuelle.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div className="p-4 rounded-2xl bg-indigo-50/50 dark:bg-indigo-950/20 border border-indigo-100/50 dark:border-indigo-900/40">
+                    <div className="flex justify-between items-center mb-2">
+                      <span className="text-xs font-mono text-indigo-600 dark:text-indigo-400 flex items-center gap-1.5 font-bold">
+                        <FileJson size={14} /> {optimizationsFile.fileName}
+                      </span>
+                      <span className="text-[10px] bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 px-2.5 py-0.5 rounded-full font-black uppercase tracking-widest">
+                        Actif 48H
+                      </span>
+                    </div>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
+                      Chaque optimisation est enregistrée dans un fichier structuré. Les optimisations <strong>disparaissent automatiquement après 48h</strong>.
+                    </p>
+                  </div>
+
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={downloadJSONFile}
+                      disabled={optimizationsFile.entries.length === 0}
+                      className="flex-1 py-2.5 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/40 dark:hover:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 rounded-xl font-bold text-xs transition-colors flex items-center justify-center gap-2 border border-indigo-100/50 dark:border-indigo-900/40 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                    >
+                      <Download size={14} /> Télécharger (.json)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={clearOptimizationsFile}
+                      disabled={optimizationsFile.entries.length === 0}
+                      className="py-2.5 px-3 bg-red-50 hover:bg-red-100 dark:bg-red-950/30 dark:hover:bg-red-900/30 text-red-600 dark:text-red-400 rounded-xl font-bold text-xs transition-colors flex items-center justify-center gap-2 border border-red-100/50 dark:border-red-900/30 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                      title="Vider le fichier de logs"
+                    >
+                      <Trash2 size={14} /> Vider
+                    </button>
+                  </div>
+
+                  <div className="max-h-56 overflow-y-auto pr-1 space-y-3 font-sans mt-4 border-t border-gray-100 dark:border-gray-800 pt-4 custom-scrollbar">
+                    {optimizationsFile.entries.length === 0 ? (
+                      <div className="py-8 text-center text-gray-400 dark:text-gray-500 text-xs italic">
+                        Aucun enregistrement d'optimisation récent (disparition_auto_48h).
+                      </div>
+                    ) : (
+                      optimizationsFile.entries.map((entry: any) => {
+                        const tempDiff = new Date(entry.expiresAt).getTime() - Date.now();
+                        const hoursLeft = Math.max(0, Math.floor(tempDiff / (1000 * 60 * 60)));
+                        const minutesLeft = Math.max(0, Math.floor((tempDiff % (1000 * 60 * 60)) / (1000 * 60)));
+
+                        return (
+                          <div key={entry.id} className="p-3 text-xs bg-gray-50 dark:bg-gray-900/40 rounded-xl border border-gray-100 dark:border-gray-800 space-y-2">
+                            <div className="flex justify-between items-center border-b border-gray-200/50 dark:border-gray-800/50 pb-1.5">
+                              <span className="font-mono text-[9px] text-gray-400 dark:text-gray-500">{entry.id}</span>
+                              <span className="text-[9px] font-black uppercase text-amber-500 bg-amber-50 dark:bg-amber-950/40 px-1.5 py-0.5 rounded-md flex items-center gap-1">
+                                <History size={10} /> Expire dans {hoursLeft}h {minutesLeft}m
+                              </span>
+                            </div>
+                            <div className="font-semibold text-gray-800 dark:text-gray-200">
+                              Optimisé par : <span className="text-gray-900 dark:text-white font-black">{entry.optimizedBy.name}</span> <span className="text-[10px] px-1.5 py-0.5 bg-gray-200 dark:bg-gray-700 rounded text-gray-600 dark:text-gray-300 capitalize">{entry.optimizedBy.role}</span>
+                            </div>
+                            <p className="text-gray-500 dark:text-gray-400 leading-relaxed italic">
+                              "{entry.recommendationText}"
+                            </p>
+                            <div className="text-[10px] text-gray-400 dark:text-gray-500 flex justify-between">
+                              <span>Lancé le : {new Date(entry.timestamp).toLocaleDateString()} {new Date(entry.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                              <span className="font-mono text-indigo-600 dark:text-indigo-400 font-bold">P:{entry.schoolStats.presents} | R:{entry.schoolStats.retards} | A:{entry.schoolStats.absents}</span>
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+              )}
+
               <button 
-                onClick={() => setIsDetailOpen(false)}
-                className="w-full mt-8 py-4 bg-indigo-600 text-white rounded-2xl font-black shadow-lg shadow-indigo-200 dark:shadow-none hover:bg-indigo-700 transition-all"
+                type="button"
+                onClick={() => { setIsDetailOpen(false); setDetailTab('analysis'); }}
+                className="w-full mt-8 py-4 bg-indigo-600 text-white rounded-2xl font-black shadow-lg shadow-indigo-200 dark:shadow-none hover:bg-indigo-700 transition-all cursor-pointer"
               >
                 {t('close')}
               </button>
@@ -201,11 +447,8 @@ const AdminDashboard = ({ stats, weeklyData, studentLevelData, userDistribution,
                   Annuler
                 </button>
                 <button 
-                  onClick={() => {
-                    notifyOptimize();
-                    setIsOptimizeOpen(false);
-                  }}
-                  className="py-4 bg-emerald-600 text-white rounded-2xl font-black shadow-lg shadow-emerald-200 dark:shadow-none hover:bg-emerald-700 transition-all"
+                  onClick={handleLaunchOptimization}
+                  className="py-4 bg-emerald-600 text-white rounded-2xl font-black shadow-lg shadow-emerald-200 dark:shadow-none hover:bg-emerald-700 transition-all cursor-pointer"
                 >
                   Lancer l'Action
                 </button>

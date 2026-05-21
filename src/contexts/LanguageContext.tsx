@@ -10,6 +10,17 @@ interface Translations {
 
 const translations: Translations = {
   // Sidebar
+  'library': { fr: 'Bibliothèque', en: 'Library', es: 'Biblioteca', zh: '图书馆', ja: '図書館' },
+  'responsibility_zones': { fr: 'Responsabilités & Direction', en: 'Responsibilities & Direction', es: 'Responsabilidades y Dirección', zh: '职责与方向', ja: '職責と方向' },
+  'strategic_optimizations': { fr: 'Optimisations IA', en: 'AI Optimizations', es: 'Optimizaciones IA', zh: 'AI 优化', ja: 'AI最適化' },
+  'strategic_optimizations_desc': { fr: 'Journal des optimisations stratégiques du système d\'apprentissage en temps réel.', en: 'Real-time strategic optimizations log for the learning ecosystem.', es: 'Registro de optimizaciones estratégicas en tiempo real.', zh: '实时战略优化日志', ja: 'リアルタイムの戦略最適化ログ' },
+  'canteen': { fr: 'Cantine', en: 'Canteen', es: 'Cantina', zh: '食堂', ja: '食堂' },
+  'reports': { fr: 'Rapports', en: 'Reports', es: 'Informes', zh: '报告', ja: 'レポート' },
+  'users': { fr: 'Utilisateurs', en: 'Users', es: 'Usuarios', zh: '用户', ja: 'ユーザー' },
+  'attendance': { fr: 'Présence', en: 'Attendance', es: 'Asistencia', zh: '出勤', ja: '出席' },
+  'kiosk': { fr: 'Borne interactive', en: 'Interactive Kiosk', es: 'Quiosco interactivo', zh: '互动终端', ja: 'インタラクティブキオスク' },
+  'recent_connections': { fr: 'Activités récentes', en: 'Recent Connections', es: 'Conexiones recientes', zh: '最近连接', ja: '最近の接続' },
+  'récent_connections': { fr: 'Activités récentes', en: 'Recent Connections', es: 'Conexiones récentes', zh: '最近连接', ja: '最近の接続' },
   'install_app': { fr: 'Installer l\'App', en: 'Install App', es: 'Instalar App', zh: '安装应用', ja: 'アプリをインストール' },
   'dashboard': { fr: 'Tableau de bord', en: 'Dashboard', es: 'Panel', zh: '仪表板', ja: 'ダッシュボード' },
   'teacher_greeting': { fr: 'Bonjour, Prof', en: 'Hello, Teacher', es: 'Hola, Profesor', zh: '你好，老师', ja: 'こんにちは、先生' },
@@ -76,6 +87,10 @@ const translations: Translations = {
   'unpublish': { fr: 'Dépublier', en: 'Unpublish', es: 'Despublicar', zh: '取消发布', ja: '非公開にする' },
   'publish': { fr: 'Publier', en: 'Publish', es: 'Publicar', zh: '发布', ja: '公開' },
   
+  'sector_distribution': { fr: 'Répartition des utilisateurs', en: 'User Distribution', es: 'Distribución de usuarios', zh: '用户分布', ja: 'ユーザー分布' },
+  'class_density': { fr: 'Répartition des effectifs par classe', en: 'Class Density', es: 'Densidad de clases', zh: '每班人数分布', ja: 'クラスごとの生徒数分布' },
+  'real_distribution_desc': { fr: 'Répartition des effectifs par classe', en: 'Real class distribution and headcount', es: 'Distribución real por clase', zh: '实际班级人数分布', ja: '実際のクラス別の生徒数分布' },
+
   'surveys': { fr: 'Sondages & Élections', en: 'Surveys & Elections', es: 'Encuestas y Elecciones', zh: '调查与选举', ja: 'アンケートと選挙' },
   'document_generator': { fr: 'Documents Officiels', en: 'Official Documents', es: 'Documentos Oficiales', zh: '官方文件', ja: '公式書類' },
   'houses': { fr: 'Maisons', en: 'Houses', es: 'Casas', zh: '学院', ja: 'ハウス' },
