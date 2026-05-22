@@ -12,10 +12,11 @@ export default defineConfig(({mode}) => {
       tailwindcss(),
       VitePWA({
         registerType: 'autoUpdate',
+        manifestFilename: 'manifest.json',
         devOptions: {
           enabled: true
         },
-        includeAssets: ['icon.svg', 'pwa-192x192.png', 'pwa-512x512.png'],
+        includeAssets: ['icon.svg', 'logo.png', 'pwa-192x192.png', 'pwa-512x512.png'],
         workbox: {
           maximumFileSizeToCacheInBytes: 5000000
         },
@@ -30,6 +31,11 @@ export default defineConfig(({mode}) => {
           start_url: '/',
           id: '/',
           icons: [
+            {
+              src: '/logo.png',
+              sizes: '512x512',
+              type: 'image/png'
+            },
             {
               src: '/pwa-192x192.png',
               sizes: '192x192',
