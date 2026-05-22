@@ -31,7 +31,7 @@ import {
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useNotification } from '../contexts/NotificationContext';
-import { db } from '../lib/firebase';
+import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { collection, onSnapshot, addDoc, updateDoc, doc, deleteDoc } from 'firebase/firestore';
 import { administrativeResponsibilities } from './Staff';
 
@@ -58,6 +58,14 @@ export default function ResponsibilityZones() {
 
   const [activeRespId, setActiveRespId] = useState<string>('');
 
+  const enforcePermission = (respId: string): boolean => {
+    if (accessibleResponsibilityIds.includes(respId)) {
+      return true;
+    }
+    notifyError("Sécurité : Action non autorisée pour vos responsabilités.");
+    return false;
+  };
+
   useEffect(() => {
     if (accessibleResponsibilityIds.length > 0) {
       if (!activeRespId || !accessibleResponsibilityIds.includes(activeRespId)) {
@@ -74,6 +82,8 @@ export default function ResponsibilityZones() {
 
   // Subscribe to real-time Firestore updates for Maternelle
   useEffect(() => {
+    if (!accessibleResponsibilityIds.includes('responsable_maternelle')) return;
+
     const unsubSiestas = onSnapshot(collection(db, 'maternelle_siestas'), (snapshot) => {
       if (snapshot.empty) {
         // Bootstrap default siestas if collection is empty
@@ -95,7 +105,7 @@ export default function ResponsibilityZones() {
         setSiestas(data);
       }
     }, (error) => {
-      console.error("Firestore siestas error:", error);
+      handleFirestoreError(error, OperationType.GET, 'maternelle_siestas');
     });
 
     const unsubTransmissions = onSnapshot(collection(db, 'maternelle_transmissions'), (snapshot) => {
@@ -118,14 +128,14 @@ export default function ResponsibilityZones() {
         setMaternelleTransmissions(data);
       }
     }, (error) => {
-      console.error("Firestore transmissions error:", error);
+      handleFirestoreError(error, OperationType.GET, 'maternelle_transmissions');
     });
 
     return () => {
       unsubSiestas();
       unsubTransmissions();
     };
-  }, []);
+  }, [accessibleResponsibilityIds]);
 
   // 2. Reading Challenge (Primaire) state
   const [readingProgress, setReadingProgress] = useState<Array<{id: string, name: string, booksRead: number, goal: number, rating: string}>>([]);
@@ -162,370 +172,388 @@ export default function ResponsibilityZones() {
   // 11. IT Admin
   const [itLoans, setItLoans] = useState<Array<{id: string, cartId: string, classTarget: string, duration: string, status: 'borrowed' | 'returned'}>>([]);
   const [itTickets, setItTickets] = useState<Array<{id: string, item: string, description: string, severity: 'minor' | 'critical', status: 'open' | 'investigating' | 'resolved'}>>([]);
-
-  // Synchronize all Responsibility tables with Firebase Firestore
   useEffect(() => {
     const unsubs: Array<() => void> = [];
 
     // 2. Reading Challenge progress
-    const unsubRp = onSnapshot(collection(db, 'resp_reading_progress'), (snapshot) => {
-      if (snapshot.empty) {
-        const defaults = [
-          { name: 'Arthur Durand', booksRead: 4, goal: 8, rating: 'Excellent' },
-          { name: 'Chloé Konan', booksRead: 6, goal: 8, rating: 'Championne' },
-          { name: 'Sébastien Diallo', booksRead: 2, goal: 8, rating: 'En progrès' },
-        ];
-        defaults.forEach(async (item) => {
-          await addDoc(collection(db, 'resp_reading_progress'), item);
-        });
-      } else {
-        setReadingProgress(snapshot.docs.map(doc => ({
-          id: doc.id,
-          name: doc.data().name || '',
-          booksRead: Number(doc.data().booksRead || 0),
-          goal: Number(doc.data().goal || 8),
-          rating: doc.data().rating || 'En progrès'
-        })));
-      }
-    }, (err) => console.error("Reading progress unsub error:", err));
-    unsubs.push(unsubRp);
+    if (accessibleResponsibilityIds.includes('responsable_primaire')) {
+      const unsubRp = onSnapshot(collection(db, 'resp_reading_progress'), (snapshot) => {
+        if (snapshot.empty) {
+          const defaults = [
+            { name: 'Arthur Durand', booksRead: 4, goal: 8, rating: 'Excellent' },
+            { name: 'Chloé Konan', booksRead: 6, goal: 8, rating: 'Championne' },
+            { name: 'Sébastien Diallo', booksRead: 2, goal: 8, rating: 'En progrès' },
+          ];
+          defaults.forEach(async (item) => {
+            await addDoc(collection(db, 'resp_reading_progress'), item);
+          });
+        } else {
+          setReadingProgress(snapshot.docs.map(doc => ({
+            id: doc.id,
+            name: doc.data().name || '',
+            booksRead: Number(doc.data().booksRead || 0),
+            goal: Number(doc.data().goal || 8),
+            rating: doc.data().rating || 'En progrès'
+          })));
+        }
+      }, (err) => handleFirestoreError(err, OperationType.GET, 'resp_reading_progress'));
+      unsubs.push(unsubRp);
 
-    // Primary Field Trips
-    const unsubFt = onSnapshot(collection(db, 'resp_field_trips'), (snapshot) => {
-      if (snapshot.empty) {
-        const defaults = [
-          { destination: 'Musée d\'Histoire Naturelle', date: '25 Mai 2026', status: 'pending' },
-          { destination: 'Parc Botanique National', date: '12 Juin 2026', status: 'approved' }
-        ];
-        defaults.forEach(async (item) => {
-          await addDoc(collection(db, 'resp_field_trips'), item);
-        });
-      } else {
-        setPrimaryFieldTrips(snapshot.docs.map(doc => ({
-          id: doc.id,
-          destination: doc.data().destination || '',
-          date: doc.data().date || '',
-          status: doc.data().status as any
-        })));
-      }
-    }, (err) => console.error("Field trips error:", err));
-    unsubs.push(unsubFt);
+      // Primary Field Trips
+      const unsubFt = onSnapshot(collection(db, 'resp_field_trips'), (snapshot) => {
+        if (snapshot.empty) {
+          const defaults = [
+            { destination: 'Musée d\'Histoire Naturelle', date: '25 Mai 2026', status: 'pending' },
+            { destination: 'Parc Botanique National', date: '12 Juin 2026', status: 'approved' }
+          ];
+          defaults.forEach(async (item) => {
+            await addDoc(collection(db, 'resp_field_trips'), item);
+          });
+        } else {
+          setPrimaryFieldTrips(snapshot.docs.map(doc => ({
+            id: doc.id,
+            destination: doc.data().destination || '',
+            date: doc.data().date || '',
+            status: doc.data().status as any
+          })));
+        }
+      }, (err) => handleFirestoreError(err, OperationType.GET, 'resp_field_trips'));
+      unsubs.push(unsubFt);
+    }
 
-    // College Detentions
-    const unsubDet = onSnapshot(collection(db, 'resp_college_detentions'), (snapshot) => {
-      if (snapshot.empty) {
-        const defaults = [
-          { student: 'Marc Ehua', reason: 'Absences répétées non justifiées aux évaluations', teacher: 'M. Ella', date: '22 Mai 2026', hour: '14:00 - 16:00', proctor: 'M. Kouamé' }
-        ];
-        defaults.forEach(async (item) => {
-          await addDoc(collection(db, 'resp_college_detentions'), item);
-        });
-      } else {
-        setCollegeDetentions(snapshot.docs.map(doc => ({
-          id: doc.id,
-          student: doc.data().student || '',
-          reason: doc.data().reason || '',
-          teacher: doc.data().teacher || '',
-          date: doc.data().date || '',
-          hour: doc.data().hour || '',
-          proctor: doc.data().proctor || ''
-        })));
-      }
-    }, (err) => console.error("Detentions error:", err));
-    unsubs.push(unsubDet);
+    // 3. College Detentions
+    if (accessibleResponsibilityIds.includes('responsable_college')) {
+      const unsubDet = onSnapshot(collection(db, 'resp_college_detentions'), (snapshot) => {
+        if (snapshot.empty) {
+          const defaults = [
+            { student: 'Marc Ehua', reason: 'Absences répétées non justifiées aux évaluations', teacher: 'M. Ella', date: '22 Mai 2026', hour: '14:00 - 16:00', proctor: 'M. Kouamé' }
+          ];
+          defaults.forEach(async (item) => {
+            await addDoc(collection(db, 'resp_college_detentions'), item);
+          });
+        } else {
+          setCollegeDetentions(snapshot.docs.map(doc => ({
+            id: doc.id,
+            student: doc.data().student || '',
+            reason: doc.data().reason || '',
+            teacher: doc.data().teacher || '',
+            date: doc.data().date || '',
+            hour: doc.data().hour || '',
+            proctor: doc.data().proctor || ''
+          })));
+        }
+      }, (err) => handleFirestoreError(err, OperationType.GET, 'resp_college_detentions'));
+      unsubs.push(unsubDet);
 
-    // Brevet Chapters
-    const unsubChapters = onSnapshot(collection(db, 'resp_brevet_chapters'), (snapshot) => {
-      if (snapshot.empty) {
-        const defaults = [
-          { subject: 'Mathématiques', topic: 'Arithmétique & PGCD', status: 'ready' },
-          { subject: 'Histoire', topic: 'La Première Guerre Mondiale', status: 'ready' },
-          { subject: 'Sciences', topic: 'Génétique & Évolution', status: 'pending' },
-        ];
-        defaults.forEach(async (item) => {
-          await addDoc(collection(db, 'resp_brevet_chapters'), item);
-        });
-      } else {
-        setBrevetChapters(snapshot.docs.map(doc => ({
-          id: doc.id,
-          subject: doc.data().subject || '',
-          topic: doc.data().topic || '',
-          status: doc.data().status as any
-        })));
-      }
-    }, (err) => console.error("Brevet chapters error:", err));
-    unsubs.push(unsubChapters);
+      // Brevet Chapters
+      const unsubChapters = onSnapshot(collection(db, 'resp_brevet_chapters'), (snapshot) => {
+        if (snapshot.empty) {
+          const defaults = [
+            { subject: 'Mathématiques', topic: 'Arithmétique & PGCD', status: 'ready' },
+            { subject: 'Histoire', topic: 'La Première Guerre Mondiale', status: 'ready' },
+            { subject: 'Sciences', topic: 'Génétique & Évolution', status: 'pending' },
+          ];
+          defaults.forEach(async (item) => {
+            await addDoc(collection(db, 'resp_brevet_chapters'), item);
+          });
+        } else {
+          setBrevetChapters(snapshot.docs.map(doc => ({
+            id: doc.id,
+            subject: doc.data().subject || '',
+            topic: doc.data().topic || '',
+            status: doc.data().status as any
+          })));
+        }
+      }, (err) => handleFirestoreError(err, OperationType.GET, 'resp_brevet_chapters'));
+      unsubs.push(unsubChapters);
+    }
 
     // Accounting Flows
-    const unsubFlows = onSnapshot(collection(db, 'resp_accounting_flows'), (snapshot) => {
-      if (snapshot.empty) {
-        const defaults = [
-          { type: 'inflow', category: 'Écolages', amount: 480000, description: 'Scolarité Trimestre 3 - Classe de 3ème', date: 'Aujourd\'hui, 10:15' },
-          { type: 'outflow', category: 'Fournitures', amount: 85000, description: 'Achat de craies et rames de papier', date: 'Hier, 16:30' },
-          { type: 'inflow', category: 'Cantine', amount: 120000, description: 'Recharge cartes cantine - Parent Koné', date: 'Aujourd\'hui, 08:45' }
-        ];
-        defaults.forEach(async (item) => {
-          await addDoc(collection(db, 'resp_accounting_flows'), item);
-        });
-      } else {
-        setAccountingFlows(snapshot.docs.map(doc => ({
-          id: doc.id,
-          type: doc.data().type as any,
-          category: doc.data().category || '',
-          amount: Number(doc.data().amount || 0),
-          description: doc.data().description || '',
-          date: doc.data().date || ''
-        })));
-      }
-    }, (err) => console.error("Accounting flows error:", err));
-    unsubs.push(unsubFlows);
+    if (accessibleResponsibilityIds.includes('gestionnaire_comptable')) {
+      const unsubFlows = onSnapshot(collection(db, 'resp_accounting_flows'), (snapshot) => {
+        if (snapshot.empty) {
+          const defaults = [
+            { type: 'inflow', category: 'Écolages', amount: 480000, description: 'Scolarité Trimestre 3 - Classe de 3ème', date: 'Aujourd\'hui, 10:15' },
+            { type: 'outflow', category: 'Fournitures', amount: 85000, description: 'Achat de craies et rames de papier', date: 'Hier, 16:30' },
+            { type: 'inflow', category: 'Cantine', amount: 120000, description: 'Recharge cartes cantine - Parent Koné', date: 'Aujourd\'hui, 08:45' }
+          ];
+          defaults.forEach(async (item) => {
+            await addDoc(collection(db, 'resp_accounting_flows'), item);
+          });
+        } else {
+          setAccountingFlows(snapshot.docs.map(doc => ({
+            id: doc.id,
+            type: doc.data().type as any,
+            category: doc.data().category || '',
+            amount: Number(doc.data().amount || 0),
+            description: doc.data().description || '',
+            date: doc.data().date || ''
+          })));
+        }
+      }, (err) => handleFirestoreError(err, OperationType.GET, 'resp_accounting_flows'));
+      unsubs.push(unsubFlows);
+    }
 
     // Remedial Groups
-    const unsubRem = onSnapshot(collection(db, 'resp_remedial_groups'), (snapshot) => {
-      if (snapshot.empty) {
-        const defaults = [
-          { studentName: 'Inès Bamba', subject: 'Physique-Chimie', level: '4ème A', date: 'Mercredi 15h' },
-          { studentName: 'Arnaud Yao', subject: 'Mathématiques', level: '3ème B', date: 'Samedi 09h' }
-        ];
-        defaults.forEach(async (item) => {
-          await addDoc(collection(db, 'resp_remedial_groups'), item);
-        });
-      } else {
-        setRemedialGroups(snapshot.docs.map(doc => ({
-          id: doc.id,
-          studentName: doc.data().studentName || '',
-          subject: doc.data().subject || '',
-          level: doc.data().level || '',
-          date: doc.data().date || ''
-        })));
-      }
-    }, (err) => console.error("Remedial groups error:", err));
-    unsubs.push(unsubRem);
+    if (accessibleResponsibilityIds.includes('responsable_pedagogique')) {
+      const unsubRem = onSnapshot(collection(db, 'resp_remedial_groups'), (snapshot) => {
+        if (snapshot.empty) {
+          const defaults = [
+            { studentName: 'Inès Bamba', subject: 'Physique-Chimie', level: '4ème A', date: 'Mercredi 15h' },
+            { studentName: 'Arnaud Yao', subject: 'Mathématiques', level: '3ème B', date: 'Samedi 09h' }
+          ];
+          defaults.forEach(async (item) => {
+            await addDoc(collection(db, 'resp_remedial_groups'), item);
+          });
+        } else {
+          setRemedialGroups(snapshot.docs.map(doc => ({
+            id: doc.id,
+            studentName: doc.data().studentName || '',
+            subject: doc.data().subject || '',
+            level: doc.data().level || '',
+            date: doc.data().date || ''
+          })));
+        }
+      }, (err) => handleFirestoreError(err, OperationType.GET, 'resp_remedial_groups'));
+      unsubs.push(unsubRem);
 
-    // Syllabus Rates
-    const unsubSyllabus = onSnapshot(collection(db, 'resp_syllabus_rates'), (snapshot) => {
-      if (snapshot.empty) {
-        const defaults = [
-          { course: 'Mathématiques 3e', teacher: 'Armand Ella', rate: 82 },
-          { course: 'Français 4e', teacher: 'Mme Touré', rate: 75 },
-          { course: 'Anglais 5e', teacher: 'Ludovic Dev', rate: 90 },
-        ];
-        defaults.forEach(async (item) => {
-          await addDoc(collection(db, 'resp_syllabus_rates'), item);
-        });
-      } else {
-        setSyllabusRates(snapshot.docs.map(doc => ({
-          id: doc.id,
-          course: doc.data().course || '',
-          teacher: doc.data().teacher || '',
-          rate: Number(doc.data().rate || 0)
-        })));
-      }
-    }, (err) => console.error("Syllabus rates error:", err));
-    unsubs.push(unsubSyllabus);
+      // Syllabus Rates
+      const unsubSyllabus = onSnapshot(collection(db, 'resp_syllabus_rates'), (snapshot) => {
+        if (snapshot.empty) {
+          const defaults = [
+            { course: 'Mathématiques 3e', teacher: 'Armand Ella', rate: 82 },
+            { course: 'Français 4e', teacher: 'Mme Touré', rate: 75 },
+            { course: 'Anglais 5e', teacher: 'Ludovic Dev', rate: 90 },
+          ];
+          defaults.forEach(async (item) => {
+            await addDoc(collection(db, 'resp_syllabus_rates'), item);
+          });
+        } else {
+          setSyllabusRates(snapshot.docs.map(doc => ({
+            id: doc.id,
+            course: doc.data().course || '',
+            teacher: doc.data().teacher || '',
+            rate: Number(doc.data().rate || 0)
+          })));
+        }
+      }, (err) => handleFirestoreError(err, OperationType.GET, 'resp_syllabus_rates'));
+      unsubs.push(unsubSyllabus);
+    }
 
     // Late Slips
-    const unsubLates = onSnapshot(collection(db, 'resp_late_slips'), (snapshot) => {
-      if (snapshot.empty) {
-        const defaults = [
-          { studentName: 'Hervé Assi', duration: 25, reason: 'Panne de bus de ramassage', date: '21 Mai, 08:35', hasTicket: true }
-        ];
-        defaults.forEach(async (item) => {
-          await addDoc(collection(db, 'resp_late_slips'), item);
-        });
-      } else {
-        setLateSlips(snapshot.docs.map(doc => ({
-          id: doc.id,
-          studentName: doc.data().studentName || '',
-          duration: Number(doc.data().duration || 0),
-          reason: doc.data().reason || '',
-          date: doc.data().date || '',
-          hasTicket: !!doc.data().hasTicket
-        })));
-      }
-    }, (err) => console.error("Late slips error:", err));
-    unsubs.push(unsubLates);
+    if (accessibleResponsibilityIds.includes('surveillant_general')) {
+      const unsubLates = onSnapshot(collection(db, 'resp_late_slips'), (snapshot) => {
+        if (snapshot.empty) {
+          const defaults = [
+            { studentName: 'Hervé Assi', duration: 25, reason: 'Panne de bus de ramassage', date: '21 Mai, 08:35', hasTicket: true }
+          ];
+          defaults.forEach(async (item) => {
+            await addDoc(collection(db, 'resp_late_slips'), item);
+          });
+        } else {
+          setLateSlips(snapshot.docs.map(doc => ({
+            id: doc.id,
+            studentName: doc.data().studentName || '',
+            duration: Number(doc.data().duration || 0),
+            reason: doc.data().reason || '',
+            date: doc.data().date || '',
+            hasTicket: !!doc.data().hasTicket
+          })));
+        }
+      }, (err) => handleFirestoreError(err, OperationType.GET, 'resp_late_slips'));
+      unsubs.push(unsubLates);
+    }
 
     // Visitors Log
-    const unsubVisitors = onSnapshot(collection(db, 'resp_visitors_log'), (snapshot) => {
-      if (snapshot.empty) {
-        const defaults = [
-          { visitorName: 'M. Koffi Kouamé (Parent)', reason: 'Rendez-vous Principal', targetPerson: 'Mme le Proviseur', entryTime: '09:45', status: 'inside' },
-          { visitorName: 'Technicien Orange CI', reason: 'Paneth Internet', targetPerson: 'Responsable IT', entryTime: '08:15', status: 'left' }
-        ];
-        defaults.forEach(async (item) => {
-          await addDoc(collection(db, 'resp_visitors_log'), item);
-        });
-      } else {
-        setVisitorsLog(snapshot.docs.map(doc => ({
-          id: doc.id,
-          visitorName: doc.data().visitorName || '',
-          reason: doc.data().reason || '',
-          targetPerson: doc.data().targetPerson || '',
-          entryTime: doc.data().entryTime || '',
-          status: doc.data().status as any
-        })));
-      }
-    }, (err) => console.error("Visitors log error:", err));
-    unsubs.push(unsubVisitors);
+    if (accessibleResponsibilityIds.includes('surveillant_adjoint')) {
+      const unsubVisitors = onSnapshot(collection(db, 'resp_visitors_log'), (snapshot) => {
+        if (snapshot.empty) {
+          const defaults = [
+            { visitorName: 'M. Koffi Kouamé (Parent)', reason: 'Rendez-vous Principal', targetPerson: 'Mme le Proviseur', entryTime: '09:45', status: 'inside' },
+            { visitorName: 'Technicien Orange CI', reason: 'Paneth Internet', targetPerson: 'Responsable IT', entryTime: '08:15', status: 'left' }
+          ];
+          defaults.forEach(async (item) => {
+            await addDoc(collection(db, 'resp_visitors_log'), item);
+          });
+        } else {
+          setVisitorsLog(snapshot.docs.map(doc => ({
+            id: doc.id,
+            visitorName: doc.data().visitorName || '',
+            reason: doc.data().reason || '',
+            targetPerson: doc.data().targetPerson || '',
+            entryTime: doc.data().entryTime || '',
+            status: doc.data().status as any
+          })));
+        }
+      }, (err) => handleFirestoreError(err, OperationType.GET, 'resp_visitors_log'));
+      unsubs.push(unsubVisitors);
 
-    // Locker Keys
-    const unsubLocker = onSnapshot(collection(db, 'resp_locker_keys'), (snapshot) => {
-      if (snapshot.empty) {
-        const defaults = [
-          { lockerNo: 'C-42', student: 'Ismaël Cissé', date: '21 Mai', returned: false },
-          { lockerNo: 'A-108', student: 'Mariam Sidibé', date: '19 Mai', returned: true }
-        ];
-        defaults.forEach(async (item) => {
-          await addDoc(collection(db, 'resp_locker_keys'), item);
-        });
-      } else {
-        setLockerKeys(snapshot.docs.map(doc => ({
-          id: doc.id,
-          lockerNo: doc.data().lockerNo || '',
-          student: doc.data().student || '',
-          date: doc.data().date || '',
-          returned: !!doc.data().returned
-        })));
-      }
-    }, (err) => console.error("Locker keys error:", err));
-    unsubs.push(unsubLocker);
+      // Locker Keys
+      const unsubLocker = onSnapshot(collection(db, 'resp_locker_keys'), (snapshot) => {
+        if (snapshot.empty) {
+          const defaults = [
+            { lockerNo: 'C-42', student: 'Ismaël Cissé', date: '21 Mai', returned: false },
+            { lockerNo: 'A-108', student: 'Mariam Sidibé', date: '19 Mai', returned: true }
+          ];
+          defaults.forEach(async (item) => {
+            await addDoc(collection(db, 'resp_locker_keys'), item);
+          });
+        } else {
+          setLockerKeys(snapshot.docs.map(doc => ({
+            id: doc.id,
+            lockerNo: doc.data().lockerNo || '',
+            student: doc.data().student || '',
+            date: doc.data().date || '',
+            returned: !!doc.data().returned
+          })));
+        }
+      }, (err) => handleFirestoreError(err, OperationType.GET, 'resp_locker_keys'));
+      unsubs.push(unsubLocker);
+    }
 
     // Clean zones
-    const unsubClean = onSnapshot(collection(db, 'resp_clean_zones'), (snapshot) => {
-      if (snapshot.empty) {
-        const defaults = [
-          { zone: 'Bloc Sanitaire Maternelle', frequency: 'Toutes les 2h', lastCleaned: '10:00 (Aujourd\'hui)', status: 'cleaned' },
-          { zone: 'Réfectoire Cantine', frequency: 'Quotidien', lastCleaned: '14:30 (Hier)', status: 'pending' },
-          { zone: 'Bibliothèque Centrale', frequency: 'Hebdomadaire', lastCleaned: '20 Mai, 16:00', status: 'cleaned' }
-        ];
-        defaults.forEach(async (item) => {
-          await addDoc(collection(db, 'resp_clean_zones'), item);
-        });
-      } else {
-        setCleanZones(snapshot.docs.map(doc => ({
-          id: doc.id,
-          zone: doc.data().zone || '',
-          frequency: doc.data().frequency || '',
-          lastCleaned: doc.data().lastCleaned || '',
-          status: doc.data().status as any
-        })));
-      }
-    }, (err) => console.error("Clean zones error:", err));
-    unsubs.push(unsubClean);
+    if (accessibleResponsibilityIds.includes('dame_menage')) {
+      const unsubClean = onSnapshot(collection(db, 'resp_clean_zones'), (snapshot) => {
+        if (snapshot.empty) {
+          const defaults = [
+            { zone: 'Bloc Sanitaire Maternelle', frequency: 'Toutes les 2h', lastCleaned: '10:00 (Aujourd\'hui)', status: 'cleaned' },
+            { zone: 'Réfectoire Cantine', frequency: 'Quotidien', lastCleaned: '14:30 (Hier)', status: 'pending' },
+            { zone: 'Bibliothèque Centrale', frequency: 'Hebdomadaire', lastCleaned: '20 Mai, 16:00', status: 'cleaned' }
+          ];
+          defaults.forEach(async (item) => {
+            await addDoc(collection(db, 'resp_clean_zones'), item);
+          });
+        } else {
+          setCleanZones(snapshot.docs.map(doc => ({
+            id: doc.id,
+            zone: doc.data().zone || '',
+            frequency: doc.data().frequency || '',
+            lastCleaned: doc.data().lastCleaned || '',
+            status: doc.data().status as any
+          })));
+        }
+      }, (err) => handleFirestoreError(err, OperationType.GET, 'resp_clean_zones'));
+      unsubs.push(unsubClean);
 
-    // Cleaning Supplies
-    const unsubSupplies = onSnapshot(collection(db, 'resp_cleaning_supplies'), (snapshot) => {
-      if (snapshot.empty) {
-        const defaults = [
-          { item: 'Savon liquide mains', stock: 12, limit: 5 },
-          { item: 'Eau de Javel (bidons 5L)', stock: 2, limit: 4 },
-          { item: 'Papier essuie-tout', stock: 45, limit: 10 }
-        ];
-        defaults.forEach(async (item) => {
-          await addDoc(collection(db, 'resp_cleaning_supplies'), item);
-        });
-      } else {
-        setCleaningSupplies(snapshot.docs.map(doc => ({
-          id: doc.id,
-          item: doc.data().item || '',
-          stock: Number(doc.data().stock || 0),
-          limit: Number(doc.data().limit || 0)
-        })));
-      }
-    }, (err) => console.error("Supplies error:", err));
-    unsubs.push(unsubSupplies);
+      // Cleaning Supplies
+      const unsubSupplies = onSnapshot(collection(db, 'resp_cleaning_supplies'), (snapshot) => {
+        if (snapshot.empty) {
+          const defaults = [
+            { item: 'Savon liquide mains', stock: 12, limit: 5 },
+            { item: 'Eau de Javel (bidons 5L)', stock: 2, limit: 4 },
+            { item: 'Papier essuie-tout', stock: 45, limit: 10 }
+          ];
+          defaults.forEach(async (item) => {
+            await addDoc(collection(db, 'resp_cleaning_supplies'), item);
+          });
+        } else {
+          setCleaningSupplies(snapshot.docs.map(doc => ({
+            id: doc.id,
+            item: doc.data().item || '',
+            stock: Number(doc.data().stock || 0),
+            limit: Number(doc.data().limit || 0)
+          })));
+        }
+      }, (err) => handleFirestoreError(err, OperationType.GET, 'resp_cleaning_supplies'));
+      unsubs.push(unsubSupplies);
+    }
 
     // Dossiers (Secrétaire Générale)
-    const unsubDos = onSnapshot(collection(db, 'resp_dossiers'), (snapshot) => {
-      if (snapshot.empty) {
-        const defaults = [
-          { name: 'Alix Koné', level: 'Classe de Seconde C', originSchool: 'Collège Moderne Bouaké', status: 'pending' },
-          { name: 'Sarah Beugré', level: 'Classe de 6ème', originSchool: 'EPP Plateau', status: 'accepted' }
-        ];
-        defaults.forEach(async (item) => {
-          await addDoc(collection(db, 'resp_dossiers'), item);
-        });
-      } else {
-        setDossiers(snapshot.docs.map(doc => ({
-          id: doc.id,
-          name: doc.data().name || '',
-          level: doc.data().level || '',
-          originSchool: doc.data().originSchool || '',
-          status: doc.data().status as any
-        })));
-      }
-    }, (err) => console.error("Dossiers error:", err));
-    unsubs.push(unsubDos);
+    if (accessibleResponsibilityIds.includes('secretaire_generale')) {
+      const unsubDos = onSnapshot(collection(db, 'resp_dossiers'), (snapshot) => {
+        if (snapshot.empty) {
+          const defaults = [
+            { name: 'Alix Koné', level: 'Classe de Seconde C', originSchool: 'Collège Moderne Bouaké', status: 'pending' },
+            { name: 'Sarah Beugré', level: 'Classe de 6ème', originSchool: 'EPP Plateau', status: 'accepted' }
+          ];
+          defaults.forEach(async (item) => {
+            await addDoc(collection(db, 'resp_dossiers'), item);
+          });
+        } else {
+          setDossiers(snapshot.docs.map(doc => ({
+            id: doc.id,
+            name: doc.data().name || '',
+            level: doc.data().level || '',
+            originSchool: doc.data().originSchool || '',
+            status: doc.data().status as any
+          })));
+        }
+      }, (err) => handleFirestoreError(err, OperationType.GET, 'resp_dossiers'));
+      unsubs.push(unsubDos);
+    }
 
     // Phone Calls (Secrétaire Adjointe)
-    const unsubCalls = onSnapshot(collection(db, 'resp_phone_calls'), (snapshot) => {
-      if (snapshot.empty) {
-        const defaults = [
-          { caller: 'Mme Martin (Maman de Léo)', message: 'Sera en retard de 15 minutes ce soir pour la sieste maternelle.', targetStudent: 'Léo Martin', status: 'noted' }
-        ];
-        defaults.forEach(async (item) => {
-          await addDoc(collection(db, 'resp_phone_calls'), item);
-        });
-      } else {
-        setPhoneCalls(snapshot.docs.map(doc => ({
-          id: doc.id,
-          caller: doc.data().caller || '',
-          message: doc.data().message || '',
-          targetStudent: doc.data().targetStudent || '',
-          status: doc.data().status as any
-        })));
-      }
-    }, (err) => console.error("Phone calls error:", err));
-    unsubs.push(unsubCalls);
+    if (accessibleResponsibilityIds.includes('secretaire_adjointe')) {
+      const unsubCalls = onSnapshot(collection(db, 'resp_phone_calls'), (snapshot) => {
+        if (snapshot.empty) {
+          const defaults = [
+            { caller: 'Mme Martin (Maman de Léo)', message: 'Sera en retard de 15 minutes ce soir pour la sieste maternelle.', targetStudent: 'Léo Martin', status: 'noted' }
+          ];
+          defaults.forEach(async (item) => {
+            await addDoc(collection(db, 'resp_phone_calls'), item);
+          });
+        } else {
+          setPhoneCalls(snapshot.docs.map(doc => ({
+            id: doc.id,
+            caller: doc.data().caller || '',
+            message: doc.data().message || '',
+            targetStudent: doc.data().targetStudent || '',
+            status: doc.data().status as any
+          })));
+        }
+      }, (err) => handleFirestoreError(err, OperationType.GET, 'resp_phone_calls'));
+      unsubs.push(unsubCalls);
+    }
 
-    // IT Loans
-    const unsubLoans = onSnapshot(collection(db, 'resp_it_loans'), (snapshot) => {
-      if (snapshot.empty) {
-        const defaults = [
-          { cartId: 'Chariot Tablettes Android #2', classTarget: 'Terminales S-B', duration: 'Aujourd\'hui 08h - 12h', status: 'borrowed' }
-        ];
-        defaults.forEach(async (item) => {
-          await addDoc(collection(db, 'resp_it_loans'), item);
-        });
-      } else {
-        setItLoans(snapshot.docs.map(doc => ({
-          id: doc.id,
-          cartId: doc.data().cartId || '',
-          classTarget: doc.data().classTarget || '',
-          duration: doc.data().duration || '',
-          status: doc.data().status as any
-        })));
-      }
-    }, (err) => console.error("IT loans error:", err));
-    unsubs.push(unsubLoans);
+    // IT Loans & Tickets
+    if (accessibleResponsibilityIds.includes('responsable_it')) {
+      const unsubLoans = onSnapshot(collection(db, 'resp_it_loans'), (snapshot) => {
+        if (snapshot.empty) {
+          const defaults = [
+            { cartId: 'Chariot Tablettes Android #2', classTarget: 'Terminales S-B', duration: 'Aujourd\'hui 08h - 12h', status: 'borrowed' }
+          ];
+          defaults.forEach(async (item) => {
+            await addDoc(collection(db, 'resp_it_loans'), item);
+          });
+        } else {
+          setItLoans(snapshot.docs.map(doc => ({
+            id: doc.id,
+            cartId: doc.data().cartId || '',
+            classTarget: doc.data().classTarget || '',
+            duration: doc.data().duration || '',
+            status: doc.data().status as any
+          })));
+        }
+      }, (err) => handleFirestoreError(err, OperationType.GET, 'resp_it_loans'));
+      unsubs.push(unsubLoans);
 
-    // IT Tickets
-    const unsubTickets = onSnapshot(collection(db, 'resp_it_tickets'), (snapshot) => {
-      if (snapshot.empty) {
-        const defaults = [
-          { item: 'Vidéo-projecteur Salle Informatique 1', description: 'Lampe décolorée ou bruit de ventilation excessif', severity: 'minor', status: 'investigating' },
-          { item: 'Borne Wifi Récréation Cour A', description: 'Pas de signal DHCP pour les badges biométriques', severity: 'critical', status: 'open' }
-        ];
-        defaults.forEach(async (item) => {
-          await addDoc(collection(db, 'resp_it_tickets'), item);
-        });
-      } else {
-        setItTickets(snapshot.docs.map(doc => ({
-          id: doc.id,
-          item: doc.data().item || '',
-          description: doc.data().description || '',
-          severity: doc.data().severity as any,
-          status: doc.data().status as any
-        })));
-      }
-    }, (err) => console.error("IT tickets error:", err));
-    unsubs.push(unsubTickets);
+      // IT Tickets
+      const unsubTickets = onSnapshot(collection(db, 'resp_it_tickets'), (snapshot) => {
+        if (snapshot.empty) {
+          const defaults = [
+            { item: 'Vidéo-projecteur Salle Informatique 1', description: 'Lampe décolorée ou bruit de ventilation excessif', severity: 'minor', status: 'investigating' },
+            { item: 'Borne Wifi Récréation Cour A', description: 'Pas de signal DHCP pour les badges biométriques', severity: 'critical', status: 'open' }
+          ];
+          defaults.forEach(async (item) => {
+            await addDoc(collection(db, 'resp_it_tickets'), item);
+          });
+        } else {
+          setItTickets(snapshot.docs.map(doc => ({
+            id: doc.id,
+            item: doc.data().item || '',
+            description: doc.data().description || '',
+            severity: doc.data().severity as any,
+            status: doc.data().status as any
+          })));
+        }
+      }, (err) => handleFirestoreError(err, OperationType.GET, 'resp_it_tickets'));
+      unsubs.push(unsubTickets);
+    }
 
     return () => {
       unsubs.forEach(cleanup => cleanup());
     };
-  }, []);
+  }, [accessibleResponsibilityIds]);
 
   // Form states
   const [formKidName, setFormKidName] = useState('');
@@ -698,6 +726,7 @@ export default function ResponsibilityZones() {
                             <button
                               key={st}
                               onClick={async () => {
+                                if (!enforcePermission('responsable_maternelle')) return;
                                 try {
                                   await updateDoc(doc(db, 'maternelle_siestas', kid.id), { status: st });
                                   notifySuccess(`Sommeil de ${kid.name} modifié !`);
@@ -740,6 +769,7 @@ export default function ResponsibilityZones() {
                         </div>
                         <button 
                           onClick={async () => {
+                            if (!enforcePermission('responsable_maternelle')) return;
                             try {
                               await deleteDoc(doc(db, 'maternelle_transmissions', trans.id));
                               notifySuccess("Transmission supprimée !");
@@ -793,6 +823,7 @@ export default function ResponsibilityZones() {
                           </span>
                           <button
                             onClick={async () => {
+                              if (!enforcePermission('responsable_primaire')) return;
                               try {
                                 const currentBooksRead = Number(student.booksRead || 0);
                                 const currentGoal = Number(student.goal || 8);
@@ -840,6 +871,7 @@ export default function ResponsibilityZones() {
                             <div className="flex gap-1">
                               <button
                                 onClick={async () => {
+                                  if (!enforcePermission('responsable_primaire')) return;
                                   try {
                                     await updateDoc(doc(db, 'resp_field_trips', trip.id), {
                                       status: 'approved'
@@ -892,6 +924,7 @@ export default function ResponsibilityZones() {
                           </span>
                           <button
                             onClick={async () => {
+                              if (!enforcePermission('responsable_college')) return;
                               try {
                                 const updatedStatus = chap.status === 'ready' ? 'pending' : 'ready';
                                 await updateDoc(doc(db, 'resp_brevet_chapters', chap.id), {
@@ -937,6 +970,7 @@ export default function ResponsibilityZones() {
                           <span>Surveillant : <strong>{det.proctor}</strong></span>
                           <button 
                             onClick={async () => {
+                              if (!enforcePermission('responsable_college')) return;
                               try {
                                 await deleteDoc(doc(db, 'resp_college_detentions', det.id));
                                 notifySuccess("Ordre de retenue supprimé");
@@ -998,6 +1032,7 @@ export default function ResponsibilityZones() {
                           </span>
                           <button
                             onClick={async () => {
+                              if (!enforcePermission('gestionnaire_comptable')) return;
                               try {
                                 await deleteDoc(doc(db, 'resp_accounting_flows', flow.id));
                                 notifySuccess("Écriture comptable supprimée !");
@@ -1070,6 +1105,7 @@ export default function ResponsibilityZones() {
                               setSyllabusRates(p => p.map(s => s.id === rateObj.id ? { ...s, rate: val } : s));
                             }}
                             onMouseUp={async (e) => {
+                              if (!enforcePermission('responsable_pedagogique')) return;
                               const val = Number((e.target as HTMLInputElement).value);
                               try {
                                 await updateDoc(doc(db, 'resp_syllabus_rates', rateObj.id), {
@@ -1080,6 +1116,7 @@ export default function ResponsibilityZones() {
                               }
                             }}
                             onTouchEnd={async (e) => {
+                              if (!enforcePermission('responsable_pedagogique')) return;
                               const val = Number((e.target as HTMLInputElement).value);
                               try {
                                 await updateDoc(doc(db, 'resp_syllabus_rates', rateObj.id), {
@@ -1114,6 +1151,7 @@ export default function ResponsibilityZones() {
                           </span>
                           <button
                             onClick={async () => {
+                              if (!enforcePermission('responsable_pedagogique')) return;
                               try {
                                 await deleteDoc(doc(db, 'resp_remedial_groups', rem.id));
                                 notifySuccess("Groupe de soutien annulé !");
@@ -1174,6 +1212,7 @@ export default function ResponsibilityZones() {
                           </button>
                           <button
                             onClick={async () => {
+                              if (!enforcePermission('surveillant_general')) return;
                               try {
                                 await deleteDoc(doc(db, 'resp_late_slips', slip.id));
                                 notifySuccess("Billet de retard supprimé !");
@@ -1225,6 +1264,7 @@ export default function ResponsibilityZones() {
                           {vis.status === 'inside' && (
                             <button
                               onClick={async () => {
+                                if (!enforcePermission('surveillant_adjoint')) return;
                                 try {
                                   await updateDoc(doc(db, 'resp_visitors_log', vis.id), {
                                     status: 'left'
@@ -1257,6 +1297,7 @@ export default function ResponsibilityZones() {
                         </div>
                         <button
                           onClick={async () => {
+                            if (!enforcePermission('surveillant_adjoint')) return;
                             try {
                               const updatedRet = !lock.returned;
                               await updateDoc(doc(db, 'resp_locker_keys', lock.id), {
@@ -1323,6 +1364,7 @@ export default function ResponsibilityZones() {
                         </div>
                         <button
                           onClick={async () => {
+                            if (!enforcePermission('dame_menage')) return;
                             try {
                               const updatedSt = zoneObj.status === 'cleaned' ? 'pending' : 'cleaned';
                               await updateDoc(doc(db, 'resp_clean_zones', zoneObj.id), {
@@ -1361,6 +1403,7 @@ export default function ResponsibilityZones() {
                           <p className="text-[10px] text-gray-405 mt-0.5">Stock: <strong>{supp.stock}</strong> (Minimum: {supp.limit})</p>
                           <button
                             onClick={async () => {
+                              if (!enforcePermission('dame_menage')) return;
                               try {
                                 const currentStock = Number(supp.stock || 0);
                                 await updateDoc(doc(db, 'resp_cleaning_supplies', supp.id), {
@@ -1420,6 +1463,7 @@ export default function ResponsibilityZones() {
                             <div className="flex gap-1">
                               <button
                                 onClick={async () => {
+                                  if (!enforcePermission('secretaire_generale')) return;
                                   try {
                                     await updateDoc(doc(db, 'resp_dossiers', dos.id), {
                                       status: 'accepted'
@@ -1435,6 +1479,7 @@ export default function ResponsibilityZones() {
                               </button>
                               <button
                                 onClick={async () => {
+                                  if (!enforcePermission('secretaire_generale')) return;
                                   try {
                                     await updateDoc(doc(db, 'resp_dossiers', dos.id), {
                                       status: 'rejected'
@@ -1496,6 +1541,7 @@ export default function ResponsibilityZones() {
                           {call.status === 'noted' && (
                             <button
                               onClick={async () => {
+                                if (!enforcePermission('secretaire_adjointe')) return;
                                 try {
                                   await updateDoc(doc(db, 'resp_phone_calls', call.id), {
                                     status: 'relayed'
@@ -1505,21 +1551,22 @@ export default function ResponsibilityZones() {
                                   console.error("Error relaying phone call:", error);
                                 }
                               }}
-                              className="text-[9px] font-black uppercase tracking-wider text-white bg-fuchsia-600 px-3 py-1 rounded-lg cursor-pointer"
+                              className="text-[9px] font-black uppercase tracking-wider text-white bg-fuchsia-600 px-3 py-1 rounded-lg cursor-pointer align-middle"
                             >
                               Marquer Transmis
                             </button>
                           )}
                           <button
                             onClick={async () => {
+                              if (!enforcePermission('secretaire_adjointe')) return;
                               try {
-                                await deleteDoc(doc(db, 'resp_phone_calls', call.id));
-                                notifySuccess("Message supprimé !");
+                                  await deleteDoc(doc(db, 'resp_phone_calls', call.id));
+                                  notifySuccess("Message supprimé !");
                               } catch (error) {
                                 console.error("Error deleting phone call:", error);
                               }
                             }}
-                            className="text-gray-400 hover:text-red-500 ml-2 text-xs cursor-pointer"
+                            className="text-gray-400 hover:text-red-500 ml-2 text-xs cursor-pointer align-middle"
                           >
                             Supprimer
                           </button>
@@ -1556,6 +1603,7 @@ export default function ResponsibilityZones() {
                         </div>
                         <button
                           onClick={async () => {
+                            if (!enforcePermission('responsable_it')) return;
                             try {
                               const newStatus = loan.status === 'borrowed' ? 'returned' : 'borrowed';
                               await updateDoc(doc(db, 'resp_it_loans', loan.id), {
@@ -1602,6 +1650,7 @@ export default function ResponsibilityZones() {
                           <div className="flex gap-1">
                             <button
                               onClick={async () => {
+                                if (!enforcePermission('responsable_it')) return;
                                 try {
                                   await updateDoc(doc(db, 'resp_it_tickets', tick.id), {
                                     status: 'resolved'
@@ -1643,6 +1692,7 @@ export default function ResponsibilityZones() {
                 <form 
                   onSubmit={async (e) => {
                     e.preventDefault();
+                    if (!enforcePermission('responsable_maternelle')) return;
                     if (!formKidName.trim()) return;
                     
                     try {
@@ -1698,6 +1748,7 @@ export default function ResponsibilityZones() {
                 <form 
                   onSubmit={async (e) => {
                     e.preventDefault();
+                    if (!enforcePermission('responsable_primaire')) return;
                     if (!formReadingName.trim()) return;
                     
                     try {
@@ -1753,6 +1804,7 @@ export default function ResponsibilityZones() {
                 <form
                   onSubmit={async (e) => {
                     e.preventDefault();
+                    if (!enforcePermission('responsable_college')) return;
                     if (!formDetStudent.trim() || !formDetReason.trim()) return;
 
                     try {
@@ -1822,6 +1874,7 @@ export default function ResponsibilityZones() {
                 <form 
                   onSubmit={async (e) => {
                     e.preventDefault();
+                    if (!enforcePermission('gestionnaire_comptable')) return;
                     if (!formLedgerDesc.trim() || !formLedgerPrice) return;
                     
                     try {
@@ -1915,6 +1968,7 @@ export default function ResponsibilityZones() {
                 <form 
                   onSubmit={async (e) => {
                     e.preventDefault();
+                    if (!enforcePermission('responsable_pedagogique')) return;
                     if (!formRemedialStudent.trim()) return;
 
                     try {
@@ -1970,6 +2024,7 @@ export default function ResponsibilityZones() {
                 <form
                   onSubmit={async (e) => {
                     e.preventDefault();
+                    if (!enforcePermission('surveillant_general')) return;
                     if (!formLateName.trim() || !formLateReason.trim()) return;
 
                     try {
@@ -2038,6 +2093,7 @@ export default function ResponsibilityZones() {
                 <form
                   onSubmit={async (e) => {
                     e.preventDefault();
+                    if (!enforcePermission('surveillant_adjoint')) return;
                     if (!formVisitorName.trim() || !formVisitorReason.trim()) return;
 
                     try {
@@ -2096,6 +2152,7 @@ export default function ResponsibilityZones() {
                   <p className="text-[10px] text-gray-450 mt-1">Vous pouvez réclamer du matériel ou déclarer un dysfonctionnement de plomberie directement au service IT / Administrative de l'école.</p>
                   <button
                     onClick={async () => {
+                      if (!enforcePermission('dame_menage')) return;
                       try {
                         await addDoc(collection(db, 'resp_it_tickets'), {
                           item: 'Incident Plomberie (Sanitaires ou blocs)',
@@ -2120,6 +2177,7 @@ export default function ResponsibilityZones() {
                 <form 
                   onSubmit={async (e) => {
                     e.preventDefault();
+                    if (!enforcePermission('secretaire_generale')) return;
                     if (!formDocName.trim() || !formDocOrigin.trim()) return;
 
                     try {
@@ -2174,6 +2232,7 @@ export default function ResponsibilityZones() {
                 <form 
                   onSubmit={async (e) => {
                     e.preventDefault();
+                    if (!enforcePermission('secretaire_adjointe')) return;
                     if (!formCallCaller.trim() || !formCallMsg.trim()) return;
 
                     try {
@@ -2229,6 +2288,7 @@ export default function ResponsibilityZones() {
                 <form 
                   onSubmit={async (e) => {
                     e.preventDefault();
+                    if (!enforcePermission('responsable_it')) return;
                     if (!formITItem.trim() || !formITDesc.trim()) return;
 
                     try {
