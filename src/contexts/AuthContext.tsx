@@ -118,7 +118,21 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
               setDoc(docRef, updateData, { merge: true }).catch(err => console.error(err));
               setCurrentUser({ id: docSnap.id, ...userData, ...updateData } as User);
             } else {
-              setCurrentUser({ id: docSnap.id, ...userData } as User);
+              const isLudo = firebaseUser.email === 'ludo.consulting3@gmail.com';
+              if (isLudo && (!userData.responsibilities || userData.responsibilities.length === 0 || userData.role !== 'personnel administratif')) {
+                console.log("Enriching Ludovic profile with admin roles...");
+                const defaultResps = userData.responsibilities && userData.responsibilities.length > 0
+                  ? userData.responsibilities
+                  : ['gestionnaire_comptable', 'responsable_it', 'responsable_college', 'responsable_pedagogique'];
+                const updatedRole = 'personnel administratif';
+                setDoc(docRef, { 
+                  responsibilities: defaultResps,
+                  role: updatedRole
+                }, { merge: true }).catch(err => console.error(err));
+                setCurrentUser({ id: docSnap.id, ...userData, role: updatedRole, responsibilities: defaultResps } as User);
+              } else {
+                setCurrentUser({ id: docSnap.id, ...userData } as User);
+              }
             }
           } else {
             console.log("User profile does not exist in Firestore.");
@@ -137,18 +151,19 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
               setDoc(docRef, adminData).catch(err => console.error("Error creating admin doc:", err));
               setCurrentUser({ id: firebaseUser.uid, ...adminData } as User);
             } else if (firebaseUser.email === 'ludo.consulting3@gmail.com') {
-              console.log("Creating teacher profile for Ludovic...");
-              const teacherData = {
+              console.log("Creating default administrative profile for Ludovic...");
+              const adminStaffData = {
                 email: firebaseUser.email,
-                role: 'enseignant',
+                role: 'personnel administratif',
                 prenom: 'Ludovic',
                 nom: 'Consulting',
+                responsibilities: ['gestionnaire_comptable', 'responsable_it', 'responsable_college', 'responsable_pedagogique'],
                 status: 'online',
                 lastSeen: serverTimestamp(),
                 date_creation: new Date().toISOString()
               };
-              setDoc(docRef, teacherData).catch(err => console.error("Error creating teacher doc:", err));
-              setCurrentUser({ id: firebaseUser.uid, ...teacherData } as User);
+              setDoc(docRef, adminStaffData).catch(err => console.error("Error creating staff doc:", err));
+              setCurrentUser({ id: firebaseUser.uid, ...adminStaffData } as User);
             } else {
               setCurrentUser(null);
             }
