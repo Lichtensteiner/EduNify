@@ -12,6 +12,9 @@ export default defineConfig(({mode}) => {
       tailwindcss(),
       VitePWA({
         registerType: 'autoUpdate',
+        devOptions: {
+          enabled: true
+        },
         includeAssets: ['icon.svg', 'pwa-192x192.png', 'pwa-512x512.png'],
         workbox: {
           maximumFileSizeToCacheInBytes: 5000000
