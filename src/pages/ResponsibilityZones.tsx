@@ -537,7 +537,18 @@ export default function ResponsibilityZones() {
     const unsubUsers = onSnapshot(collection(db, 'users'), (snapshot) => {
       const allUsers = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       const students = allUsers.filter((u: any) => u.role === 'élève' || u.role === 'eleve');
-      const surveillants = allUsers.filter((u: any) => u.role === 'surveillant');
+      const surveillants = allUsers.filter((u: any) => 
+        u.role === 'surveillant' || 
+        u.role === 'surveillant_general' || 
+        u.role === 'surveillant_adjoint' ||
+        (u.responsibilities && (
+          u.responsibilities.includes('surveillant_general') || 
+          u.responsibilities.includes('surveillant_adjoint') ||
+          u.responsibilities.includes('surveillant')
+        )) ||
+        u.responsabilite === 'surveillant' ||
+        u.position?.toLowerCase().includes('surveillant')
+      );
       setDbStudents(students);
       setDbSurveillants(surveillants);
     }, (err) => handleFirestoreError(err, OperationType.GET, 'users'));

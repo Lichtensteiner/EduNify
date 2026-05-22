@@ -270,15 +270,6 @@ export default function Staff() {
                               }`}>
                                 {tData(member.role)}
                               </span>
-                              {member.responsibilities && member.responsibilities.length > 0 && member.responsibilities.map(respId => {
-                                const respInfo = administrativeResponsibilities.find(r => r.id === respId);
-                                if (!respInfo) return null;
-                                return (
-                                  <span key={respId} className={`inline-flex items-center px-1.5 py-0.5 rounded-md text-[9px] font-black border uppercase tracking-wider ${respInfo.badgeBg}`}>
-                                    {respInfo.label}
-                                  </span>
-                                );
-                              })}
                             </div>
                           </div>
                         </div>
