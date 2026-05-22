@@ -52,6 +52,7 @@ import { LanguageProvider } from './contexts/LanguageContext';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { NotificationProvider } from './contexts/NotificationContext';
 import ReloadPrompt from './components/ReloadPrompt';
+import PWAPrompt from './components/PWAPrompt';
 import Footer from './components/Footer';
 import { Ban } from 'lucide-react';
 import ErrorBoundary from './components/ErrorBoundary';
@@ -250,6 +251,7 @@ export default function App() {
             <NotificationProvider>
               <AppContent />
               <ReloadPrompt />
+              <PWAPrompt />
             </NotificationProvider>
           </AuthProvider>
         </LanguageProvider>

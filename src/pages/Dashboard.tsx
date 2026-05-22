@@ -52,7 +52,6 @@ import { useLanguage } from '../contexts/LanguageContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { useNotification } from '../contexts/NotificationContext';
 import NewUserAnnouncement from '../components/NewUserAnnouncement';
-import PWAPrompt from '../components/PWAPrompt';
 
 const COLORS = ['#4f46e5', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
 
@@ -1395,7 +1394,6 @@ export default function Dashboard({ onNavigate }: any) {
       </div>
 
       <NewUserAnnouncement />
-      <PWAPrompt />
 
       {currentUser?.role === 'admin' || currentUser?.role === 'personnel administratif' ? (
         <AdminDashboard 

@@ -10,7 +10,9 @@ interface BeforeInstallPromptEvent extends Event {
 }
 
 export function usePWA() {
-  const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
+  const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(
+    (window as any).deferredPrompt || null
+  );
   const [isStandalone, setIsStandalone] = useState(false);
 
   useEffect(() => {
@@ -23,13 +25,20 @@ export function usePWA() {
       // Prevent the mini-infobar from appearing on mobile
       e.preventDefault();
       // Stash the event so it can be triggered later.
+      (window as any).deferredPrompt = e;
       setInstallPrompt(e as BeforeInstallPromptEvent);
     };
+
+    // If there is already a stashed prompt, keep it
+    if ((window as any).deferredPrompt) {
+      setInstallPrompt((window as any).deferredPrompt);
+    }
 
     window.addEventListener('beforeinstallprompt', handler);
 
     const appInstalledHandler = () => {
       setInstallPrompt(null);
+      (window as any).deferredPrompt = null;
       setIsStandalone(true);
       console.log('PWA was installed');
     };
@@ -43,20 +52,22 @@ export function usePWA() {
   }, []);
 
   const installApp = async () => {
-    if (!installPrompt) {
+    const promptEvent = installPrompt || (window as any).deferredPrompt;
+    if (!promptEvent) {
       return;
     }
 
     // Show the install prompt
-    await installPrompt.prompt();
+    await promptEvent.prompt();
 
     // Wait for the user to respond to the prompt
-    const { outcome } = await installPrompt.userChoice;
+    const { outcome } = await promptEvent.userChoice;
     console.log(`User response to the install prompt: ${outcome}`);
 
     // We've used the prompt, and can't use it again, throw it away
     setInstallPrompt(null);
+    (window as any).deferredPrompt = null;
   };
 
-  return { isInstallable: !!installPrompt, installApp, isStandalone };
+  return { isInstallable: !!installPrompt || !!(window as any).deferredPrompt, installApp, isStandalone };
 }

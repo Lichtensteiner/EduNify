@@ -878,9 +878,14 @@ export default function Settings() {
                                  Installer Edu-Nify
                                </button>
                             ) : (
-                               <div className="flex flex-col gap-2">
-                                 <p className="text-xs font-black text-indigo-200 uppercase tracking-widest">VOTRE NAVIGATEUR EST PRÊT</p>
-                                 <p className="text-[10px] font-medium opacity-80 max-w-sm">Si le bouton n'apparait pas, vous pouvez installer manuellement via le menu de votre navigateur (Option "Ajouter à l'écran d'accueil").</p>
+                               <div className="flex flex-col gap-4">
+                                 <button 
+                                   onClick={() => window.dispatchEvent(new CustomEvent('open-pwa-install-guide'))}
+                                   className="w-full sm:w-auto px-8 py-3.5 bg-white text-indigo-700 hover:bg-indigo-50 rounded-2xl font-black text-sm transition-all active:scale-95 shadow-md cursor-pointer uppercase tracking-wider"
+                                 >
+                                   Guide d'Installation (iOS/Android)
+                                 </button>
+                                 <p className="text-[10px] font-medium opacity-90 max-w-sm">Si le bouton d'installation automatique n'est pas supporté par votre navigateur (par exemple sur Safari iOS), vous pouvez l'ajouter manuellement en 3 clics.</p>
                                </div>
                             )}
                           </div>

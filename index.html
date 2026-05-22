@@ -32,6 +32,12 @@
       </div>
     </div>
     <script>
+      // Capture early PWA install prompts
+      window.addEventListener('beforeinstallprompt', (e) => {
+        e.preventDefault();
+        window.deferredPrompt = e;
+      });
+
       window.onerror = function(msg, url, lineNo, columnNo, error) {
         document.getElementById('loading-display').style.display = 'none';
         document.getElementById('error-display').style.display = 'block';

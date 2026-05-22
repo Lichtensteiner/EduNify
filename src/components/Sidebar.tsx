@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { LayoutDashboard, Users, CalendarCheck, FileText, Settings, BookOpen, Code, LogOut, ScanLine, Smartphone, IdCard, Trophy, ScanFace, Activity, GraduationCap, UserCircle, Castle, X, Download, Calendar as CalendarIcon, MessageSquare, BookUser, MessageCircle, Info, Sparkles, Wallet, ShieldAlert, History, Award, ShieldCheck, Scale, Utensils, Library, Vote, FileBadge } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
+import { usePWA } from '../hooks/usePWA';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 
@@ -15,6 +16,7 @@ interface SidebarProps {
 export default function Sidebar({ activeTab, setActiveTab, isMobileOpen, setIsMobileOpen }: SidebarProps) {
   const { currentUser, logout } = useAuth();
   const { t, tData } = useLanguage();
+  const { isStandalone } = usePWA();
   const [totalUnreadCount, setTotalUnreadCount] = useState(0);
 
   useEffect(() => {
@@ -180,7 +182,22 @@ export default function Sidebar({ activeTab, setActiveTab, isMobileOpen, setIsMo
           })}
         </div>
 
-        <div className="p-4 border-t border-gray-200 dark:border-gray-700 shrink-0 space-y-4">
+        <div className="p-4 border-t border-gray-200 dark:border-gray-700 shrink-0 space-y-3">
+          {isStandalone ? (
+            <div className="flex items-center gap-2 px-4 py-2 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400 rounded-xl text-xs font-semibold border border-emerald-100 dark:border-emerald-800/30">
+              <span className="flex h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              Application installée ✓
+            </div>
+          ) : (
+            <button 
+              onClick={() => window.dispatchEvent(new CustomEvent('open-pwa-install-guide'))}
+              className="w-full flex items-center gap-3 px-4 py-2.5 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white rounded-xl text-xs font-bold transition-all active:scale-95 shadow-md shadow-indigo-600/10 cursor-pointer"
+            >
+              <Smartphone size={16} className="text-white shrink-0 animate-bounce" />
+              <span>Installer l'application</span>
+            </button>
+          )}
+
           {currentUser && (
             <div className="flex items-center gap-3 px-4 py-3 bg-gray-50 dark:bg-gray-700/50 rounded-xl border border-gray-100 dark:border-gray-600 mb-2">
               {currentUser.photo ? (
