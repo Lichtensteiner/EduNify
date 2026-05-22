@@ -48,13 +48,14 @@ export default function ResponsibilityZones() {
   // Check which responsibilities are active for the logged-in user
   // If admin, they can manage and view ALL responsibilities EXCEPT 'responsable_maternelle' (Gestion de la Maternelle is removed from admin's Bureau Direction tabs)
   const isGlobalAdmin = currentUser?.role === 'admin';
-  const userResponsibilities = currentUser?.responsibilities || [];
+  const responsibilitiesString = (currentUser?.responsibilities || []).join(',');
   
   const accessibleResponsibilityIds = React.useMemo(() => {
     return isGlobalAdmin 
       ? availableResponsibilityIds.filter(id => id !== 'responsable_maternelle') 
-      : userResponsibilities;
-  }, [isGlobalAdmin, availableResponsibilityIds, userResponsibilities]);
+      : (currentUser?.responsibilities || []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isGlobalAdmin, availableResponsibilityIds, responsibilitiesString]);
 
   const [activeRespId, setActiveRespId] = useState<string>('');
 
@@ -146,7 +147,15 @@ export default function ResponsibilityZones() {
   const [brevetChapters, setBrevetChapters] = useState<Array<{id: string, subject: string, topic: string, status: 'ready' | 'pending'}>>([]);
 
   // 4. Comptabilité Ledger Flow (Cash Flow ledger)
-  const [accountingFlows, setAccountingFlows] = useState<Array<{id: string, type: 'inflow' | 'outflow', category: string, amount: number, description: string, date: string}>>([]);
+  const [accountingFlows, setAccountingFlows] = useState<Array<{id: string, type: 'inflow' | 'outflow', category: string, amount: number, description: string, date: string, isCanteen?: boolean}>>([]);
+
+  // Database-synced states for real-time validation & dropdown selects
+  const [dbStudents, setDbStudents] = useState<any[]>([]);
+  const [dbSubjects, setDbSubjects] = useState<any[]>([]);
+  const [dbSurveillants, setDbSurveillants] = useState<any[]>([]);
+  const [dbClasses, setDbClasses] = useState<any[]>([]);
+  const [payments, setPayments] = useState<any[]>([]);
+  const [canteenTransactions, setCanteenTransactions] = useState<any[]>([]);
 
   // 5. Pedagogique checks
   const [remedialGroups, setRemedialGroups] = useState<Array<{id: string, studentName: string, subject: string, level: string, date: string}>>([]);
@@ -266,32 +275,6 @@ export default function ResponsibilityZones() {
         }
       }, (err) => handleFirestoreError(err, OperationType.GET, 'resp_brevet_chapters'));
       unsubs.push(unsubChapters);
-    }
-
-    // Accounting Flows
-    if (accessibleResponsibilityIds.includes('gestionnaire_comptable')) {
-      const unsubFlows = onSnapshot(collection(db, 'resp_accounting_flows'), (snapshot) => {
-        if (snapshot.empty) {
-          const defaults = [
-            { type: 'inflow', category: 'Écolages', amount: 480000, description: 'Scolarité Trimestre 3 - Classe de 3ème', date: 'Aujourd\'hui, 10:15' },
-            { type: 'outflow', category: 'Fournitures', amount: 85000, description: 'Achat de craies et rames de papier', date: 'Hier, 16:30' },
-            { type: 'inflow', category: 'Cantine', amount: 120000, description: 'Recharge cartes cantine - Parent Koné', date: 'Aujourd\'hui, 08:45' }
-          ];
-          defaults.forEach(async (item) => {
-            await addDoc(collection(db, 'resp_accounting_flows'), item);
-          });
-        } else {
-          setAccountingFlows(snapshot.docs.map(doc => ({
-            id: doc.id,
-            type: doc.data().type as any,
-            category: doc.data().category || '',
-            amount: Number(doc.data().amount || 0),
-            description: doc.data().description || '',
-            date: doc.data().date || ''
-          })));
-        }
-      }, (err) => handleFirestoreError(err, OperationType.GET, 'resp_accounting_flows'));
-      unsubs.push(unsubFlows);
     }
 
     // Remedial Groups
@@ -550,10 +533,109 @@ export default function ResponsibilityZones() {
       unsubs.push(unsubTickets);
     }
 
+    // Subscriptions to core collections (users, subjects, classes, payments, canteen_transactions) for real-time validation dropdowns
+    const unsubUsers = onSnapshot(collection(db, 'users'), (snapshot) => {
+      const allUsers = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      const students = allUsers.filter((u: any) => u.role === 'élève' || u.role === 'eleve');
+      const surveillants = allUsers.filter((u: any) => u.role === 'surveillant');
+      setDbStudents(students);
+      setDbSurveillants(surveillants);
+    }, (err) => handleFirestoreError(err, OperationType.GET, 'users'));
+    unsubs.push(unsubUsers);
+
+    const unsubSubjects = onSnapshot(collection(db, 'subjects'), (snapshot) => {
+      const subs = snapshot.docs.map(doc => doc.data().name as string).filter(Boolean);
+      setDbSubjects(subs);
+    }, (err) => handleFirestoreError(err, OperationType.GET, 'subjects'));
+    unsubs.push(unsubSubjects);
+
+    const unsubClasses = onSnapshot(collection(db, 'classes'), (snapshot) => {
+      const classesData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setDbClasses(classesData);
+    }, (err) => handleFirestoreError(err, OperationType.GET, 'classes'));
+    unsubs.push(unsubClasses);
+
+    const unsubPayments = onSnapshot(collection(db, 'payments'), (snapshot) => {
+      const payData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setPayments(payData);
+    }, (err) => handleFirestoreError(err, OperationType.GET, 'payments'));
+    unsubs.push(unsubPayments);
+
+    const unsubCanteen = onSnapshot(collection(db, 'canteen_transactions'), (snapshot) => {
+      const transData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setCanteenTransactions(transData);
+    }, (err) => handleFirestoreError(err, OperationType.GET, 'canteen_transactions'));
+    unsubs.push(unsubCanteen);
+
     return () => {
       unsubs.forEach(cleanup => cleanup());
     };
   }, [accessibleResponsibilityIds]);
+
+  // Dynamic Real-time compute of Ledger Flows for the Accountant responsibility
+  useEffect(() => {
+    const combinedFlows: Array<{id: string, type: 'inflow' | 'outflow', category: string, amount: number, description: string, date: string, isCanteen?: boolean}> = [];
+
+    // Map payments to cash flows
+    payments.forEach(p => {
+      const isOutflow = Number(p.amount || 0) < 0;
+      const amt = Math.abs(Number(p.amount || 0));
+      
+      const catLabel = p.type === 'tuition' ? 'Écolages' :
+                       p.type === 'registration' ? 'Inscription' :
+                       p.type === 'canteen' ? 'Cantine' :
+                       p.type === 'transport' ? 'Transport' : 'Autre';
+
+      let dateStr = 'À l\'instant';
+      if (p.date?.toDate) {
+        const d = p.date.toDate();
+        dateStr = d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+      } else if (p.date && typeof p.date === 'string') {
+        dateStr = p.date;
+      }
+
+      combinedFlows.push({
+        id: p.id,
+        type: isOutflow ? 'outflow' : 'inflow',
+        category: catLabel,
+        amount: amt,
+        description: p.notes || p.studentName || 'Transactions Réelles',
+        date: dateStr,
+        isCanteen: false
+      });
+    });
+
+    // Map canteen transactions to cash flows
+    canteenTransactions.forEach(t => {
+      if (t.type === 'topup') {
+        const student = dbStudents.find(s => s.id === t.userId);
+        const name = student ? `${student.prenom} ${student.nom}` : 'Utilisateur Cantine';
+
+        let dateStr = 'À l\'instant';
+        if (t.timestamp?.toDate) {
+          const d = t.timestamp.toDate();
+          dateStr = d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+        } else if (t.timestamp && typeof t.timestamp === 'string') {
+          dateStr = t.timestamp;
+        }
+
+        combinedFlows.push({
+          id: t.id,
+          type: 'inflow',
+          category: 'Cantine',
+          amount: Number(t.amount || 0),
+          description: `Recharge cantine - ${name}`,
+          date: dateStr,
+          isCanteen: true
+        });
+      }
+    });
+
+    // Sort flows by ID (descending) so newest is on top
+    combinedFlows.sort((a, b) => b.id.localeCompare(a.id));
+
+    setAccountingFlows(combinedFlows);
+  }, [payments, canteenTransactions, dbStudents]);
 
   // Form states
   const [formKidName, setFormKidName] = useState('');
@@ -590,6 +672,16 @@ export default function ResponsibilityZones() {
   const [formITItem, setFormITItem] = useState('');
   const [formITDesc, setFormITDesc] = useState('');
   const [formITSeverity, setFormITSeverity] = useState<'minor' | 'critical'>('minor');
+
+  // New Form states for College Brevet and IT equip loans
+  const [collegeFormType, setCollegeFormType] = useState<'detention' | 'brevet'>('detention');
+  const [formBrevetSubject, setFormBrevetSubject] = useState('');
+  const [formBrevetTopic, setFormBrevetTopic] = useState('');
+
+  const [itFormType, setItFormType] = useState<'incident' | 'loan'>('incident');
+  const [formITLoanCart, setFormITLoanCart] = useState('');
+  const [formITLoanClass, setFormITLoanClass] = useState('');
+  const [formITLoanDuration, setFormITLoanDuration] = useState('1 Cours (Mardi 10h)');
 
   const [formDocName, setFormDocName] = useState('');
   const [formDocLevel, setFormDocLevel] = useState('Classe de 6ème');
@@ -922,25 +1014,42 @@ export default function ResponsibilityZones() {
                           <span className={`text-[9px] font-black uppercase ${chap.status === 'ready' ? 'text-emerald-500' : 'text-amber-500'}`}>
                             {chap.status === 'ready' ? 'Prêt' : 'En attente'}
                           </span>
-                          <button
-                            onClick={async () => {
-                              if (!enforcePermission('responsable_college')) return;
-                              try {
-                                const updatedStatus = chap.status === 'ready' ? 'pending' : 'ready';
-                                await updateDoc(doc(db, 'resp_brevet_chapters', chap.id), {
-                                  status: updatedStatus
-                                });
-                                notifySuccess("Statut du programme actualisé !");
-                              } catch (error) {
-                                console.error("Error updating chapter status:", error);
-                              }
-                            }}
-                            className={`p-1 rounded-lg border text-[9px] font-black uppercase cursor-pointer ${
-                              chap.status === 'ready' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-gray-50 border-gray-150'
-                            }`}
-                          >
-                            Bascule
-                          </button>
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              onClick={async () => {
+                                if (!enforcePermission('responsable_college')) return;
+                                try {
+                                  const updatedStatus = chap.status === 'ready' ? 'pending' : 'ready';
+                                  await updateDoc(doc(db, 'resp_brevet_chapters', chap.id), {
+                                    status: updatedStatus
+                                  });
+                                  notifySuccess("Statut du programme actualisé !");
+                                } catch (error) {
+                                  console.error("Error updating chapter status:", error);
+                                }
+                              }}
+                              className={`p-1 rounded-lg border text-[9px] font-black uppercase cursor-pointer ${
+                                chap.status === 'ready' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-gray-50 border-gray-150'
+                              }`}
+                            >
+                              Bascule
+                            </button>
+                            <button
+                              onClick={async () => {
+                                if (!enforcePermission('responsable_college')) return;
+                                try {
+                                  await deleteDoc(doc(db, 'resp_brevet_chapters', chap.id));
+                                  notifySuccess("Programme de révision supprimé !");
+                                } catch (error) {
+                                  console.error("Error deleting brevet chapter:", error);
+                                }
+                              }}
+                              className="p-1 text-gray-400 hover:text-red-500 rounded-md cursor-pointer"
+                              title="Supprimer"
+                            >
+                              <Trash2 size={12} />
+                            </button>
+                          </div>
                         </div>
                       </div>
                     ))}
@@ -1800,74 +1909,179 @@ export default function ResponsibilityZones() {
               )}
 
               {/* Form 3: College */}
-              {activeRespId === 'responsable_college' && (
-                <form
-                  onSubmit={async (e) => {
-                    e.preventDefault();
-                    if (!enforcePermission('responsable_college')) return;
-                    if (!formDetStudent.trim() || !formDetReason.trim()) return;
+              {activeRespId === 'responsable_college' && (() => {
+                const displayStudents = dbStudents.length > 0 ? dbStudents : [
+                  { id: '1', prenom: 'Arthur', nom: 'Traoré', classe: '3ème A' },
+                  { id: '2', prenom: 'Inès', nom: 'Bamba', classe: '4ème B' },
+                  { id: '3', prenom: 'Arnaud', nom: 'Yao', classe: '3ème B' }
+                ];
+                const displaySurveillants = dbSurveillants.length > 0 ? dbSurveillants : [
+                  { id: 's1', prenom: 'M.', nom: 'Kouamé' },
+                  { id: 's2', prenom: 'Mme', nom: 'Touré' },
+                  { id: 's3', prenom: 'Service', nom: 'Permanence' }
+                ];
+                const displaySubjects = dbSubjects.length > 0 ? dbSubjects : ["Mathématiques", "Physique-Chimie", "Français", "Sciences - SVT", "Anglais", "Histoire-Géographie"];
+                
+                return (
+                  <div className="space-y-3">
+                    {/* Action Selector */}
+                    <div className="grid grid-cols-2 gap-2 mb-1">
+                      <button
+                        type="button"
+                        onClick={() => setCollegeFormType('detention')}
+                        className={`py-2 text-[10px] font-black uppercase rounded-lg border transition-all cursor-pointer ${
+                          collegeFormType === 'detention'
+                            ? 'bg-indigo-50 dark:bg-indigo-950/30 text-indigo-700 dark:text-indigo-300 border-indigo-500 font-bold'
+                            : 'bg-white dark:bg-gray-900 text-gray-400 border-gray-150 dark:border-gray-850'
+                        }`}
+                      >
+                        Heure de Colle
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setCollegeFormType('brevet')}
+                        className={`py-2 text-[10px] font-black uppercase rounded-lg border transition-all cursor-pointer ${
+                          collegeFormType === 'brevet'
+                            ? 'bg-indigo-50 dark:bg-indigo-950/30 text-indigo-700 dark:text-indigo-300 border-indigo-500 font-bold'
+                            : 'bg-white dark:bg-gray-900 text-gray-400 border-gray-150 dark:border-gray-850'
+                        }`}
+                      >
+                        Révision Brevet
+                      </button>
+                    </div>
 
-                    try {
-                      await addDoc(collection(db, 'resp_college_detentions'), {
-                        student: formDetStudent,
-                        reason: formDetReason,
-                        teacher: currentUser?.prenom || 'Direction',
-                        date: '23 Mai 2026',
-                        hour: '13h30 - 15h30',
-                        proctor: formDetProctor
-                      });
-                      setFormDetStudent('');
-                      setFormDetReason('');
-                      notifySuccess("Ordre de retenue officiellement émis !");
-                    } catch (error) {
-                      console.error("Error adding college detention:", error);
-                    }
-                  }}
-                  className="space-y-3 text-xs"
-                >
-                  <div className="space-y-1">
-                    <label className="text-[10px] uppercase font-bold text-gray-400">Élève Consigné</label>
-                    <input 
-                      type="text" 
-                      placeholder="Nom complet"
-                      value={formDetStudent}
-                      onChange={(e) => setFormDetStudent(e.target.value)}
-                      className="w-full p-2.5 bg-gray-50 dark:bg-gray-900 border rounded-xl outline-none"
-                    />
+                    {collegeFormType === 'detention' ? (
+                      <form
+                        onSubmit={async (e) => {
+                          e.preventDefault();
+                          if (!enforcePermission('responsable_college')) return;
+                          const studentVal = formDetStudent || `${displayStudents[0].prenom} ${displayStudents[0].nom}`;
+                          const proctorVal = formDetProctor || `${displaySurveillants[0].prenom} ${displaySurveillants[0].nom}`;
+                          if (!formDetReason.trim()) return;
+
+                          try {
+                            await addDoc(collection(db, 'resp_college_detentions'), {
+                              student: studentVal,
+                              reason: formDetReason,
+                              teacher: currentUser?.prenom || 'Direction',
+                              date: '23 Mai 2026',
+                              hour: '13h30 - 15h30',
+                              proctor: proctorVal
+                            });
+                            setFormDetStudent('');
+                            setFormDetReason('');
+                            notifySuccess("Ordre de retenue officiellement émis !");
+                          } catch (error) {
+                            console.error("Error adding college detention:", error);
+                          }
+                        }}
+                        className="space-y-3 text-xs"
+                      >
+                        <div className="space-y-1">
+                          <label className="text-[10px] uppercase font-bold text-gray-400 block">Élève Consigné</label>
+                          <select 
+                            value={formDetStudent}
+                            onChange={(e) => setFormDetStudent(e.target.value)}
+                            className="w-full p-2.5 bg-gray-50 border rounded-xl dark:bg-gray-900 dark:border-gray-750 outline-none"
+                          >
+                            {displayStudents.map(student => (
+                              <option key={student.id} value={`${student.prenom} ${student.nom}`}>
+                                {student.prenom} {student.nom} ({student.classe})
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="text-[10px] uppercase font-bold text-gray-400 block">Motif Disciplinaire</label>
+                          <textarea 
+                            placeholder="Bavardages incessants malgré avertissements, etc."
+                            rows={2}
+                            value={formDetReason}
+                            onChange={(e) => setFormDetReason(e.target.value)}
+                            className="w-full p-2.5 bg-gray-50 border rounded-xl dark:bg-gray-900 dark:border-gray-750 outline-none"
+                          />
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="text-[10px] uppercase font-bold text-gray-400 block">Surveillant de permanence</label>
+                          <select
+                            value={formDetProctor}
+                            onChange={(e) => setFormDetProctor(e.target.value)}
+                            className="w-full p-2.5 bg-gray-50 border rounded-xl dark:bg-gray-900 dark:border-gray-750 outline-none"
+                          >
+                            {displaySurveillants.map(surv => (
+                              <option key={surv.id} value={`${surv.prenom} ${surv.nom}`}>
+                                {surv.prenom} {surv.nom}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <button 
+                          type="submit"
+                          className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-black uppercase text-[10px] tracking-wider transition-all cursor-pointer"
+                        >
+                          Émettre Heure de Colle
+                        </button>
+                      </form>
+                    ) : (
+                      <form
+                        onSubmit={async (e) => {
+                          e.preventDefault();
+                          if (!enforcePermission('responsable_college')) return;
+                          const subjectVal = formBrevetSubject || displaySubjects[0];
+                          if (!formBrevetTopic.trim()) return;
+
+                          try {
+                            await addDoc(collection(db, 'resp_brevet_chapters'), {
+                              subject: subjectVal,
+                              topic: formBrevetTopic,
+                              status: 'pending'
+                            });
+                            setFormBrevetTopic('');
+                            notifySuccess("Programme de révision du Brevet planifié !");
+                          } catch (error) {
+                            console.error("Error adding brevet chapter:", error);
+                          }
+                        }}
+                        className="space-y-3 text-xs"
+                      >
+                        <div className="space-y-1">
+                          <label className="text-[10px] uppercase font-bold text-gray-400 block">Matière disponible</label>
+                          <select
+                            value={formBrevetSubject}
+                            onChange={(e) => setFormBrevetSubject(e.target.value)}
+                            className="w-full p-2.5 bg-gray-50 border rounded-xl dark:bg-gray-900 dark:border-gray-750 outline-none"
+                          >
+                            {displaySubjects.map(sub => (
+                              <option key={sub} value={sub}>{sub}</option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="text-[10px] uppercase font-bold text-gray-400 block">Chapitre / Sujet de révision</label>
+                          <input 
+                            type="text" 
+                            placeholder="Ex: Arithmétique & Théorème de Thalès"
+                            value={formBrevetTopic}
+                            onChange={(e) => setFormBrevetTopic(e.target.value)}
+                            className="w-full p-2.5 bg-gray-50 border rounded-xl dark:bg-gray-900 dark:border-gray-750 outline-none"
+                          />
+                        </div>
+
+                        <button 
+                          type="submit"
+                          className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-black uppercase text-[10px] tracking-wider transition-all cursor-pointer"
+                        >
+                          Planifier Révision
+                        </button>
+                      </form>
+                    )}
                   </div>
-
-                  <div className="space-y-1">
-                    <label className="text-[10px] uppercase font-bold text-gray-400">Motif Disciplinaire</label>
-                    <textarea 
-                      placeholder="Bavardages incessants malgré avertissements, etc."
-                      rows={2}
-                      value={formDetReason}
-                      onChange={(e) => setFormDetReason(e.target.value)}
-                      className="w-full p-2.5 bg-gray-50 dark:bg-gray-900 border rounded-xl outline-none"
-                    />
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="text-[10px] uppercase font-bold text-gray-400">Surveillant de permanence</label>
-                    <select
-                      value={formDetProctor}
-                      onChange={(e) => setFormDetProctor(e.target.value)}
-                      className="w-full p-2.5 bg-gray-50 dark:bg-gray-900 border rounded-xl outline-none"
-                    >
-                      <option value="M. Kouamé">M. Kouamé</option>
-                      <option value="Mme Touré">Mme Touré</option>
-                      <option value="Service Permanence">Service Permanence</option>
-                    </select>
-                  </div>
-
-                  <button 
-                    type="submit"
-                    className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-black uppercase text-[10px] tracking-wider transition-all cursor-pointer"
-                  >
-                    Générer et Imprimer
-                  </button>
-                </form>
-              )}
+                );
+              })()}
 
               {/* Form 4: Comptabilité */}
               {activeRespId === 'gestionnaire_comptable' && (
@@ -1878,18 +2092,26 @@ export default function ResponsibilityZones() {
                     if (!formLedgerDesc.trim() || !formLedgerPrice) return;
                     
                     try {
-                      await addDoc(collection(db, 'resp_accounting_flows'), {
-                        type: formLedgerType,
-                        category: formLedgerCategory,
-                        amount: Number(formLedgerPrice),
-                        description: formLedgerDesc,
-                        date: 'À l\'instant'
+                      const amountVal = Number(formLedgerPrice);
+                      const isOutflow = formLedgerType === 'outflow';
+                      await addDoc(collection(db, 'payments'), {
+                        studentId: 'auxiliary',
+                        studentName: formLedgerDesc,
+                        amount: isOutflow ? -amountVal : amountVal,
+                        type: formLedgerCategory === 'Écolages' ? 'tuition' :
+                              formLedgerCategory === 'Cantine' ? 'canteen' :
+                              formLedgerCategory === 'Transport' ? 'transport' : 'other',
+                        status: 'paid',
+                        date: new Date(), // use local timestamp compatibility
+                        method: 'cash',
+                        reference: 'COMPTE-RELAIS',
+                        notes: formLedgerDesc
                       });
                       setFormLedgerDesc('');
                       setFormLedgerPrice('');
-                      notifySuccess("Ligne comptable consignée !");
+                      notifySuccess("Écriture financière enregistrée en temps réel !");
                     } catch (error) {
-                      console.error("Error adding accounting flow:", error);
+                      console.error("Error adding live payment flow:", error);
                     }
                   }}
                   className="space-y-3 text-xs"
@@ -1923,12 +2145,12 @@ export default function ResponsibilityZones() {
                     <select
                       value={formLedgerCategory}
                       onChange={(e) => setFormLedgerCategory(e.target.value)}
-                      className="w-full p-2.5 bg-gray-50 border rounded-xl"
+                      className="w-full p-2.5 bg-gray-50 dark:bg-gray-900 border rounded-xl outline-none"
                     >
                       <option value="Écolages">Écolages (Frais sco)</option>
-                      <option value="Encas">Fournitures administrative</option>
+                      <option value="Fournitures">Fournitures administrative</option>
                       <option value="Cantine">Recharge Canteen</option>
-                      <option value="Matériel">Équipements & IT</option>
+                      <option value="Transport">Transport / Logistique</option>
                     </select>
                   </div>
 
@@ -1939,18 +2161,18 @@ export default function ResponsibilityZones() {
                       placeholder="Ex: 150000"
                       value={formLedgerPrice}
                       onChange={(e) => setFormLedgerPrice(e.target.value)}
-                      className="w-full p-2.5 bg-gray-50 border rounded-xl"
+                      className="w-full p-2.5 bg-gray-50 border rounded-xl dark:bg-gray-900 dark:border-gray-750 outline-none"
                     />
                   </div>
 
                   <div className="space-y-1">
-                    <label className="text-[10px] uppercase font-bold text-gray-400">Candidat ou Objet précis</label>
+                    <label className="text-[10px] uppercase font-bold text-gray-400 font-bold">Description / Objet précis</label>
                     <input 
                       type="text" 
-                      placeholder="Ex: Frais scolarité Touré 6ème B"
+                      placeholder="Ex: Scolarité Koné Ismaël"
                       value={formLedgerDesc}
                       onChange={(e) => setFormLedgerDesc(e.target.value)}
-                      className="w-full p-2.5 bg-gray-50 border rounded-xl"
+                      className="w-full p-2.5 bg-gray-50 border rounded-xl dark:bg-gray-900 dark:border-gray-750 outline-none"
                     />
                   </div>
 
@@ -1958,66 +2180,82 @@ export default function ResponsibilityZones() {
                     type="submit"
                     className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-black uppercase text-[10px] cursor-pointer"
                   >
-                    Valider Écriture Ledger
+                    Valider Écriture Réelle
                   </button>
                 </form>
               )}
 
               {/* Form 5: Pedagogique */}
-              {activeRespId === 'responsable_pedagogique' && (
-                <form 
-                  onSubmit={async (e) => {
-                    e.preventDefault();
-                    if (!enforcePermission('responsable_pedagogique')) return;
-                    if (!formRemedialStudent.trim()) return;
+              {activeRespId === 'responsable_pedagogique' && (() => {
+                const displayStudents = dbStudents.length > 0 ? dbStudents : [
+                  { id: '1', prenom: 'Arthur', nom: 'Traoré', classe: '3ème A' },
+                  { id: '2', prenom: 'Inès', nom: 'Bamba', classe: '4ème B' },
+                  { id: '3', prenom: 'Arnaud', nom: 'Yao', classe: '3ème B' }
+                ];
+                const displaySubjects = dbSubjects.length > 0 ? dbSubjects : ["Mathématiques", "Physique-Chimie", "Français", "Sciences - SVT", "Anglais", "Histoire-Géographie"];
 
-                    try {
-                      await addDoc(collection(db, 'resp_remedial_groups'), {
-                        studentName: formRemedialStudent,
-                        subject: formRemedialSubject,
-                        level: formRemedialLevel,
-                        date: 'Mercredi 14h30'
-                      });
-                      setFormRemedialStudent('');
-                      notifySuccess("Élève inscrit au soutien scolaire !");
-                    } catch (error) {
-                      console.error("Error adding remedial group:", error);
-                    }
-                  }}
-                  className="space-y-3 text-xs"
-                >
-                  <div className="space-y-1">
-                    <label className="text-[10px] uppercase font-bold text-gray-400">Élève en difficulté</label>
-                    <input 
-                      type="text" 
-                      placeholder="Arthur Traoré"
-                      value={formRemedialStudent}
-                      onChange={(e) => setFormRemedialStudent(e.target.value)}
-                      className="w-full p-2.5 bg-gray-50 border rounded-xl"
-                    />
-                  </div>
+                return (
+                  <form 
+                    onSubmit={async (e) => {
+                      e.preventDefault();
+                      if (!enforcePermission('responsable_pedagogique')) return;
+                      const studentVal = formRemedialStudent || `${displayStudents[0].prenom} ${displayStudents[0].nom}`;
+                      const subjectVal = formRemedialSubject || displaySubjects[0];
+                      const matchedStudent = displayStudents.find(s => `${s.prenom} ${s.nom}` === studentVal);
+                      const classVal = matchedStudent?.classe || '3ème A';
 
-                  <div className="space-y-1">
-                    <label className="text-[10px] uppercase font-bold text-gray-400">Matière Soutien</label>
-                    <select
-                      value={formRemedialSubject}
-                      onChange={(e) => setFormRemedialSubject(e.target.value)}
-                      className="w-full p-2.5 bg-gray-50 border rounded-xl"
-                    >
-                      <option value="Mathématiques">Mathématiques</option>
-                      <option value="Physique-Chimie">Physique-Chimie</option>
-                      <option value="Français">Français</option>
-                    </select>
-                  </div>
-
-                  <button 
-                    type="submit"
-                    className="w-full py-2.5 bg-amber-600 text-white rounded-xl font-black text-[10px] uppercase cursor-pointer"
+                      try {
+                        await addDoc(collection(db, 'resp_remedial_groups'), {
+                          studentName: studentVal,
+                          subject: subjectVal,
+                          level: classVal,
+                          date: 'Mercredi 14h30'
+                        });
+                        setFormRemedialStudent('');
+                        notifySuccess("Élève inscrit au soutien scolaire !");
+                      } catch (error) {
+                        console.error("Error adding remedial group:", error);
+                      }
+                    }}
+                    className="space-y-3 text-xs"
                   >
-                    Ouvrir un groupe de soutien
-                  </button>
-                </form>
-              )}
+                    <div className="space-y-1">
+                      <label className="text-[10px] uppercase font-bold text-gray-400 block">Élève en difficulté</label>
+                      <select 
+                        value={formRemedialStudent}
+                        onChange={(e) => setFormRemedialStudent(e.target.value)}
+                        className="w-full p-2.5 bg-gray-50 border rounded-xl dark:bg-gray-900 dark:border-gray-750 outline-none"
+                      >
+                        {displayStudents.map(student => (
+                          <option key={student.id} value={`${student.prenom} ${student.nom}`}>
+                            {student.prenom} {student.nom} ({student.classe})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-[10px] uppercase font-bold text-gray-400 block">Matière Soutien</label>
+                      <select
+                        value={formRemedialSubject}
+                        onChange={(e) => setFormRemedialSubject(e.target.value)}
+                        className="w-full p-2.5 bg-gray-50 border rounded-xl dark:bg-gray-900 dark:border-gray-750 outline-none"
+                      >
+                        {displaySubjects.map(sub => (
+                          <option key={sub} value={sub}>{sub}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <button 
+                      type="submit"
+                      className="w-full py-2.5 bg-amber-600 text-white rounded-xl font-black text-[10px] uppercase cursor-pointer"
+                    >
+                      Ouvrir un groupe de soutien
+                    </button>
+                  </form>
+                );
+              })()}
 
               {/* Form 6: Surveillant General */}
               {activeRespId === 'surveillant_general' && (
@@ -2284,71 +2522,171 @@ export default function ResponsibilityZones() {
               )}
 
               {/* Form 11: IT Material */}
-              {activeRespId === 'responsable_it' && (
-                <form 
-                  onSubmit={async (e) => {
-                    e.preventDefault();
-                    if (!enforcePermission('responsable_it')) return;
-                    if (!formITItem.trim() || !formITDesc.trim()) return;
+              {activeRespId === 'responsable_it' && (() => {
+                const displayClasses = dbClasses.length > 0 ? dbClasses.map(c => c.name || c.id) : ["Terminales S-A", "Terminales S-B", "3ème A", "4ème B", "6ème C"];
+                const tabletCarts = ["Chariot Tablettes Android #1", "Chariot Tablettes Android #2", "Valise iPads Pro #1", "Vidéo-projecteur Mobile #2"];
 
-                    try {
-                      await addDoc(collection(db, 'resp_it_tickets'), {
-                        item: formITItem,
-                        description: formITDesc,
-                        severity: formITSeverity,
-                        status: 'open'
-                      });
-                      setFormITItem('');
-                      setFormITDesc('');
-                      notifySuccess("Incident informatique consigné !");
-                    } catch (error) {
-                      console.error("Error adding IT ticket:", error);
-                    }
-                  }}
-                  className="space-y-3 text-xs"
-                >
-                  <div className="space-y-1">
-                    <label className="text-[10px] uppercase font-bold text-gray-400">Matériel défaillant</label>
-                    <input 
-                      type="text" 
-                      placeholder="Ex: Ordinateur portable Salle 4"
-                      value={formITItem}
-                      onChange={(e) => setFormITItem(e.target.value)}
-                      className="w-full p-2.5 bg-gray-50 border rounded-xl outline-none"
-                    />
+                return (
+                  <div className="space-y-3">
+                    {/* Mode Selector */}
+                    <div className="grid grid-cols-2 gap-2 mb-1">
+                      <button
+                        type="button"
+                        onClick={() => setItFormType('incident')}
+                        className={`py-2 text-[10px] font-black uppercase rounded-lg border transition-all cursor-pointer ${
+                          itFormType === 'incident'
+                            ? 'bg-cyan-50 dark:bg-cyan-950/30 text-cyan-700 dark:text-cyan-300 border-cyan-500 font-bold'
+                            : 'bg-white dark:bg-gray-900 text-gray-400 border-gray-150 dark:border-gray-850'
+                        }`}
+                      >
+                        Incident Ticket
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setItFormType('loan')}
+                        className={`py-2 text-[10px] font-black uppercase rounded-lg border transition-all cursor-pointer ${
+                          itFormType === 'loan'
+                            ? 'bg-cyan-50 dark:bg-cyan-950/30 text-cyan-700 dark:text-cyan-300 border-cyan-500 font-bold'
+                            : 'bg-white dark:bg-gray-900 text-gray-400 border-gray-150 dark:border-gray-850'
+                        }`}
+                      >
+                        Nouveau Prêt
+                      </button>
+                    </div>
+
+                    {itFormType === 'incident' ? (
+                      <form 
+                        onSubmit={async (e) => {
+                          e.preventDefault();
+                          if (!enforcePermission('responsable_it')) return;
+                          if (!formITItem.trim() || !formITDesc.trim()) return;
+
+                          try {
+                            await addDoc(collection(db, 'resp_it_tickets'), {
+                              item: formITItem,
+                              description: formITDesc,
+                              severity: formITSeverity,
+                              status: 'open'
+                            });
+                            setFormITItem('');
+                            setFormITDesc('');
+                            notifySuccess("Incident informatique consigné !");
+                          } catch (error) {
+                            console.error("Error adding IT ticket:", error);
+                          }
+                        }}
+                        className="space-y-3 text-xs"
+                      >
+                        <div className="space-y-1">
+                          <label className="text-[10px] uppercase font-bold text-gray-400 block">Matériel défaillant</label>
+                          <input 
+                            type="text" 
+                            placeholder="Ex: Ordinateur portable Salle 4"
+                            value={formITItem}
+                            onChange={(e) => setFormITItem(e.target.value)}
+                            className="w-full p-2.5 bg-gray-50 border rounded-xl dark:bg-gray-900 dark:border-gray-750 outline-none"
+                          />
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="text-[10px] uppercase font-bold text-gray-400 block">Symptômes relevés</label>
+                          <textarea 
+                            placeholder="Ne s'allume plus après mise à jour..."
+                            rows={2}
+                            value={formITDesc}
+                            onChange={(e) => setFormITDesc(e.target.value)}
+                            className="w-full p-2.5 bg-gray-50 border rounded-xl dark:bg-gray-900 dark:border-gray-750 outline-none"
+                          />
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="text-[10px] uppercase font-bold text-gray-440 block">Gravité</label>
+                          <select
+                            value={formITSeverity}
+                            onChange={(e) => setFormITSeverity(e.target.value as any)}
+                            className="w-full p-2.5 bg-gray-50 border rounded-xl dark:bg-gray-900 dark:border-gray-750 outline-none"
+                          >
+                            <option value="minor">Mineure (Simple bug)</option>
+                            <option value="critical">Critique (Bloquant cours)</option>
+                          </select>
+                        </div>
+
+                        <button 
+                          type="submit"
+                          className="w-full py-2.5 bg-cyan-600 hover:bg-cyan-700 text-white rounded-xl font-black uppercase text-[10px] tracking-wider transition-all cursor-pointer"
+                        >
+                          Créer incident ticket
+                        </button>
+                      </form>
+                    ) : (
+                      <form
+                        onSubmit={async (e) => {
+                          e.preventDefault();
+                          if (!enforcePermission('responsable_it')) return;
+                          const selectedCart = formITLoanCart || tabletCarts[0];
+                          const selectedClass = formITLoanClass || displayClasses[0];
+
+                          try {
+                            await addDoc(collection(db, 'resp_it_loans'), {
+                              cartId: selectedCart,
+                              classTarget: selectedClass,
+                              duration: formITLoanDuration,
+                              status: 'borrowed'
+                            });
+                            notifySuccess("Chariot de valises tablettes enregistré en prêt !");
+                          } catch (error) {
+                            console.error("Error creating IT loan doc:", error);
+                          }
+                        }}
+                        className="space-y-3 text-xs"
+                      >
+                        <div className="space-y-1">
+                          <label className="text-[10px] uppercase font-bold text-gray-400 block">Chariot / Valise</label>
+                          <select
+                            value={formITLoanCart}
+                            onChange={(e) => setFormITLoanCart(e.target.value)}
+                            className="w-full p-2.5 bg-gray-50 border rounded-xl dark:bg-gray-900 dark:border-gray-750 outline-none"
+                          >
+                            {tabletCarts.map(cart => (
+                              <option key={cart} value={cart}>{cart}</option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="text-[10px] uppercase font-bold text-gray-400 block">Classe destinataire</label>
+                          <select
+                            value={formITLoanClass}
+                            onChange={(e) => setFormITLoanClass(e.target.value)}
+                            className="w-full p-2.5 bg-gray-50 border rounded-xl dark:bg-gray-900 dark:border-gray-750 outline-none"
+                          >
+                            {displayClasses.map(clsName => (
+                              <option key={clsName} value={clsName}>{clsName}</option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="text-[10px] uppercase font-bold text-gray-400 block">Date & Créneau de retour</label>
+                          <input 
+                            type="text" 
+                            value={formITLoanDuration}
+                            onChange={(e) => setFormITLoanDuration(e.target.value)}
+                            className="w-full p-2.5 bg-gray-50 border rounded-xl dark:bg-gray-900 dark:border-gray-750 outline-none"
+                          />
+                        </div>
+
+                        <button 
+                          type="submit"
+                          className="w-full py-2.5 bg-cyan-600 hover:bg-cyan-700 text-white rounded-xl font-black uppercase text-[10px] tracking-wider transition-all cursor-pointer"
+                        >
+                          Enregistrer Sortie Valise
+                        </button>
+                      </form>
+                    )}
                   </div>
-
-                  <div className="space-y-1">
-                    <label className="text-[10px] uppercase font-bold text-gray-400">Symptômes relevés</label>
-                    <textarea 
-                      placeholder="Ne s'allume plus après mise à jour..."
-                      rows={2}
-                      value={formITDesc}
-                      onChange={(e) => setFormITDesc(e.target.value)}
-                      className="w-full p-2.5 bg-gray-50 border rounded-xl outline-none"
-                    />
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="text-[10px] uppercase font-bold text-gray-440">Gravité</label>
-                    <select
-                      value={formITSeverity}
-                      onChange={(e) => setFormITSeverity(e.target.value as any)}
-                      className="w-full p-2.5 bg-gray-50 border rounded-xl outline-none"
-                    >
-                      <option value="minor">Mineure (Simple bug)</option>
-                      <option value="critical">Critique (Bloquant cours)</option>
-                    </select>
-                  </div>
-
-                  <button 
-                    type="submit"
-                    className="w-full py-2.5 bg-cyan-600 text-white rounded-xl font-black uppercase text-[10px] tracking-wider transition-all cursor-pointer"
-                  >
-                    Créer Incident Ticket
-                  </button>
-                </form>
-              )}
+                );
+              })()}
 
             </div>
 
