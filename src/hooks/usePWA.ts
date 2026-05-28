@@ -1,59 +1,64 @@
 import { useState, useEffect } from 'react';
 
-interface BeforeInstallPromptEvent extends Event {
-  readonly platforms: string[];
-  readonly userChoice: Promise<{
-    outcome: 'accepted' | 'dismissed';
-    platform: string;
-  }>;
-  prompt(): Promise<void>;
-}
-
 export function usePWA() {
-  const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(
     (window as any).deferredPrompt || null
   );
+  const [isInstallable, setIsInstallable] = useState(
+    !!((window as any).deferredPrompt)
+  );
+  const [showInstallBanner, setShowInstallBanner] = useState(false);
   const [isStandalone, setIsStandalone] = useState(false);
 
   useEffect(() => {
-    // Check if app is already running in standalone mode (already installed)
+    // Détecter si l'application fonctionne déjà en mode autonome (déjà installée)
     const standaloneMode = window.matchMedia('(display-mode: standalone)').matches 
       || (window.navigator as any).standalone === true;
     
     setIsStandalone(standaloneMode);
 
-    const handler = (e: any) => {
-      // Prevent Chrome from displaying its default mini-infobar prompt
+    const handleBeforeInstallPrompt = (e: any) => {
+      // Empêcher Chrome d'afficher sa propre mini-infobulle automatique
       e.preventDefault();
-      // Save the event so it can be handled later
+      // Sauvegarder l'événement pour pouvoir l'exécuter plus tard
       (window as any).deferredPrompt = e;
-      setInstallPrompt(e as BeforeInstallPromptEvent);
+      setDeferredPrompt(e);
+      setIsInstallable(true);
+      
+      if (!standaloneMode) {
+        setShowInstallBanner(true); // Afficher notre bouton ou bannière d'installation personnalisée
+      }
     };
 
-    // If there is already a stashed prompt, keep it
-    if ((window as any).deferredPrompt) {
-      setInstallPrompt((window as any).deferredPrompt);
-    }
-
-    window.addEventListener('beforeinstallprompt', handler);
-
-    const appInstalledHandler = () => {
+    const handleAppInstalled = () => {
       console.log("L'application a bien été installée !");
-      setInstallPrompt(null);
-      (window as any).deferredPrompt = null;
+      setShowInstallBanner(false);
+      setDeferredPrompt(null);
+      setIsInstallable(false);
       setIsStandalone(true);
     };
 
-    window.addEventListener('appinstalled', appInstalledHandler);
+    // If there is already a stashed prompt in window, initialize state
+    if ((window as any).deferredPrompt) {
+      setDeferredPrompt((window as any).deferredPrompt);
+      setIsInstallable(true);
+      if (!standaloneMode) {
+        setShowInstallBanner(true);
+      }
+    }
+
+    // Écouter les événements d'installation
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    window.addEventListener('appinstalled', handleAppInstalled);
 
     return () => {
-      window.removeEventListener('beforeinstallprompt', handler);
-      window.removeEventListener('appinstalled', appInstalledHandler);
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+      window.removeEventListener('appinstalled', handleAppInstalled);
     };
   }, []);
 
   const installApp = async () => {
-    // Specific check for iOS devices (Safari does not dispatch the beforeinstallprompt event)
+    // Gestion spécifique pour iOS (Safari ne supporte pas l'événement avant installation)
     const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
     if (isIOS) {
       alert(
@@ -65,9 +70,9 @@ export function usePWA() {
       return;
     }
 
-    const promptEvent = installPrompt || (window as any).deferredPrompt;
-    
-    // If Chrome or default browser has not yet dispatched the installation event
+    const promptEvent = deferredPrompt || (window as any).deferredPrompt;
+
+    // Si Chrome ne nous a pas encore fourni l'événement d'installation
     if (!promptEvent) {
       alert(
         "Pour installer l'application sur Chrome : \n" +
@@ -78,16 +83,18 @@ export function usePWA() {
     }
 
     try {
-      // Trigger official installation prompt
+      // Déclencher l'invite d'installation de Chrome
       await promptEvent.prompt();
-
-      // Wait for user choice (Accepted or Dismissed)
+      
+      // Attendre la réponse de l'utilisateur (Accepté ou Refusé)
       const { outcome } = await promptEvent.userChoice;
       console.log(`Réponse de l'utilisateur à l'installation : ${outcome}`);
-
+      
       if (outcome === 'accepted') {
-        setInstallPrompt(null);
         (window as any).deferredPrompt = null;
+        setDeferredPrompt(null);
+        setIsInstallable(false);
+        setShowInstallBanner(false);
       }
     } catch (err) {
       console.error("Erreur durant l'installation :", err);
@@ -95,8 +102,12 @@ export function usePWA() {
   };
 
   return { 
-    isInstallable: !!installPrompt || !!(window as any).deferredPrompt, 
+    isInstallable, 
     installApp, 
-    isStandalone 
+    isStandalone,
+    deferredPrompt,
+    showInstallBanner,
+    setShowInstallBanner
   };
 }
+
