@@ -72,17 +72,24 @@ export default function PWAPrompt() {
               <div className="absolute -bottom-12 -left-12 h-36 w-36 rounded-full bg-indigo-400/20 blur-2xl" />
               
               <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-4">
-                <div className="flex items-center gap-4 text-center md:text-left flex-1">
-                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/15 backdrop-blur-md border border-white/20 shadow-inner">
-                    <Smartphone size={24} className="text-white animate-pulse" />
+                <div className="flex items-center gap-4 text-center md:text-left flex-1 flex-col sm:flex-row">
+                  <div className="relative flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-white p-1 border border-white/20 shadow-lg">
+                    <img src="/logo.png" alt="Edu-Nify" className="h-full w-full object-contain rounded-xl" referrerPolicy="no-referrer" />
+                    <div className="absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500 text-white border-2 border-indigo-600 dark:border-indigo-950 shadow-sm">
+                      <Download size={10} className="animate-bounce" />
+                    </div>
                   </div>
                   <div className="min-w-0">
                     <h3 className="text-base font-black flex items-center justify-center md:justify-start gap-1.5 uppercase tracking-wide">
-                      <Sparkles size={14} className="text-amber-300" />
-                      Installer Edu-Nify sur votre mobile
+                      <Sparkles size={14} className="text-amber-300 shrink-0" />
+                      {detectedOS === 'desktop' 
+                        ? "Installer l'application sur votre Ordinateur" 
+                        : "Installer l'application sur votre Mobile"}
                     </h3>
-                    <p className="text-xs font-medium text-indigo-100 mt-0.5">
-                      Accédez plus vite et profitez d'une fluidité parfaite directement depuis votre écran d'accueil sans passer par l'App Store !
+                    <p className="text-xs font-medium text-indigo-100 mt-0.5 leading-relaxed">
+                      {detectedOS === 'desktop'
+                        ? "Exécutez Edu-Nify directement sur votre PC/Mac avec son icône d'origine, en plein écran ultra-rapide et autonome !"
+                        : "Profitez d'une fluidité parfaite et accédez à l'application directement depuis votre écran d'accueil sans passer par l'App Store !"}
                     </p>
                   </div>
                 </div>
@@ -93,7 +100,7 @@ export default function PWAPrompt() {
                     className="flex flex-1 md:flex-none items-center justify-center gap-2 rounded-2xl bg-white px-5 py-2.5 text-xs font-black text-indigo-600 shadow-md hover:bg-neutral-100 hover:shadow-lg transition-all active:scale-95 cursor-pointer uppercase tracking-wider"
                   >
                     {isInstallable ? <Download size={14} /> : <HelpCircle size={14} />}
-                    {isInstallable ? "Installer" : "Comment Installer ?"}
+                    {isInstallable ? "Installer l'application" : "Guide d'installation"}
                   </button>
                   <button
                     onClick={() => setDismissed(true)}
@@ -138,12 +145,12 @@ export default function PWAPrompt() {
                   <X size={20} />
                 </button>
                 <div className="flex items-center gap-3">
-                  <div className="p-2 bg-white/15 rounded-xl border border-white/20">
-                    <Smartphone size={22} />
+                  <div className="h-12 w-12 shrink-0 overflow-hidden rounded-xl border border-white/30 bg-white p-0.5 shadow-md">
+                    <img src="/logo.png" alt="Edu-Nify Logo" className="h-full w-full object-contain rounded-lg" referrerPolicy="no-referrer" />
                   </div>
                   <div>
                     <h2 className="text-lg font-black tracking-tight uppercase">Installation de l'application</h2>
-                    <p className="text-xs text-indigo-100">Ajouter <b>Edu-Nify</b> à votre écran d'accueil</p>
+                    <p className="text-xs text-indigo-100">Ajouter <b>Edu-Nify</b> à votre écran de PC ou mobile</p>
                   </div>
                 </div>
               </div>

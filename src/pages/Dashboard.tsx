@@ -1217,6 +1217,10 @@ export default function Dashboard({ onNavigate }: any) {
   const [houses, setHouses] = useState<any[]>([]);
   const [alerts, setAlerts] = useState<any[]>([]);
 
+  // Raw inputs from flat, non-nested subscribers
+  const [rawUsers, setRawUsers] = useState<any[] | null>(null);
+  const [rawTodayAttendance, setRawTodayAttendance] = useState<any[] | null>(null);
+
   useEffect(() => {
     if (!currentUser || !isFirebaseConfigured) {
       setLoading(false);
@@ -1239,6 +1243,10 @@ export default function Dashboard({ onNavigate }: any) {
       setHouses(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })).sort((a: any, b: any) => (b.points || 0) - (a.points || 0)));
     });
 
+    let unsubWeeklyAtt: (() => void) | undefined;
+    let unsubDashboardUsers: (() => void) | undefined;
+    let unsubTodayAttendance: (() => void) | undefined;
+
     // Admin specific distribution & presence
     if (currentUser.role === 'admin' || currentUser.role === 'personnel administratif') {
       // Calculate last 5 days for weekly data
@@ -1248,11 +1256,11 @@ export default function Dashboard({ onNavigate }: any) {
         return d.toISOString().split('T')[0];
       });
 
-      const unsubWeeklyAtt = onSnapshot(
+      unsubWeeklyAtt = onSnapshot(
         query(collection(db, 'attendance'), where('date', 'in', last5Days)),
         (snapshot) => {
-          const countsByDay: {[key: string]: {presents: number, retards: number, absents: number}} = {};
-          last5Days.forEach(day => countsByDay[day] = {presents: 0, retards: 0, absents: 0});
+          const countsByDay: { [key: string]: { presents: number, retards: number, absents: number } } = {};
+          last5Days.forEach(day => countsByDay[day] = { presents: 0, retards: 0, absents: 0 });
           
           snapshot.docs.forEach(doc => {
             const data = doc.data();
@@ -1277,85 +1285,110 @@ export default function Dashboard({ onNavigate }: any) {
         (error) => handleFirestoreError(error, OperationType.GET, 'attendance')
       );
 
-      const unsubDashboard = onSnapshot(collection(db, 'users'), (userSnapshot) => {
-        let expectedTotal = 0;
-        let pCount = 0, eCount = 0, sCount = 0, parCount = 0;
-        const usersMap = new Map();
-        const countsByClass: {[key: string]: number} = {};
+      // Listen to users flat list
+      unsubDashboardUsers = onSnapshot(collection(db, 'users'), (userSnapshot) => {
+        const usersList = userSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        setRawUsers(usersList);
+      }, (error) => handleFirestoreError(error, OperationType.GET, 'users'));
 
-        userSnapshot.forEach(doc => {
-          const data = doc.data();
-          usersMap.set(doc.id, data);
-          const role = data.role?.toLowerCase() || '';
-          
-          if (role === 'enseignant') pCount++;
-          else if (role === 'élève' || role === 'eleve') {
-            eCount++;
-            if (data.classe) {
-              countsByClass[data.classe] = (countsByClass[data.classe] || 0) + 1;
-            }
-          }
-          else if (role === 'admin' || role === 'personnel' || role === 'personnel administratif') sCount++;
-          else if (role === 'parent') parCount++;
+      // Listen to today's attendance flat list
+      unsubTodayAttendance = onSnapshot(query(collection(db, 'attendance'), where('date', '==', today)), (attendanceSnapshot) => {
+        const attList = attendanceSnapshot.docs.map(doc => doc.data());
+        setRawTodayAttendance(attList);
+      }, (error) => handleFirestoreError(error, OperationType.GET, 'attendance'));
 
-          if (['enseignant', 'élève', 'eleve', 'personnel', 'admin', 'personnel administratif'].includes(role)) {
-            expectedTotal++;
-          }
-        });
-
-        setUserDistribution([
-          { name: 'Élèves', value: eCount, color: COLORS[1] },
-          { name: 'Enseignants', value: pCount, color: COLORS[0] },
-          { name: 'Parents', value: parCount, color: COLORS[2] },
-          { name: 'Administration', value: sCount, color: COLORS[3] }
-        ]);
-
-        const totalStudents = userSnapshot.docs.filter(d => ['élève', 'eleve'].includes(d.data().role?.toLowerCase())).length;
-
-        // Calculate class redistribution indicators
-        const cData = Object.entries(countsByClass).map(([name, students]) => ({
-          name,
-          students,
-          percentage: totalStudents > 0 ? Number(((students / totalStudents) * 100).toFixed(1)) : 0
-        })).sort((a, b) => b.students - a.students).slice(0, 8);
-        setClassData(cData);
-
-        const levelMap = new Map();
-        userSnapshot.docs.forEach(doc => {
-          const data = doc.data();
-          if (data.role === 'élève' || data.role === 'eleve') {
-            const level = (data.classe || 'N/A').split(' ')[0];
-            levelMap.set(level, (levelMap.get(level) || 0) + 1);
-          }
-        });
-        setStudentLevelData(Array.from(levelMap.entries()).map(([name, value]) => ({ name, value })));
-
-        // Today's attendance
-        const unsubTodayAtt = onSnapshot(query(collection(db, 'attendance'), where('date', '==', today)), (snapshot) => {
-          let prToday = 0, reToday = 0;
-          snapshot.docs.forEach(doc => {
-            const d = doc.data();
-            if (usersMap.has(d.user_id)) {
-              if (d.statut === 'Présent') prToday++;
-              else if (d.statut === 'Retard') reToday++;
-            }
-          });
-          setStats({ presents: prToday, retards: reToday, absents: Math.max(0, expectedTotal - (prToday + reToday)), total: expectedTotal });
-        },
-        (error) => handleFirestoreError(error, OperationType.GET, 'attendance')
-      );
-
-        setLoading(false);
-        return () => unsubTodayAtt();
-      },
-      (error) => handleFirestoreError(error, OperationType.GET, 'users')
-    );
-      return () => { unsubEco(); unsubWellbeing(); unsubHouses(); unsubDashboard(); unsubWeeklyAtt(); };
     } else {
       setLoading(false);
-      return () => { unsubEco(); unsubWellbeing(); unsubHouses(); };
     }
+
+    return () => {
+      unsubEco();
+      unsubWellbeing();
+      unsubHouses();
+      if (unsubWeeklyAtt) unsubWeeklyAtt();
+      if (unsubDashboardUsers) unsubDashboardUsers();
+      if (unsubTodayAttendance) unsubTodayAttendance();
+    };
   }, [currentUser]);
+
+  // Process raw users and raw attendance lists into statistical charts & stats variables
+  useEffect(() => {
+    if (!rawUsers || (currentUser?.role !== 'admin' && currentUser?.role !== 'personnel administratif')) {
+      return;
+    }
+
+    let expectedTotal = 0;
+    let pCount = 0;
+    let eCount = 0;
+    let sCount = 0;
+    let parCount = 0;
+    const usersMap = new Map();
+    const countsByClass: { [key: string]: number } = {};
+
+    rawUsers.forEach(user => {
+      usersMap.set(user.id, user);
+      const role = user.role?.toLowerCase() || '';
+      
+      if (role === 'enseignant') pCount++;
+      else if (role === 'élève' || role === 'eleve') {
+        eCount++;
+        if (user.classe) {
+          countsByClass[user.classe] = (countsByClass[user.classe] || 0) + 1;
+        }
+      }
+      else if (role === 'admin' || role === 'personnel' || role === 'personnel administratif') sCount++;
+      else if (role === 'parent') parCount++;
+
+      if (['enseignant', 'élève', 'eleve', 'personnel', 'admin', 'personnel administratif'].includes(role)) {
+        expectedTotal++;
+      }
+    });
+
+    setUserDistribution([
+      { name: 'Élèves', value: eCount, color: COLORS[1] },
+      { name: 'Enseignants', value: pCount, color: COLORS[0] },
+      { name: 'Parents', value: parCount, color: COLORS[2] },
+      { name: 'Administration', value: sCount, color: COLORS[3] }
+    ]);
+
+    const totalStudents = rawUsers.filter(u => ['élève', 'eleve'].includes(u.role?.toLowerCase())).length;
+
+    // Calculate class redistribution indicators
+    const cData = Object.entries(countsByClass).map(([name, students]) => ({
+      name,
+      students,
+      percentage: totalStudents > 0 ? Number(((students / totalStudents) * 100).toFixed(1)) : 0
+    })).sort((a, b) => b.students - a.students).slice(0, 8);
+    setClassData(cData);
+
+    const levelMap = new Map();
+    rawUsers.forEach(user => {
+      if (user.role === 'élève' || user.role === 'eleve') {
+        const level = (user.classe || 'N/A').split(' ')[0];
+        levelMap.set(level, (levelMap.get(level) || 0) + 1);
+      }
+    });
+    setStudentLevelData(Array.from(levelMap.entries()).map(([name, value]) => ({ name, value })));
+
+    // Process attendance stats if rawTodayAttendance has loaded
+    if (rawTodayAttendance) {
+      let prToday = 0;
+      let reToday = 0;
+      rawTodayAttendance.forEach(att => {
+        if (usersMap.has(att.user_id)) {
+          if (att.statut === 'Présent') prToday++;
+          else if (att.statut === 'Retard') reToday++;
+        }
+      });
+      setStats({
+        presents: prToday,
+        retards: reToday,
+        absents: Math.max(0, expectedTotal - (prToday + reToday)),
+        total: expectedTotal
+      });
+      setLoading(false);
+    }
+  }, [rawUsers, rawTodayAttendance, currentUser]);
 
   const handleMoodSelect = async (selectedMood: string) => {
     setMood(selectedMood);

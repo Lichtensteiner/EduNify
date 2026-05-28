@@ -852,15 +852,15 @@ export default function Settings() {
                         <div className="relative z-10 flex flex-col sm:flex-row items-center justify-between gap-6">
                           <div className="text-center sm:text-left flex-1">
                             <div className="flex items-center justify-center sm:justify-start gap-4 mb-4">
-                               <div className={`w-14 h-14 rounded-2xl flex items-center justify-center ${isStandalone ? 'bg-emerald-500 text-white' : 'bg-white text-indigo-600'}`}>
-                                  <Smartphone size={32} />
+                               <div className="w-14 h-14 rounded-2xl flex items-center justify-center overflow-hidden bg-white p-1.5 shadow-md shrink-0">
+                                  <img src="/logo.png" alt="Edu-Nify" className="w-full h-full object-contain rounded-xl" referrerPolicy="no-referrer" />
                                </div>
                                <div>
                                  <h4 className={`text-xl font-black ${isStandalone ? 'text-gray-900 dark:text-white' : 'text-white'}`}>
-                                   {isStandalone ? 'Application Installée' : 'Installer l\'Application'}
+                                   {isStandalone ? 'Application Installée ✓' : 'Installer l\'Application'}
                                  </h4>
                                  <p className={`text-sm font-medium ${isStandalone ? 'text-gray-500' : 'text-indigo-100'}`}>
-                                   {isStandalone ? 'Mode standalone activé avec succès' : 'Profitez d\'Edu-Nify directement sur votre écran d\'accueil'}
+                                   {isStandalone ? 'Mode autonome activé avec succès' : 'Profitez d\'Edu-Nify directement sur l\'écran de votre ordinateur ou de votre mobile'}
                                  </p>
                                </div>
                             </div>
@@ -868,7 +868,7 @@ export default function Settings() {
                             {isStandalone ? (
                               <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400 font-bold text-xs">
                                 <CheckCircle size={16} />
-                                L'APPLICATION EST PRÊTE ET DISPONIBLE DANS VOS APPLICATIONS
+                                L'APPLICATION EST PRÊTE ET DISPONIBLE DANS SÉANCE ACTIVE DE VOTRE SYSTÈME
                               </div>
                             ) : isInstallable ? (
                                <button 
@@ -883,9 +883,9 @@ export default function Settings() {
                                    onClick={() => window.dispatchEvent(new CustomEvent('open-pwa-install-guide'))}
                                    className="w-full sm:w-auto px-8 py-3.5 bg-white text-indigo-700 hover:bg-indigo-50 rounded-2xl font-black text-sm transition-all active:scale-95 shadow-md cursor-pointer uppercase tracking-wider"
                                  >
-                                   Guide d'Installation (iOS/Android)
+                                   Guide d'Installation (Ordinateur / iOS / Android)
                                  </button>
-                                 <p className="text-[10px] font-medium opacity-90 max-w-sm">Si le bouton d'installation automatique n'est pas supporté par votre navigateur (par exemple sur Safari iOS), vous pouvez l'ajouter manuellement en 3 clics.</p>
+                                 <p className="text-[10px] font-medium opacity-90 max-w-sm">Si le bouton d'installation automatique n'est pas supporté par votre navigateur (par exemple sur Safari iOS), vous pouvez l'ajouter manuellement en quelques clics.</p>
                                </div>
                             )}
                           </div>

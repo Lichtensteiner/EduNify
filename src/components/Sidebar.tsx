@@ -193,7 +193,7 @@ export default function Sidebar({ activeTab, setActiveTab, isMobileOpen, setIsMo
               onClick={() => window.dispatchEvent(new CustomEvent('open-pwa-install-guide'))}
               className="w-full flex items-center gap-3 px-4 py-2.5 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white rounded-xl text-xs font-bold transition-all active:scale-95 shadow-md shadow-indigo-600/10 cursor-pointer"
             >
-              <Smartphone size={16} className="text-white shrink-0 animate-bounce" />
+              <Download size={16} className="text-indigo-200 shrink-0 animate-bounce" />
               <span>Installer l'application</span>
             </button>
           )}
