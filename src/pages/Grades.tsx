@@ -179,8 +179,20 @@ const Grades: React.FC = () => {
           setClasses(clData);
         }
 
-        const studentSnap = await getDocs(query(collection(db, 'users'), where('role', '==', 'élève')));
-        const stData = studentSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        // Recuperer de maniere inclusive tous les eleves dans Firestore
+        const studentSnapEleve = await getDocs(query(collection(db, 'users'), where('role', '==', 'élève')));
+        const studentSnapEleve2 = await getDocs(query(collection(db, 'users'), where('role', '==', 'eleve')));
+
+        const stData: any[] = [];
+        studentSnapEleve.docs.forEach(doc => {
+          stData.push({ id: doc.id, ...doc.data() });
+        });
+        studentSnapEleve2.docs.forEach(doc => {
+          if (!stData.some(s => s.id === doc.id)) {
+            stData.push({ id: doc.id, ...doc.data() });
+          }
+        });
+
         if (stData.length === 0) {
           setStudents([
             { id: 'stu_1', prenom: 'Ange-Emanuel', nom: 'Koffi', classe: '6ème A' },
@@ -246,62 +258,109 @@ const Grades: React.FC = () => {
     return () => unsubscribe();
   }, [currentUser]);
 
-  // Handle Mock Logs & Safety Events
+  // Écouter les véritables modifications de notes enregistrées dans Firestore
   useEffect(() => {
-    // Generate some highly visual security actions to prove audit trail
-    const defaultHist: GradeHistoryLog[] = [
-      {
-        id: 'h1',
-        gradeId: 'seed_g1',
-        modifiedBy: 'usr_tea_402',
-        modifiedByName: 'M. Kouamé (Maths)',
-        modifiedByRole: 'enseignant',
-        modifiedAt: new Date(Date.now() - 3600000),
-        oldScore: 12,
-        newScore: 14.5,
-        changeReason: "Correction d'un report de point sur la question optionnelle",
-        isSuspicious: false
-      },
-      {
-        id: 'h2',
-        gradeId: 'seed_g2',
-        modifiedBy: 'usr_hacked_token',
-        modifiedByName: 'Inconnu (Session suspecte)',
-        modifiedByRole: 'enseignant',
-        modifiedAt: new Date(Date.now() - 7200000),
-        oldScore: 5,
-        newScore: 18.5,
-        changeReason: "Maj générale",
-        isSuspicious: true
-      }
-    ];
+    if (!currentUser) return;
 
-    const defaultSafety: SafetyAuditLog[] = [
-      {
-        id: 's1',
-        timestamp: new Date(Date.now() - 1200000),
-        actorId: 'usr_hacked_token',
-        actorName: 'Tentative d\'intrusion anonyme',
-        actorRole: 'Visiteur suspect',
-        event: 'SUSPICIOUS_GRADE_SPIKE_DETECTED',
-        severity: 'CRITICAL',
-        details: 'Écart de score anormal détecté (+13.5 points) sur le devoir de mathématiques'
-      },
-      {
-        id: 's2',
-        timestamp: new Date(Date.now() - 86400000),
-        actorId: 'system_cron',
-        actorName: 'Scheduler Verrouillage',
-        actorRole: 'système',
-        event: 'GRADE_AUTO_LOCKED',
-        severity: 'INFO',
-        details: 'Clôture automatique de 12 notes arrivées à expiration de la fenêtre de 48h'
-      }
-    ];
+    const histRef = collection(db, 'grades_history');
+    const unsubscribe = onSnapshot(histRef, (snapshot) => {
+      const liveHist = snapshot.docs.map(doc => {
+        const data = doc.data();
+        let modifiedAtDate: Date;
+        if (data.modifiedAt?.toDate) {
+          modifiedAtDate = data.modifiedAt.toDate();
+        } else if (data.modifiedAt) {
+          modifiedAtDate = new Date(data.modifiedAt);
+        } else {
+          modifiedAtDate = new Date();
+        }
 
-    setHistoryLogs(defaultHist);
-    setSafetyLogs(defaultSafety);
-  }, []);
+        return {
+          id: doc.id,
+          ...data,
+          modifiedAt: modifiedAtDate
+        } as GradeHistoryLog;
+      });
+
+      // Trier par date la plus récente
+      liveHist.sort((a, b) => b.modifiedAt.getTime() - a.modifiedAt.getTime());
+
+      // Si la base est totalement vide, ajouter un historique initial pour démo (sans bloquer le temps réel)
+      if (liveHist.length === 0) {
+        setHistoryLogs([
+          {
+            id: 'h1',
+            gradeId: 'seed_g1',
+            modifiedBy: 'usr_tea_402',
+            modifiedByName: 'M. Kouamé (Maths)',
+            modifiedByRole: 'enseignant',
+            modifiedAt: new Date(Date.now() - 3600000),
+            oldScore: 12,
+            newScore: 14.5,
+            changeReason: "Correction d'un report de point sur la question optionnelle",
+            isSuspicious: false
+          }
+        ]);
+      } else {
+        setHistoryLogs(liveHist);
+      }
+    }, (error) => {
+      console.error("Error loading real grades history:", error);
+    });
+
+    return () => unsubscribe();
+  }, [currentUser]);
+
+  // Écouter les véritables alertes de sécurité dans Firestore
+  useEffect(() => {
+    if (!currentUser) return;
+
+    const safetyRef = collection(db, 'safety_audit_logs');
+    const unsubscribe = onSnapshot(safetyRef, (snapshot) => {
+      const liveSafety = snapshot.docs.map(doc => {
+        const data = doc.data();
+        let timestampDate: Date;
+        if (data.timestamp?.toDate) {
+          timestampDate = data.timestamp.toDate();
+        } else if (data.timestamp) {
+          timestampDate = new Date(data.timestamp);
+        } else {
+          timestampDate = new Date();
+        }
+
+        return {
+          id: doc.id,
+          ...data,
+          timestamp: timestampDate,
+          details: data.details || data.payload?.detectedError || `Événement ${data.event || ''} enregistré`
+        } as SafetyAuditLog;
+      });
+
+      // Trier par date la plus récente
+      liveSafety.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+
+      if (liveSafety.length === 0) {
+        setSafetyLogs([
+          {
+            id: 's1',
+            timestamp: new Date(Date.now() - 1200000),
+            actorId: 'usr_hacked_token',
+            actorName: 'Dépistage d\'intégrité',
+            actorRole: 'Système',
+            event: 'INTEGRITY_CHECK_ONLINE',
+            severity: 'INFO',
+            details: 'Liaison temps réel établie avec la base de données Firestore à Abidjan'
+          }
+        ]);
+      } else {
+        setSafetyLogs(liveSafety);
+      }
+    }, (error) => {
+      console.error("Error loading real safety logs:", error);
+    });
+
+    return () => unsubscribe();
+  }, [currentUser]);
 
   // Compute stats dynamically
   const subjects = Array.from(new Set(grades.map(g => g.subject)));
@@ -347,6 +406,18 @@ const Grades: React.FC = () => {
       label: `EN COURS DE VALIDATION (${hoursLeft}h restantes)`,
       color: 'text-emerald-600 bg-emerald-50 dark:bg-emerald-950/20'
     };
+  };
+
+  // Resolve user student name dynamically from real users list
+  const resolveStudentName = (grade: Grade) => {
+    const student = students.find(s => s.id === grade.studentId);
+    if (student) {
+      if (student.prenom || student.nom) {
+        return `${student.prenom || ''} ${student.nom || ''}`.trim();
+      }
+      return student.displayName || student.name || grade.studentName || 'Élève';
+    }
+    return grade.studentName || 'Élève';
   };
 
   // Run Simulated Time Leap of (e.g. 50 hours)
@@ -444,6 +515,15 @@ const Grades: React.FC = () => {
       const student = students.find(s => s.id === newGrade.studentId);
       const matchedClass = classes.find(c => c.nom === newGrade.classId || c.id === newGrade.classId);
 
+      let resolvedStudentNameStr = 'Élève anonyme';
+      if (student) {
+        if (student.prenom || student.nom) {
+          resolvedStudentNameStr = `${student.prenom || ''} ${student.nom || ''}`.trim();
+        } else {
+          resolvedStudentNameStr = student.displayName || student.name || 'Élève';
+        }
+      }
+
       // Analyze potential fraud/spike delta
       let isScoreSuspicious = false;
       let scoreGap = 0;
@@ -460,7 +540,7 @@ const Grades: React.FC = () => {
         const offlineItem: Grade = {
           id: fakeId,
           studentId: newGrade.studentId,
-          studentName: student ? `${student.prenom} ${student.nom}` : "Élève hors-ligne",
+          studentName: resolvedStudentNameStr,
           subject: newGrade.subject,
           score: parsedScore,
           maxScore: parsedMax,
@@ -487,7 +567,7 @@ const Grades: React.FC = () => {
       // Standard Firestore execution
       const payload: Omit<Grade, 'id'> = {
         studentId: newGrade.studentId,
-        studentName: student ? `${student.prenom} ${student.nom}` : 'Yao Ange',
+        studentName: resolvedStudentNameStr,
         classId: matchedClass?.nom || newGrade.classId || '6ème A',
         subject: newGrade.subject || 'Mathématiques',
         title: newGrade.title,
@@ -1028,7 +1108,7 @@ const Grades: React.FC = () => {
                           </td>
 
                           <td className="px-6 py-4 whitespace-nowrap font-bold text-gray-900 dark:text-white">
-                            {grade.studentName}
+                            {resolveStudentName(grade)}
                           </td>
 
                           <td className="px-6 py-4 whitespace-nowrap text-xs font-black text-gray-400 uppercase">
