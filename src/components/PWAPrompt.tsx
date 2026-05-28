@@ -281,27 +281,45 @@ export default function PWAPrompt() {
 
                     {detectedOS === 'desktop' && (
                       <div className="space-y-4">
-                        <div className="space-y-3">
-                          <div className="flex gap-4 items-start">
-                            <div className="h-6 w-6 rounded-full bg-indigo-100 dark:bg-indigo-900 text-indigo-600 dark:text-indigo-400 font-bold flex items-center justify-center text-xs shrink-0 mt-0.5">1</div>
-                            <div className="leading-relaxed">
-                              Sur <b>Chrome, Edge ou Opera</b>, regardez à droite dans la barre d'adresse du navigateur.
+                        <div className="bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-800 p-4 rounded-2xl">
+                          <h4 className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-3">Si vous utilisez Google Chrome ou Microsoft Edge :</h4>
+                          
+                          <div className="space-y-4">
+                            <div>
+                              <p className="text-xs font-bold text-indigo-600 dark:text-indigo-400 flex items-center gap-1.5">
+                                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-indigo-100 dark:bg-indigo-950 text-[10px] font-black">A</span>
+                                Option 1 : Via l'icône de téléchargement (si disponible)
+                              </p>
+                              <p className="text-xs text-slate-600 dark:text-slate-300 ml-6 mt-1 leading-relaxed">
+                                Cliquez sur l'<b>icône de téléchargement / d'écran</b> <Download size={13} className="inline mx-1 text-indigo-600" /> situé tout à fait à droite dans la <b>barre d'adresse (recherche)</b> du navigateur, puis cliquez sur <b>Installer</b>.
+                              </p>
                             </div>
-                          </div>
 
-                          <div className="flex gap-4 items-start">
-                            <div className="h-6 w-6 rounded-full bg-indigo-100 dark:bg-indigo-900 text-indigo-600 dark:text-indigo-400 font-bold flex items-center justify-center text-xs shrink-0 mt-0.5">2</div>
-                            <div className="leading-relaxed flex items-center gap-1.5 flex-wrap">
-                              Cliquez sur l'icône de téléchargement <Download size={15} className="text-indigo-600" /> ou l'icône d'ordinateur à droite de l'URL.
-                            </div>
-                          </div>
+                            <hr className="border-gray-100 dark:border-gray-700" />
 
-                          <div className="flex gap-4 items-start">
-                            <div className="h-6 w-6 rounded-full bg-indigo-100 dark:bg-indigo-900 text-indigo-600 dark:text-indigo-400 font-bold flex items-center justify-center text-xs shrink-0 mt-0.5">3</div>
-                            <div className="leading-relaxed">
-                              Cliquez sur <b>Installer</b> dans la pop-up de confirmation. Une icône sera automatiquement ajoutée à votre bureau.
+                            <div>
+                              <p className="text-xs font-bold text-indigo-600 dark:text-indigo-400 flex items-center gap-1.5">
+                                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-indigo-100 dark:bg-indigo-950 text-[10px] font-black">B</span>
+                                Option 2 : Via le menu du navigateur (Si l'icône n'apparaît pas)
+                              </p>
+                              <ol className="text-xs text-slate-600 dark:text-slate-300 ml-6 mt-2 space-y-1.5 list-decimal pl-4 leading-relaxed">
+                                <li>Cliquez sur le bouton de menu <b>(⋮) ou (⋯)</b> présent tout en haut à droite du navigateur.</li>
+                                <li>Allez dans le sous-menu <b>Enregistrer et partager</b> (ou directement dans la liste principale).</li>
+                                <li>Sélectionnez <b>Installer la page en tant qu'appli...</b> ou <b>Installer Edu-Nify</b>.</li>
+                                <li>Confirmez l'installation. Le logiciel aura sa propre icône d'origine sur votre Bureau PC/Mac !</li>
+                              </ol>
                             </div>
                           </div>
+                        </div>
+
+                        <div className="bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-800 p-4 rounded-2xl">
+                          <h4 className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2">Si vous utilisez Safari sur macOS (Apple Mac) :</h4>
+                          <ol className="text-xs text-slate-600 dark:text-slate-300 space-y-1.5 list-decimal pl-4 leading-relaxed">
+                            <li>Ouvrez ce site dans le navigateur <b>Safari</b>.</li>
+                            <li>Cliquez sur le menu <b>Fichier</b> tout en haut à gauche de votre écran Mac.</li>
+                            <li>Sélectionnez l'option <b>Ajouter au Dock...</b></li>
+                            <li>Validez : l'application <b>Edu-Nify</b> est maintenant ajoutée à votre barre de raccourcis macOS et votre dossier Applications avec son icône d'origine !</li>
+                          </ol>
                         </div>
                       </div>
                     )}
