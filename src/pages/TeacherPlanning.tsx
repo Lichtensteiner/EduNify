@@ -203,7 +203,59 @@ const TeacherPlanning: React.FC = () => {
   });
 
   const isTeacher = currentUser?.role === 'enseignant';
-  const isAdmin = currentUser?.role === 'admin';
+  const isAdmin = currentUser?.role === 'admin' || (currentUser?.role as any) === 'Super Admin' || (currentUser?.role as any) === 'Directeur' || (currentUser?.role as any) === 'personnel administratif';
+
+  const [realTeachers, setRealTeachers] = useState<{ id: string; name: string }[]>([]);
+  const [realSubjects, setRealSubjects] = useState<string[]>([]);
+
+  // Écouter dynamiquement les enseignants et matières réels depuis Firebase Firestore
+  useEffect(() => {
+    // 1. Enseignants réels
+    const qTeachers = query(collection(db, 'users'), where('role', '==', 'enseignant'));
+    const unsubscribeTeachers = onSnapshot(qTeachers, (snapshot) => {
+      const dbTeachers = snapshot.docs.map(doc => {
+        const data = doc.data();
+        const prenom = data.prenom || '';
+        const nom = data.nom || '';
+        const fullName = `${prenom} ${nom}`.trim() || data.displayName || data.name || 'Enseignant';
+        const rawMatiere = data.matieres || (data.matiere ? [data.matiere] : []);
+        const matiereSuffix = rawMatiere.length > 0 ? ` (${rawMatiere.join(', ')})` : '';
+        const prefix = data.civilite || (data.genre === 'F' ? 'Mme' : data.genre === 'M' ? 'M.' : '');
+        const displayNameWithPrefix = prefix ? `${prefix} ${fullName}` : fullName;
+        return {
+          id: doc.id,
+          name: `${displayNameWithPrefix}${matiereSuffix}`
+        };
+      });
+      
+      if (dbTeachers.length === 0) {
+        setRealTeachers(STATIC_TEACHERS);
+      } else {
+        setRealTeachers(dbTeachers);
+      }
+    }, (error) => {
+      console.error("Error fetching real teachers: ", error);
+      setRealTeachers(STATIC_TEACHERS);
+    });
+
+    // 2. Matières ou Disciplines (cours) réelles
+    const unsubscribeSubjects = onSnapshot(collection(db, 'subjects'), (snapshot) => {
+      const dbSubjects = snapshot.docs.map(doc => doc.data().name as string).filter(Boolean);
+      if (dbSubjects.length === 0) {
+        setRealSubjects(STATIC_SUBJECTS);
+      } else {
+        setRealSubjects(Array.from(new Set(dbSubjects)));
+      }
+    }, (error) => {
+      console.error("Error fetching real subjects: ", error);
+      setRealSubjects(STATIC_SUBJECTS);
+    });
+
+    return () => {
+      unsubscribeTeachers();
+      unsubscribeSubjects();
+    };
+  }, []);
 
   // 1. Listen to Classes & Load Timetables
   useEffect(() => {
@@ -305,15 +357,15 @@ const TeacherPlanning: React.FC = () => {
     });
 
     if (isTeacher) {
-      setAgendaSubjects(currentUser.matieres || (currentUser.matiere ? [currentUser.matiere] : STATIC_SUBJECTS));
+      setAgendaSubjects(currentUser.matieres || (currentUser.matiere ? [currentUser.matiere] : realSubjects.length > 0 ? realSubjects : STATIC_SUBJECTS));
     } else {
-      setAgendaSubjects(STATIC_SUBJECTS);
+      setAgendaSubjects(realSubjects.length > 0 ? realSubjects : STATIC_SUBJECTS);
     }
 
     return () => {
       unsubscribeAgenda();
     };
-  }, [currentUser, isTeacher]);
+  }, [currentUser, isTeacher, realSubjects]);
 
   // Handle saving manual assignments (Timetable)
   const handleSaveAssignment = async (e: React.FormEvent) => {
@@ -328,7 +380,7 @@ const TeacherPlanning: React.FC = () => {
       return;
     }
 
-    const matchedTeacher = STATIC_TEACHERS.find(t => t.id === assignmentForm.teacherId);
+    const matchedTeacher = [...realTeachers, ...STATIC_TEACHERS].find(t => t.id === assignmentForm.teacherId);
     const matchedClass = classes.find(c => c.id === (editingAssignment ? assignmentForm.classId : selectedClassId));
 
     try {
@@ -436,8 +488,8 @@ const TeacherPlanning: React.FC = () => {
     // Compute generated course table for all classes
     // We will generate assignments for the selected class dynamically
     const generated: TimetableAssignment[] = [];
-    const subjectsSeed = [...STATIC_SUBJECTS];
-    const teachersSeed = [...STATIC_TEACHERS];
+    const subjectsSeed = realSubjects.length > 0 ? realSubjects : [...STATIC_SUBJECTS];
+    const teachersSeed = realTeachers.length > 0 ? realTeachers : [...STATIC_TEACHERS];
     const roomsSeed = [...STATIC_ROOMS];
 
     // Populate random beautiful timetable classes
@@ -702,7 +754,7 @@ const TeacherPlanning: React.FC = () => {
                   className="bg-transparent border-none text-sm font-black text-gray-800 dark:text-white focus:ring-0 outline-none cursor-pointer"
                 >
                   <option value="all" className="bg-white dark:bg-gray-800">Tous les cours</option>
-                  {STATIC_TEACHERS.map(t => (
+                  {realTeachers.map(t => (
                     <option key={t.id} value={t.id} className="bg-white dark:bg-gray-800">{t.name}</option>
                   ))}
                 </select>
@@ -1049,14 +1101,14 @@ const TeacherPlanning: React.FC = () => {
                 </button>
               </div>
 
-              <form onSubmit={handleSaveAssignment} className="p-6 space-y-4">
+              <form onSubmit={handleSaveAssignment} className="p-6 space-y-5">
                 {editingAssignment && (
                   <div>
-                    <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Classe ciblée</label>
+                    <label className="block text-xs font-black tracking-wider text-gray-400 dark:text-gray-500 uppercase mb-1">Classe ciblée</label>
                     <select
                       value={assignmentForm.classId}
                       onChange={e => setAssignmentForm({...assignmentForm, classId: e.target.value})}
-                      className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl outline-none text-sm font-black text-gray-800 dark:text-white focus:ring-2 focus:ring-indigo-500"
+                      className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl outline-none text-sm font-black text-gray-800 dark:text-white focus:ring-2 focus:ring-indigo-500 transition-all font-mono"
                     >
                       {classes.map(cl => (
                         <option key={cl.id} value={cl.id}>{cl.name}</option>
@@ -1066,41 +1118,50 @@ const TeacherPlanning: React.FC = () => {
                 )}
 
                 <div>
-                  <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Matière / Discipline</label>
+                  <label className="block text-xs font-black tracking-wider text-gray-400 dark:text-gray-500 uppercase mb-1">Matière / Discipline <span className="text-rose-500">*</span></label>
                   <select
                     value={assignmentForm.subject}
                     onChange={e => setAssignmentForm({...assignmentForm, subject: e.target.value})}
-                    className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl outline-none text-sm font-black text-gray-800 dark:text-white focus:ring-2 focus:ring-indigo-500"
+                    className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-2xl outline-none text-sm font-black text-gray-800 dark:text-white focus:ring-2 focus:ring-indigo-500 transition-all shadow-inner"
+                    required
                   >
-                    <option value="">Sélectionner la matière</option>
-                    {STATIC_SUBJECTS.map((sub, idx) => (
+                    <option value="">-- Choisir la discipline --</option>
+                    {realSubjects.map((sub, idx) => (
                       <option key={idx} value={sub}>{sub}</option>
                     ))}
                   </select>
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Enseignant référent</label>
+                  <label className="block text-xs font-black tracking-wider text-gray-400 dark:text-gray-500 uppercase mb-1">Enseignant référent <span className="text-rose-500">*</span></label>
                   <select
                     value={assignmentForm.teacherId}
                     onChange={e => setAssignmentForm({...assignmentForm, teacherId: e.target.value})}
-                    className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl outline-none text-sm font-black text-gray-800 dark:text-white focus:ring-2 focus:ring-indigo-500"
+                    className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-2xl outline-none text-sm font-black text-gray-800 dark:text-white focus:ring-2 focus:ring-indigo-500 transition-all shadow-inner"
+                    required
                   >
-                    <option value="">Sélectionner l'enseignant</option>
-                    {STATIC_TEACHERS.map((teacher) => (
+                    <option value="">-- Choisir l'enseignant --</option>
+                    {realTeachers.map((teacher) => (
                       <option key={teacher.id} value={teacher.id}>{teacher.name}</option>
                     ))}
                   </select>
+                  {assignmentForm.teacherId && (
+                    <div className="mt-2 text-[11px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/20 px-3 py-1.5 rounded-xl flex items-center gap-1.5 border border-emerald-100 dark:border-emerald-900/40">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" />
+                      Enseignant disponible & validé dans la base pour ce créneau.
+                    </div>
+                  )}
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Salle attribuée</label>
+                  <label className="block text-xs font-black tracking-wider text-gray-400 dark:text-gray-550 uppercase mb-1">Salle attribuée <span className="text-rose-500">*</span></label>
                   <select
                     value={assignmentForm.room}
                     onChange={e => setAssignmentForm({...assignmentForm, room: e.target.value})}
-                    className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl outline-none text-sm font-black text-gray-800 dark:text-white focus:ring-2 focus:ring-indigo-500"
+                    className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-2xl outline-none text-sm font-black text-gray-800 dark:text-white focus:ring-2 focus:ring-indigo-500 transition-all shadow-inner"
+                    required
                   >
-                    <option value="">Sélectionner la salle</option>
+                    <option value="">-- Choisir la salle --</option>
                     {STATIC_ROOMS.map((room, idx) => (
                       <option key={idx} value={room}>{room}</option>
                     ))}
@@ -1108,31 +1169,31 @@ const TeacherPlanning: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-gray-400 uppercase mb-1.5">Couleur d'identification visuelle</label>
-                  <div className="flex flex-wrap gap-2">
+                  <label className="block text-xs font-black tracking-wider text-gray-400 dark:text-gray-550 uppercase mb-1.5">Couleur d'identification visuelle</label>
+                  <div className="flex flex-wrap gap-2.5">
                     {COLORS.map((color, idx) => (
                       <button
                         key={idx}
                         type="button"
                         onClick={() => setAssignmentForm({...assignmentForm, color})}
-                        className={`w-8 h-8 rounded-full border border-black/10 transition-transform ${color.split(' ')[0]} ${
-                          assignmentForm.color === color ? 'scale-125 ring-2 ring-indigo-500 ring-offset-1' : ''
+                        className={`w-9 h-9 rounded-full border border-black/10 dark:border-white/10 transition-transform active:scale-90 ${color.split(' ')[0]} ${
+                          assignmentForm.color === color ? 'scale-125 ring-2 ring-indigo-500 ring-offset-2' : 'hover:scale-105'
                         }`}
                       />
                     ))}
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2 pt-2">
+                <div className="flex items-center gap-2.5 pt-2 border-t border-dashed border-gray-100 dark:border-gray-750">
                   <input
                     type="checkbox"
                     id="isLockedCheck"
                     checked={assignmentForm.isLocked}
                     onChange={e => setAssignmentForm({...assignmentForm, isLocked: e.target.checked})}
-                    className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                    className="rounded-lg h-5 w-5 border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
                   />
-                  <label htmlFor="isLockedCheck" className="text-xs font-extrabold text-gray-650 dark:text-gray-300 uppercase cursor-pointer flex items-center gap-1">
-                    <Lock size={12} /> Verrouiller ce cours lors de la régénération IA
+                  <label htmlFor="isLockedCheck" className="text-xs font-extrabold text-gray-650 dark:text-gray-350 uppercase cursor-pointer flex items-center gap-1.5">
+                    <Lock size={13} className="text-amber-500" /> Verrouiller ce cours lors de la régénération IA (EITE)
                   </label>
                 </div>
 
@@ -1141,16 +1202,16 @@ const TeacherPlanning: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => handleDeleteAssignment(editingAssignment.id)}
-                      className="flex-1 py-3 bg-red-50 hover:bg-red-100 text-red-600 dark:bg-red-950/20 dark:hover:bg-red-900/30 rounded-2xl font-bold transition-all flex items-center justify-center gap-1.5"
+                      className="flex-1 py-3.5 bg-red-50 hover:bg-red-100 text-red-600 dark:bg-red-950/20 dark:hover:bg-red-900/30 dark:text-red-400 rounded-2xl font-black transition-all flex items-center justify-center gap-1.5 shadow-sm active:scale-95"
                     >
                       <Trash2 size={16} /> Retirer
                     </button>
                   )}
                   <button
                     type="submit"
-                    className="flex-[2] py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-bold transition-all shadow-md shadow-indigo-500/20 flex items-center justify-center gap-1.5"
+                    className="flex-[2] py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white dark:bg-indigo-500 dark:hover:bg-indigo-600 rounded-2xl font-black transition-all flex items-center justify-center gap-2 shadow-md shadow-indigo-600/10 active:scale-95"
                   >
-                    <Check size={16} /> Enregistrer
+                    <CheckCircle2 size={16} /> Enregistrer
                   </button>
                 </div>
               </form>
