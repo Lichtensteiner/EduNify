@@ -951,44 +951,108 @@ const Finance: React.FC = () => {
       </div>
 
       {/* Main stats counters */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
-          <p className="text-xs text-gray-400 font-extrabold uppercase tracking-widest">{translate('total_revenue', 'Recettes Totales Encaissées')}</p>
-          <p className="text-2xl font-black text-emerald-600 mt-1">{formatCurrency(stats.income)}</p>
-          <div className="mt-2 text-[10px] text-gray-400 flex items-center justify-between">
-            <span>Cantine incluse :</span>
-            <span className="font-mono font-bold text-gray-600 dark:text-gray-300">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
+        
+        {/* Card 1: Recettes Totales */}
+        <div className="bg-white dark:bg-gray-800 p-5 sm:p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col justify-between transition-all hover:shadow-md h-full">
+          <div className="space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[11px] text-gray-400 dark:text-gray-500 font-extrabold uppercase tracking-widest leading-normal">
+                {translate('total_revenue', 'Recettes Totales Encaissées')}
+              </span>
+              <div className="p-2.5 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 rounded-xl shrink-0">
+                <TrendingUp size={18} />
+              </div>
+            </div>
+            <div className="pt-1">
+              <div className="text-lg xs:text-xl sm:text-2xl lg:text-3xl font-black text-emerald-600 leading-tight tracking-tight select-all truncate shrink min-w-0" title={formatCurrency(stats.income)}>
+                {formatCurrency(stats.income)}
+              </div>
+            </div>
+          </div>
+          <div className="mt-4 pt-3 border-t border-gray-50 dark:border-gray-700/60 text-[10px] text-gray-400 dark:text-gray-400 flex items-center justify-between gap-2">
+            <span className="truncate">Cantine incluse :</span>
+            <span className="font-mono font-bold text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-gray-900/40 px-2 py-0.5 rounded shrink-0 truncate max-w-[150px]" title={formatCurrency(canteenTransactions.filter(t => t.type === 'topup').reduce((acc, curr) => acc + curr.amount, 0))}>
               {formatCurrency(canteenTransactions.filter(t => t.type === 'topup').reduce((acc, curr) => acc + curr.amount, 0))}
             </span>
           </div>
         </div>
 
-        <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
-          <p className="text-xs text-gray-400 font-extrabold uppercase tracking-widest">Dépenses Générales Validées</p>
-          <p className="text-2xl font-black text-rose-500 mt-1">{formatCurrency(stats.charges)}</p>
-          <div className="mt-2 text-[10px] text-gray-400 flex items-center justify-between">
-            <span>Ration, Salaires, Maintenance</span>
-            <span className="font-mono text-gray-500 font-bold">({expenses.length} justificatifs)</span>
+        {/* Card 2: Dépenses Générales */}
+        <div className="bg-white dark:bg-gray-800 p-5 sm:p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col justify-between transition-all hover:shadow-md h-full">
+          <div className="space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[11px] text-gray-400 dark:text-gray-500 font-extrabold uppercase tracking-widest leading-normal">
+                Dépenses Générales Validées
+              </span>
+              <div className="p-2.5 bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 rounded-xl shrink-0">
+                <TrendingDown size={18} />
+              </div>
+            </div>
+            <div className="pt-1">
+              <div className="text-lg xs:text-xl sm:text-2xl lg:text-3xl font-black text-rose-500 leading-tight tracking-tight select-all truncate shrink min-w-0" title={formatCurrency(stats.charges)}>
+                {formatCurrency(stats.charges)}
+              </div>
+            </div>
+          </div>
+          <div className="mt-4 pt-3 border-t border-gray-50 dark:border-gray-700/60 text-[10px] text-gray-400 dark:text-gray-400 flex items-center justify-between gap-2">
+            <span className="truncate">Salaires, Ration, Matériel</span>
+            <span className="font-mono text-gray-500 dark:text-gray-450 font-bold bg-gray-50 dark:bg-gray-900/40 px-2 py-0.5 rounded shrink-0">
+              ({expenses.length} justificatifs)
+            </span>
           </div>
         </div>
 
-        <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
-          <p className="text-xs text-gray-400 font-extrabold uppercase tracking-widest">Résultat / Trésorerie Nette</p>
-          <p className={`text-2xl font-black mt-1 ${stats.result >= 0 ? 'text-indigo-650' : 'text-red-650'}`}>
-            {formatCurrency(stats.result)}
-          </p>
-          <div className="mt-2 text-[10px] text-gray-400">
-            <span>Excédent d'autofinancement direct</span>
+        {/* Card 3: Résultat / Trésorerie Nette */}
+        <div className="bg-white dark:bg-gray-800 p-5 sm:p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col justify-between transition-all hover:shadow-md h-full">
+          <div className="space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[11px] text-gray-400 dark:text-gray-500 font-extrabold uppercase tracking-widest leading-normal">
+                Résultat / Trésorerie Nette
+              </span>
+              <div className={`p-2.5 rounded-xl shrink-0 ${stats.result >= 0 ? 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-450' : 'bg-red-50 dark:bg-red-950/40 text-red-650'}`}>
+                <Activity size={18} />
+              </div>
+            </div>
+            <div className="pt-1">
+              <div className={`text-lg xs:text-xl sm:text-2xl lg:text-3xl font-black leading-tight tracking-tight select-all truncate shrink min-w-0 ${stats.result >= 0 ? 'text-indigo-600 dark:text-indigo-400' : 'text-red-500'}`} title={formatCurrency(stats.result)}>
+                {formatCurrency(stats.result)}
+              </div>
+            </div>
+          </div>
+          <div className="mt-4 pt-3 border-t border-gray-50 dark:border-gray-700/60 text-[10px] text-gray-400 dark:text-gray-400 flex items-center justify-between gap-2">
+            <span className="truncate">Solde disponible net</span>
+            <span className={`px-2 py-0.5 rounded text-[9px] font-extrabold uppercase shrink-0 ${stats.result >= 0 ? 'bg-emerald-50 dark:bg-emerald-950/45 text-emerald-700 dark:text-emerald-400' : 'bg-rose-50 dark:bg-rose-950/45 text-rose-700 dark:text-rose-400'}`}>
+              {stats.result >= 0 ? 'Excédentaire' : 'Déficitaire'}
+            </span>
           </div>
         </div>
 
-        <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
-          <p className="text-xs text-gray-400 font-extrabold uppercase tracking-widest">Créances Restantes & Retards</p>
-          <p className="text-2xl font-black text-amber-500 mt-1">{formatCurrency(stats.unpaid)}</p>
-          <div className="mt-2 text-[10px] text-gray-400">
-            <span>Relances automatiques actives</span>
+        {/* Card 4: Créances Restantes */}
+        <div className="bg-white dark:bg-gray-800 p-5 sm:p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col justify-between transition-all hover:shadow-md h-full">
+          <div className="space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[11px] text-gray-400 dark:text-gray-500 font-extrabold uppercase tracking-widest leading-normal">
+                Créances Restantes & Retards
+              </span>
+              <div className="p-2.5 bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 rounded-xl shrink-0">
+                <AlertCircle size={18} />
+              </div>
+            </div>
+            <div className="pt-1">
+              <div className="text-lg xs:text-xl sm:text-2xl lg:text-3xl font-black text-amber-500 leading-tight tracking-tight select-all truncate shrink min-w-0" title={formatCurrency(stats.unpaid)}>
+                {formatCurrency(stats.unpaid)}
+              </div>
+            </div>
+          </div>
+          <div className="mt-4 pt-3 border-t border-gray-50 dark:border-gray-700/60 text-[10px] text-gray-400 dark:text-gray-400 flex items-center justify-between gap-2">
+            <span className="truncate">Relances scolaires</span>
+            <span className="font-semibold text-amber-600 dark:text-amber-400 shrink-0">
+              Actives
+            </span>
           </div>
         </div>
+
       </div>
 
       {/* Mini warning if no caisse is opened */}
