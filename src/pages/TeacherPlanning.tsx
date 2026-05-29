@@ -213,7 +213,7 @@ const TeacherPlanning: React.FC = () => {
   const isAdmin = currentUser?.role === 'admin' || (currentUser?.role as any) === 'Super Admin' || (currentUser?.role as any) === 'Directeur' || (currentUser?.role as any) === 'personnel administratif';
 
   const [realTeachers, setRealTeachers] = useState<{ id: string; name: string; subjects: string[] }[]>([]);
-  const [realSubjects, setRealSubjects] = useState<string[]>([]);
+  const [realSubjects, setRealSubjects] = useState<{ id: string; name: string; teacherId?: string; teacherName?: string }[]>([]);
 
   // Écouter dynamiquement les enseignants et matières réels depuis Firebase Firestore
   useEffect(() => {
@@ -249,8 +249,16 @@ const TeacherPlanning: React.FC = () => {
 
     // 2. Matières ou Disciplines (cours) réelles
     const unsubscribeSubjects = onSnapshot(collection(db, 'subjects'), (snapshot) => {
-      const dbSubjects = snapshot.docs.map(doc => doc.data().name as string).filter(Boolean);
-      setRealSubjects(Array.from(new Set(dbSubjects)));
+      const dbSubjects = snapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          name: data.name as string || '',
+          teacherId: data.teacherId as string || '',
+          teacherName: data.teacherName as string || ''
+        };
+      }).filter(sub => !!sub.name);
+      setRealSubjects(dbSubjects);
     }, (error) => {
       console.error("Error fetching real subjects: ", error);
       setRealSubjects([]);
@@ -362,9 +370,9 @@ const TeacherPlanning: React.FC = () => {
     });
 
     if (isTeacher) {
-      setAgendaSubjects(currentUser.matieres || (currentUser.matiere ? [currentUser.matiere] : realSubjects.length > 0 ? realSubjects : STATIC_SUBJECTS));
+      setAgendaSubjects(currentUser.matieres || (currentUser.matiere ? [currentUser.matiere] : realSubjects.length > 0 ? realSubjects.map(s => s.name) : STATIC_SUBJECTS));
     } else {
-      setAgendaSubjects(realSubjects.length > 0 ? realSubjects : STATIC_SUBJECTS);
+      setAgendaSubjects(realSubjects.length > 0 ? realSubjects.map(s => s.name) : STATIC_SUBJECTS);
     }
 
     return () => {
@@ -514,7 +522,7 @@ const TeacherPlanning: React.FC = () => {
     // Compute generated course table for all classes
     // We will generate assignments for the selected class dynamically
     const generated: TimetableAssignment[] = [];
-    const subjectsSeed = realSubjects;
+    const subjectsSeed = realSubjects.map(sub => sub.name);
     const teachersSeed = realTeachers;
     const roomsSeed = [...STATIC_ROOMS];
 
@@ -889,10 +897,13 @@ const TeacherPlanning: React.FC = () => {
                           {DAYS.map((day) => {
                             const cells = getAssignmentsForCell(day, slot.id);
                             // Filter only if the subject is recorded in our Firestore database (realSubjects)
-                            // If there are no subjects in the database, we treat it as empty because mock subjects are excluded.
-                            const validCourses = cells.filter(course => 
-                              realSubjects.some(sub => sub.toLowerCase().trim() === course.subject.toLowerCase().trim())
-                            );
+                            // If there are no subjects in the db yet, we show seeds for standard display.
+                            // Real, user-created assignments (id not starting with seed_) are always shown.
+                            const validCourses = cells.filter(course => {
+                              if (!course.id.startsWith('seed_')) return true;
+                              if (realSubjects.length === 0 && realTeachers.length === 0) return true;
+                              return realSubjects.some(sub => sub.name.toLowerCase().trim() === course.subject.toLowerCase().trim());
+                            });
 
                             return (
                               <td
@@ -901,13 +912,27 @@ const TeacherPlanning: React.FC = () => {
                               >
                                 {validCourses.length > 0 ? (
                                   validCourses.map((course) => {
-                                    // Check if the teacher exists in the real-time database
-                                    const matchedDbTeacher = realTeachers.find(t => 
-                                      t.id === course.teacherId || 
-                                      t.name.toLowerCase().replace(/\s+/g, '').includes(course.teacherName.toLowerCase().replace(/\s+/g, ''))
-                                    );
+                                    // Robust real-time teacher resolution from firebase list:
+                                    // 1. Try exact ID
+                                    let matchedDbTeacher = realTeachers.find(t => t.id === course.teacherId);
+                                    
+                                    // 2. Fallback: try match by name
+                                    if (!matchedDbTeacher && course.teacherName) {
+                                      matchedDbTeacher = realTeachers.find(t => 
+                                        t.name.toLowerCase().replace(/\s+/g, '').includes(course.teacherName.toLowerCase().replace(/\s+/g, ''))
+                                      );
+                                    }
+                                    
+                                    // 3. Fallback: If no teacher specified, search if a teacher is officially assigned to this subject
+                                    if (!matchedDbTeacher) {
+                                      const matchingSubjectDoc = realSubjects.find(s => s.name.toLowerCase().trim() === course.subject.toLowerCase().trim());
+                                      if (matchingSubjectDoc && matchingSubjectDoc.teacherId) {
+                                        matchedDbTeacher = realTeachers.find(t => t.id === matchingSubjectDoc.teacherId);
+                                      }
+                                    }
+
                                     const hasRealTeacher = !!matchedDbTeacher;
-                                    const displayTeacherName = hasRealTeacher ? matchedDbTeacher.name.split('(')[0] : '';
+                                    const displayTeacherName = hasRealTeacher ? matchedDbTeacher.name.split('(')[0].trim() : '';
 
                                     return (
                                       <div
@@ -1225,7 +1250,11 @@ const TeacherPlanning: React.FC = () => {
                         const newSub = e.target.value;
                         setAssignmentForm(prev => {
                           const updated = { ...prev, subject: newSub };
-                          if (newSub && filterQualifiedTeachersOnly) {
+                          // Auto-retrieve the teacher assigned to this subject in the database
+                          const matchedSubjectDoc = realSubjects.find(s => s.name === newSub);
+                          if (matchedSubjectDoc && matchedSubjectDoc.teacherId) {
+                            updated.teacherId = matchedSubjectDoc.teacherId;
+                          } else if (newSub && filterQualifiedTeachersOnly) {
                             const match = realTeachers.find(t => t.id === prev.teacherId);
                             if (match && !match.subjects.includes(newSub.toLowerCase().trim())) {
                               updated.teacherId = '';
@@ -1239,7 +1268,7 @@ const TeacherPlanning: React.FC = () => {
                     >
                       <option value="">-- Choisir la discipline --</option>
                       {realSubjects.map((sub, idx) => (
-                        <option key={idx} value={sub}>{sub}</option>
+                        <option key={sub.id || idx} value={sub.name}>{sub.name}</option>
                       ))}
                     </select>
                   </div>
