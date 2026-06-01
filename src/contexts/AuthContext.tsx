@@ -131,7 +131,18 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
                 }, { merge: true }).catch(err => console.error(err));
                 setCurrentUser({ id: docSnap.id, ...userData, role: updatedRole, responsibilities: defaultResps } as User);
               } else {
-                setCurrentUser({ id: docSnap.id, ...userData } as User);
+                // If it is any personnel administratif with empty responsibilities but has a position, auto-map!
+                if (userData.role === 'personnel administratif' && (!userData.responsibilities || userData.responsibilities.length === 0) && userData.position) {
+                  const mappedResps = mapPositionToResponsibility(userData.position);
+                  if (mappedResps.length > 0) {
+                    setDoc(docRef, { responsibilities: mappedResps }, { merge: true }).catch(err => console.error(err));
+                    setCurrentUser({ id: docSnap.id, ...userData, responsibilities: mappedResps } as User);
+                  } else {
+                    setCurrentUser({ id: docSnap.id, ...userData } as User);
+                  }
+                } else {
+                  setCurrentUser({ id: docSnap.id, ...userData } as User);
+                }
               }
             }
           } else {
@@ -358,3 +369,21 @@ export const useAuth = () => {
   if (!context) throw new Error("useAuth must be used within AuthProvider");
   return context;
 };
+
+export function mapPositionToResponsibility(pos?: string): string[] {
+  if (!pos) return [];
+  const normalized = pos.toLowerCase().trim()
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, ""); // strip accents
+  
+  if (normalized.includes('college')) return ['responsable_college'];
+  if (normalized.includes('primaire')) return ['responsable_primaire'];
+  if (normalized.includes('maternelle')) return ['responsable_maternelle'];
+  if (normalized.includes('secretaire generale') || normalized === 'secretaire generale') return ['secretaire_generale'];
+  if (normalized.includes('secretaire adjoint') || normalized === 'secretaire adjointe') return ['secretaire_adjointe'];
+  if (normalized === 'surveillant' || normalized.includes('surveillant general') || normalized === 'surveillant general') return ['surveillant_general'];
+  if (normalized.includes('surveillant adjoint')) return ['surveillant_adjoint'];
+  if (normalized.includes('comptable')) return ['gestionnaire_comptable'];
+  if (normalized.includes('pedagogique') || normalized.includes('charge pedagogique')) return ['responsable_pedagogique'];
+  if (normalized.includes('menage')) return ['dame_menage'];
+  return [];
+}

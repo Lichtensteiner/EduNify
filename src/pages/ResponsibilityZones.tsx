@@ -28,7 +28,7 @@ import {
   FileBadge,
   Sparkle
 } from 'lucide-react';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth, mapPositionToResponsibility } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useNotification } from '../contexts/NotificationContext';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
@@ -51,11 +51,23 @@ export default function ResponsibilityZones() {
   const responsibilitiesString = (currentUser?.responsibilities || []).join(',');
   
   const accessibleResponsibilityIds = React.useMemo(() => {
-    return isGlobalAdmin 
-      ? availableResponsibilityIds.filter(id => id !== 'responsable_maternelle') 
-      : (currentUser?.responsibilities || []);
+    // If the user has explicit responsibilities or an administrative position, we restrict them strictly to that!
+    // This satisfies "le rôle de responsabilité de chaque user soit dans sa section bureau direction... rien que sa section"
+    const configured = currentUser?.responsibilities || [];
+    const fromPosition = currentUser?.position ? mapPositionToResponsibility(currentUser.position) : [];
+    const combined = Array.from(new Set([...configured, ...fromPosition]));
+
+    if (combined.length > 0) {
+      return combined;
+    }
+
+    if (isGlobalAdmin) {
+      return availableResponsibilityIds.filter(id => id !== 'responsable_maternelle');
+    }
+
+    return [];
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isGlobalAdmin, availableResponsibilityIds, responsibilitiesString]);
+  }, [isGlobalAdmin, availableResponsibilityIds, responsibilitiesString, currentUser?.position]);
 
   const [activeRespId, setActiveRespId] = useState<string>('');
 
