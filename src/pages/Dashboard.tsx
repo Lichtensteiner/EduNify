@@ -26,7 +26,9 @@ import {
   Download,
   Trash2,
   History,
-  FileJson
+  FileJson,
+  Smartphone,
+  Search
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { 
@@ -51,6 +53,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { useNotification } from '../contexts/NotificationContext';
+import { usePWA } from '../hooks/usePWA';
 import NewUserAnnouncement from '../components/NewUserAnnouncement';
 
 const COLORS = ['#4f46e5', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
@@ -96,6 +99,18 @@ const AdminDashboard = ({ stats, weeklyData, studentLevelData, userDistribution,
   const [isOptimizeOpen, setIsOptimizeOpen] = useState(false);
   const [detailTab, setDetailTab] = useState<'analysis' | 'file'>('analysis');
   const [teacherPlanning, setTeacherPlanning] = useState<any[]>([]);
+  const [pwaInstalls, setPwaInstalls] = useState<any[]>([]);
+  const [pwaSearch, setPwaSearch] = useState('');
+
+  // Setup real-time Firestore subscriber for PWA Installations
+  useEffect(() => {
+    if (!isFirebaseConfigured) return;
+    const unsub = onSnapshot(collection(db, 'pwa_installations'), (snap) => {
+      const docs = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setPwaInstalls(docs);
+    });
+    return () => unsub();
+  }, []);
 
   // File-like storage for strategic recommendations optimizations with 48h expiration (Synchronized in real-time with Firestore)
   const [optimizationsFile, setOptimizationsFile] = useState<{
@@ -729,6 +744,163 @@ const AdminDashboard = ({ stats, weeklyData, studentLevelData, userDistribution,
             </div>
          </div>
       </div>
+
+      {/* PWA Installations & Analytics Section */}
+      <div className="bg-white dark:bg-gray-800 p-8 rounded-3xl border border-gray-100 dark:border-gray-700 shadow-sm space-y-6">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-gray-150 dark:border-gray-700 pb-4 gap-4">
+          <div>
+            <h3 className="text-xl font-black text-gray-900 dark:text-white flex items-center gap-2">
+              <Smartphone className="text-indigo-600 dark:text-indigo-400" size={24} />
+              Statistiques & Terminaux PWA
+            </h3>
+            <p className="text-xs text-gray-500 dark:text-gray-400 font-medium font-sans">Suivi en temps réel de l'adoption de l'application mobile et bureautique Edu-Nify.</p>
+          </div>
+          <div className="flex items-center gap-1 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 px-3 py-1.5 rounded-xl text-xs font-bold font-mono">
+            {pwaInstalls.length} terminaux enregistrés
+          </div>
+        </div>
+
+        {/* Dynamic Computed metrics cards */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="p-4 bg-gray-50 dark:bg-gray-900/40 border border-gray-100 dark:border-gray-800 rounded-2xl flex flex-col justify-between">
+            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Android (Mobiles)</span>
+            <div className="flex items-baseline justify-between mt-2">
+              <span className="text-2xl font-black text-gray-900 dark:text-white">
+                {pwaInstalls.filter(x => x.platform === 'android').length}
+              </span>
+              <span className="text-[10px] font-bold text-emerald-500 font-mono bg-emerald-50 dark:bg-emerald-950/20 px-1.5 py-0.5 rounded">
+                {pwaInstalls.length > 0 ? Math.round((pwaInstalls.filter(x => x.platform === 'android').length / pwaInstalls.length) * 100) : 0}%
+              </span>
+            </div>
+          </div>
+
+          <div className="p-4 bg-gray-50 dark:bg-gray-900/40 border border-gray-100 dark:border-gray-800 rounded-2xl flex flex-col justify-between">
+            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">iOS / Safari</span>
+            <div className="flex items-baseline justify-between mt-2">
+              <span className="text-2xl font-black text-gray-900 dark:text-white">
+                {pwaInstalls.filter(x => x.platform === 'ios').length}
+              </span>
+              <span className="text-[10px] font-bold text-indigo-500 font-mono bg-indigo-50 dark:bg-indigo-950/20 px-1.5 py-0.5 rounded">
+                {pwaInstalls.length > 0 ? Math.round((pwaInstalls.filter(x => x.platform === 'ios').length / pwaInstalls.length) * 100) : 0}%
+              </span>
+            </div>
+          </div>
+
+          <div className="p-4 bg-gray-50 dark:bg-gray-900/40 border border-gray-100 dark:border-gray-800 rounded-2xl flex flex-col justify-between">
+            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Ordinateurs (Chrome)</span>
+            <div className="flex items-baseline justify-between mt-2">
+              <span className="text-2xl font-black text-gray-900 dark:text-white">
+                {pwaInstalls.filter(x => x.platform === 'desktop').length}
+              </span>
+              <span className="text-[10px] font-bold text-purple-500 font-mono bg-purple-50 dark:bg-purple-950/20 px-1.5 py-0.5 rounded">
+                {pwaInstalls.length > 0 ? Math.round((pwaInstalls.filter(x => x.platform === 'desktop').length / pwaInstalls.length) * 100) : 0}%
+              </span>
+            </div>
+          </div>
+
+          <div className="p-4 bg-gray-50 dark:bg-gray-900/40 border border-gray-100 dark:border-gray-800 rounded-2xl flex flex-col justify-between">
+            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest font-sans">Taux de rétention (7j)</span>
+            <div className="flex items-baseline justify-between mt-2">
+              <span className="text-2xl font-black text-gray-900 dark:text-white">
+                {pwaInstalls.length > 0 ? Math.round((pwaInstalls.filter(doc => {
+                  if (!doc.lastUsed) return false;
+                  return (Date.now() - new Date(doc.lastUsed).getTime()) / (1000 * 60 * 60 * 24) <= 7;
+                }).length / pwaInstalls.length) * 100) : 0}%
+              </span>
+              <span className="text-[10px] font-bold text-blue-500 font-mono bg-blue-50 dark:bg-blue-950/20 px-1.5 py-0.5 rounded">
+                Actif
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Searching & Listings */}
+        <div className="space-y-4 pt-2">
+          <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
+            <h4 className="text-sm font-black text-gray-400 uppercase tracking-wider font-sans">Liste des terminaux installés</h4>
+            <div className="relative w-full sm:w-64">
+              <input 
+                type="text" 
+                placeholder="Rechercher un utilisateur ou plateforme..."
+                value={pwaSearch}
+                onChange={(e) => setPwaSearch(e.target.value)}
+                className="w-full pl-9 pr-4 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-150 dark:border-gray-650 rounded-xl text-xs text-gray-900 dark:text-white focus:ring-1 focus:ring-indigo-500 focus:bg-white"
+              />
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            </div>
+          </div>
+
+          <div className="border border-gray-100 dark:border-gray-700 rounded-2xl overflow-hidden shadow-sm overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-gray-50 dark:bg-gray-700 text-gray-400 dark:text-gray-300 font-black uppercase tracking-widest text-[10px] border-b border-gray-100 dark:border-gray-700">
+                <tr>
+                  <th className="px-6 py-4 font-sans">Utilisateur</th>
+                  <th className="px-6 py-4 font-sans">Plateforme</th>
+                  <th className="px-6 py-4 font-sans">Dernier accès</th>
+                  <th className="px-6 py-4 text-center font-sans">Statut</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100 dark:divide-gray-700 font-medium text-gray-700 dark:text-gray-300">
+                {pwaInstalls.filter(doc => {
+                  const s = pwaSearch.toLowerCase();
+                  return (
+                    (doc.userName || '').toLowerCase().includes(s) ||
+                    (doc.userEmail || '').toLowerCase().includes(s) ||
+                    (doc.platform || '').toLowerCase().includes(s)
+                  );
+                }).length === 0 ? (
+                  <tr>
+                    <td colSpan={4} className="px-6 py-12 text-center text-gray-400 dark:text-gray-500 italic font-sans">
+                      Aucun terminal PWA enregistré correspondant à la recherche.
+                    </td>
+                  </tr>
+                ) : (
+                  pwaInstalls.filter(doc => {
+                    const s = pwaSearch.toLowerCase();
+                    return (
+                      (doc.userName || '').toLowerCase().includes(s) ||
+                      (doc.userEmail || '').toLowerCase().includes(s) ||
+                      (doc.platform || '').toLowerCase().includes(s)
+                    );
+                  }).map((doc) => {
+                    const is7dActive = doc.lastUsed && (Date.now() - new Date(doc.lastUsed).getTime()) / (1000 * 60 * 60 * 24) <= 7;
+                    return (
+                      <tr key={doc.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+                        <td className="px-6 py-4">
+                          <div>
+                            <p className="font-bold text-gray-900 dark:text-white font-sans">{doc.userName || "Utilisateur Inconnu"}</p>
+                            <p className="text-[10px] text-gray-400 dark:text-gray-500 font-mono">{doc.userEmail}</p>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider ${
+                            doc.platform === 'android' ? 'bg-emerald-55 dark:bg-emerald-950/40 text-emerald-600' :
+                            doc.platform === 'ios' ? 'bg-indigo-55 dark:bg-indigo-950/40 text-indigo-600' :
+                            'bg-gray-150 dark:bg-gray-600 text-gray-600 dark:text-gray-300'
+                          }`}>
+                            {doc.platform || 'Inconnu'}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 font-mono text-[11px] text-gray-400">
+                          {doc.lastUsed ? new Date(doc.lastUsed).toLocaleString() : 'Inconnu'}
+                        </td>
+                        <td className="px-6 py-4 text-center">
+                          <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${
+                            is7dActive ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40' : 'bg-red-50 text-red-500 dark:bg-red-950/40'
+                          }`}>
+                            <span className={`w-1.5 h-1.5 rounded-full ${is7dActive ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'}`} />
+                            {is7dActive ? 'Actif' : 'Inactif'}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
     </div>
   );
 };
@@ -1205,6 +1377,7 @@ const ChevronRightIcon = ({ className, size = 18 }: any) => (
 export default function Dashboard({ onNavigate }: any) {
   const { currentUser } = useAuth();
   const { t, tData } = useLanguage();
+  const { isStandalone } = usePWA();
   const [stats, setStats] = useState({ presents: 0, retards: 0, absents: 0, total: 0 });
   const [weeklyData, setWeeklyData] = useState<any[]>([]);
   const [studentLevelData, setStudentLevelData] = useState<any[]>([]);
@@ -1427,6 +1600,34 @@ export default function Dashboard({ onNavigate }: any) {
       </div>
 
       <NewUserAnnouncement />
+
+      {!isStandalone && (
+        <div className="bg-gradient-to-r from-indigo-500 via-purple-600 to-pink-500 rounded-3xl p-6 text-white shadow-xl shadow-indigo-600/15 relative overflow-hidden flex flex-col md:flex-row md:items-center md:justify-between gap-6">
+          <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full blur-2xl translate-x-12 -translate-y-12 animate-pulse"></div>
+          <div className="absolute -bottom-12 -left-12 w-48 h-48 bg-black/10 rounded-full blur-xl"></div>
+          
+          <div className="relative flex items-start gap-4 flex-1">
+            <div className="bg-white/10 backdrop-blur-md p-3 rounded-2xl shrink-0 mt-0.5 border border-white/20">
+              <Download size={24} className="text-white" />
+            </div>
+            <div>
+              <h2 className="text-lg font-bold tracking-tight">Installer Edu-Nify sur votre appareil</h2>
+              <p className="text-sm text-indigo-50/90 mt-1 max-w-2xl leading-relaxed">
+                Profitez d'une expérience fluide, rapide et optimisée avec des notifications en temps réel, un accès hors ligne partiel et une icône sur votre écran d'accueil comme une application native.
+              </p>
+            </div>
+          </div>
+          
+          <div className="relative flex items-center gap-3 shrink-0">
+            <button 
+              onClick={() => window.dispatchEvent(new CustomEvent('open-pwa-install-guide'))}
+              className="px-5 py-2.5 bg-white text-indigo-600 hover:bg-indigo-50 active:scale-95 transition-all text-xs font-bold rounded-2xl shadow-md cursor-pointer"
+            >
+              📥 Installer maintenant
+            </button>
+          </div>
+        </div>
+      )}
 
       {currentUser?.role === 'admin' || currentUser?.role === 'personnel administratif' ? (
         <AdminDashboard 

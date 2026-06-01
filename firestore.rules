@@ -290,6 +290,12 @@ service cloud.firestore {
       allow write: if isAuthenticated() && (isAdmin() || isStaff());
     }
 
+    // PWA Installations Collection
+    match /pwa_installations/{installId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && (request.auth.uid == installId || isAdmin());
+    }
+
     // Maternelle siestas (sleep records)
     match /maternelle_siestas/{siestaId} {
       allow read, write: if hasResponsibility('responsable_maternelle');

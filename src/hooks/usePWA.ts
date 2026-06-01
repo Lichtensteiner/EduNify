@@ -1,6 +1,10 @@
 import { useState, useEffect } from 'react';
+import { useAuth } from '../contexts/AuthContext';
+import { doc, setDoc } from 'firebase/firestore';
+import { db } from '../lib/firebase';
 
 export function usePWA() {
+  const { currentUser } = useAuth();
   const [deferredPrompt, setDeferredPrompt] = useState<any>(
     (window as any).deferredPrompt || null
   );
@@ -9,6 +13,34 @@ export function usePWA() {
   );
   const [showInstallBanner, setShowInstallBanner] = useState(false);
   const [isStandalone, setIsStandalone] = useState(false);
+
+  // Helper to detect operating system
+  const getOS = () => {
+    const userAgent = window.navigator.userAgent.toLowerCase();
+    if (/iphone|ipad|ipod/.test(userAgent)) return 'ios';
+    if (/android/.test(userAgent)) return 'android';
+    return 'desktop';
+  };
+
+  // Record direct PWA Installation to Firestore
+  const recordInstall = async (userObj = currentUser) => {
+    if (!userObj) return;
+    try {
+      const platform = getOS();
+      await setDoc(doc(db, 'pwa_installations', userObj.id), {
+        userId: userObj.id,
+        userName: `${userObj.prenom || ''} ${userObj.nom || ''}`.trim(),
+        userEmail: userObj.email || '',
+        platform,
+        installedAt: new Date().toISOString(),
+        lastUsed: new Date().toISOString(),
+        userAgent: navigator.userAgent
+      }, { merge: true });
+      localStorage.setItem('edu_nify_pwa_tracked', 'true');
+    } catch (err) {
+      console.warn("PWA installation log error:", err);
+    }
+  };
 
   useEffect(() => {
     // Détecter si l'application fonctionne déjà en mode autonome (déjà installée)
@@ -36,6 +68,9 @@ export function usePWA() {
       setDeferredPrompt(null);
       setIsInstallable(false);
       setIsStandalone(true);
+      if (currentUser) {
+        recordInstall(currentUser);
+      }
     };
 
     // If there is already a stashed prompt in window, initialize state
@@ -55,7 +90,30 @@ export function usePWA() {
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
       window.removeEventListener('appinstalled', handleAppInstalled);
     };
-  }, []);
+  }, [currentUser]);
+
+  // Track regular standalone PWA usage
+  useEffect(() => {
+    if (currentUser && isStandalone) {
+      const updateUsage = async () => {
+        try {
+          const platform = getOS();
+          await setDoc(doc(db, 'pwa_installations', currentUser.id), {
+            userId: currentUser.id,
+            userName: `${currentUser.prenom || ''} ${currentUser.nom || ''}`.trim(),
+            userEmail: currentUser.email || '',
+            platform,
+            lastUsed: new Date().toISOString(),
+            userAgent: navigator.userAgent
+          }, { merge: true });
+          localStorage.setItem('edu_nify_pwa_tracked', 'true');
+        } catch (err) {
+          console.warn("Standalone PWA usage tracking error:", err);
+        }
+      };
+      updateUsage();
+    }
+  }, [currentUser, isStandalone]);
 
   const installApp = async () => {
     // Gestion spécifique pour iOS (Safari ne supporte pas l'événement avant installation)
@@ -95,6 +153,9 @@ export function usePWA() {
         setDeferredPrompt(null);
         setIsInstallable(false);
         setShowInstallBanner(false);
+        if (currentUser) {
+          await recordInstall(currentUser);
+        }
       }
     } catch (err) {
       console.error("Erreur durant l'installation :", err);
@@ -107,7 +168,8 @@ export function usePWA() {
     isStandalone,
     deferredPrompt,
     showInstallBanner,
-    setShowInstallBanner
+    setShowInstallBanner,
+    getOS
   };
 }
 
