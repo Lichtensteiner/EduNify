@@ -466,7 +466,7 @@ export default function Settings() {
                   <div className="pt-6 border-t border-gray-100 dark:border-gray-700">
                     <h4 className="text-sm font-black text-gray-900 dark:text-white uppercase tracking-widest mb-4">Langue de l'Interface</h4>
                     <div className="flex flex-wrap gap-3">
-                      {['fr', 'en', 'ar', 'de'].map((lng) => (
+                      {['fr', 'en', 'es', 'zh', 'ja', 'pt'].map((lng) => (
                         <button
                           key={lng}
                           onClick={() => setLanguage(lng as any)}
@@ -476,7 +476,7 @@ export default function Settings() {
                               : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200'
                           }`}
                         >
-                          {lng === 'fr' ? '🇫🇷 Français' : lng === 'en' ? '🇺🇸 English' : lng === 'ar' ? '🇸🇦 العربية' : '🇩🇪 Deutsch'}
+                          {lng === 'fr' ? '🇫🇷 Français' : lng === 'en' ? '🇬🇧 English' : lng === 'es' ? '🇪🇸 Español' : lng === 'zh' ? '🇨🇳 中文' : lng === 'ja' ? '🇯🇵 日本語' : '🇵🇹 Português'}
                         </button>
                       ))}
                     </div>

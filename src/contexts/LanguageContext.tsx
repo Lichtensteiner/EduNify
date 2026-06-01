@@ -1,10 +1,11 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { ptTranslations } from './ptTranslations';
 
-export type Language = 'fr' | 'en' | 'es' | 'zh' | 'ja';
+export type Language = 'fr' | 'en' | 'es' | 'zh' | 'ja' | 'pt';
 
 interface Translations {
   [key: string]: {
-    [lang in Language]: string;
+    [lang in Language]?: string;
   };
 }
 
@@ -1024,7 +1025,44 @@ const translations: Translations = {
   'not_enough_data_chart': { fr: 'Pas assez de données pour générer le graphique', en: 'Not enough data to generate the chart', es: 'No hay suficientes datos para generar el gráfico', zh: '数据不足以生成图表', ja: 'チャートを生成するためのデータが不足しています' },
   'new_message_in': { fr: 'Nouveau message dans', en: 'New message in', es: 'Nuevo message en', zh: '新消息在', ja: '新しいメッセージ:' },
   'class_tracking': { fr: 'Suivre_Classe', en: 'Track Class', es: 'Seguir Clase', zh: '跟踪班级', ja: 'クラスを追跡' },
+  'admin_analysis_details': { fr: 'Détails de l\'Analyse Administrative', en: 'Administrative Analysis Details', es: 'Detalles de Análisis Administrativo', pt: 'Detalhes da Análise Administrativa', zh: '行政分析详细信息', ja: '管理分析の詳細' },
+  'admin_insights_desc': { fr: 'Analyse statistique et IA temps réel du niveau global d\'engagement, ponctualité et comportement.', en: 'Real-time statistical and AI analysis of overall engagement, punctuality, and behavior.', es: 'Análisis estadístico e IA en tiempo real del nivel general de compromiso, puntualidad y comportamiento.', pt: 'Análise estatística e de IA em tempo real do nível global de engajamento, pontualidade e comportamento.', zh: '总体参与度、准时度和行为的实时统计和 AI 分析。', ja: '全体的なエンゲージメント、時間厳守、および行動のリアルタイムの統計およびAI分析。' },
+  'data_sources': { fr: 'Sources de Données', en: 'Data Sources', es: 'Fuentes de Datos', pt: 'Fontes de Dados', zh: '数据源', ja: 'データソース' },
+  'system_optimization': { fr: 'Optimisation du Système', en: 'System Optimization', es: 'Optimización del Sistema', pt: 'Otimização do Sistema', zh: '系统优化', ja: 'システムの最適化' },
+  'optimization_desc': { fr: 'L\'IA analyse les flux de données comportementales et d\'assiduité pour suggérer des optimisations directes pour votre établissement scolaire.', en: 'The AI analyzes behavioral and attendance data flows to suggest direct optimizations for your school.', es: 'La IA analiza los flujos de datos de comportamiento y asistencia para sugerir optimizaciones directas para su escuela.', pt: 'A IA analisa os fluxos de dados comportamentais e de presença para sugerir otimizações diretas para a sua escola.', zh: 'AI 分析行为和出勤数据流，以为您的学校建议直接优化。', ja: 'AIは行動および出席データフローを分析して、学校の直接的な最適化を提案します。' },
+  'total_workforce': { fr: 'Effectif Total', en: 'Total Workforce', es: 'Efectivo Total', pt: 'Efetivo Total', zh: '总人数', ja: '全メンバー数' },
+  'late_average': { fr: 'Moyenne des Retards', en: 'Average Lateness', es: 'Promedio de Retrasos', pt: 'Média de Atrasos', zh: '平均迟到', ja: '平均遅刻' },
+  'house_points_label': { fr: 'Points de Maisons', en: 'House Points', es: 'Puntos de las Casas', pt: 'Pontos das Casas', zh: '学院分数', ja: 'ハウスポイント' },
+
+  'students_label': { fr: 'Élèves', en: 'Students', es: 'Estudiantes', pt: 'Alunos', zh: '学生', ja: '生徒' },
+  'occupation': { fr: 'Occupation', en: 'Occupation', es: 'Ocupación', pt: 'Ocupação', zh: '占用率', ja: '占有率' },
+  'ai_analysis': { fr: 'Analyse IA', en: 'AI Insights', es: 'Análisis IA', pt: 'Análise de IA', zh: 'AI 分析', ja: 'AI分析(インサイト)' },
+  'strategic_recommendation': { fr: 'Recommandation Stratégique', en: 'Strategic Recommendation', es: 'Recomendación Estratégica', pt: 'Recomendação Estratégica', zh: '战略建议', ja: '戦略的推奨事項' },
+  'points_stat': { fr: 'points', en: 'pts', es: 'pts', pt: 'pts', zh: '分', ja: 'ポイント' },
+  'no_points_data': { fr: 'Aucune donnée de points', en: 'No points data', es: 'Sin datos de puntos', pt: 'Sem dados de pontos', zh: '无分数数据', ja: 'ポイントデータなし' },
+  'attendance_evolution': { fr: 'Évolution des Présences', en: 'Attendance Evolution', es: 'Evolución de Asistencias', pt: 'Evolução de Presenças', zh: '出勤情况变化', ja: '出席率の推移' },
+  'weekly_comparative_analysis': { fr: 'Analyse comparative hebdomadaire', en: 'Weekly comparative analysis', es: 'Análisis comparativo semanal', pt: 'Análise comparativa semanal', zh: '每周比较分析', ja: '週次比較分析' },
+  'presents_label': { fr: 'Présents', en: 'Presents', es: 'Presentes', pt: 'Presentes', zh: '已出勤', ja: '出席' },
+  'lates_label': { fr: 'Retards', en: 'Lateness', es: 'Retrasos', pt: 'Atrasos', zh: '迟到', ja: '遅刻' },
+  'data_flow_init': { fr: 'Initialisation des flux de données...', en: 'Data flow streams initializing...', es: 'Inicializando flujos de datos...', pt: 'Inicializando fluxos de dados...', zh: '数据流初始化中...', ja: 'データフローを初期化中...' },
+  'details_btn': { fr: 'Détails', en: 'Details', es: 'Detalles', pt: 'Detalhes', zh: '详情', ja: '詳細' },
+  'optimize_btn': { fr: 'Optimiser', en: 'Optimize', es: 'Optimizar', pt: 'Otimizar', zh: '优化', ja: '最適化する' },
+  'launch_action': { fr: 'Lancer l\'Action', en: 'Launch Action', es: 'Iniciar Acción', pt: 'Iniciar Ação', zh: '启动操作', ja: 'アクション実行' },
+  'storage_file': { fr: 'Fichier de Stockage', en: 'Storage File', es: 'Archivo de Almacenamiento', pt: 'Arquivo de Armazenamento', zh: '存储文件', ja: 'ストレージファイル' },
+  'optimization_file_desc': { fr: 'Chaque optimisation est enregistrée dans un fichier structuré. Les optimisations disparaissent automatiquement après 48h.', en: 'Each optimization is saved in a structured file. Optimizations automatically expire after 48h.', es: 'Cada optimización se registra en un archivo estructurado. Las optimizaciones desaparecen automáticamente después de 48 horas.', pt: 'Cada otimização é gravada num arquivo estruturado. As otimizações expiram automaticamente após 48h.', zh: '每次优化都会保存在结构化文件中。 48小时后优化将自动消失。', ja: '各最適化は構造化ファイルに保存されます。最適化は48時間後に自動的に期限切れになります。' },
+  'download_json': { fr: 'Télécharger (.json)', en: 'Download (.json)', es: 'Descargar (.json)', pt: 'Baixar (.json)', zh: '下载 (.json)', ja: 'ダウンロード (.json)' },
+  'empty_btn': { fr: 'Vider', en: 'Empty', es: 'Vaciar', pt: 'Esvaziar', zh: '清空', ja: 'クリア' },
+  'clear_logs_tooltip': { fr: 'Vider le fichier de logs', en: 'Clear log file', es: 'Vaciar archivo de registros', pt: 'Limpar arquivo de registos', zh: '清空日志文件', ja: 'ログ de 削除' },
 };
+
+// Merge dynamically generated Portuguese translations
+Object.entries(ptTranslations).forEach(([key, ptValue]) => {
+  if (translations[key]) {
+    translations[key].pt = ptValue;
+  } else {
+    translations[key] = { pt: ptValue };
+  }
+});
 
 interface LanguageContextType {
   language: Language;
@@ -1046,7 +1084,7 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   }, [language]);
 
   const t = (key: string) => {
-    return translations[key]?.[language] || key;
+    return translations[key]?.[language] || translations[key]?.['fr'] || translations[key]?.['en'] || key;
   };
 
   const tData = (value: string) => {

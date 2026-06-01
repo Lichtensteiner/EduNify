@@ -141,8 +141,8 @@ const TeacherPlanning: React.FC = () => {
   // Timetable State
   const [assignments, setAssignments] = useState<TimetableAssignment[]>([]);
   const [classes, setClasses] = useState<{id: string, name: string}[]>([]);
-  const [selectedClassId, setSelectedClassId] = useState<string>('c1');
-  const [selectedTeacherId, setSelectedTeacherId] = useState<string>('all');
+  const [selectedClassId, setSelectedClassId] = useState<string>('');
+  const [selectedSubject, setSelectedSubject] = useState<string>('all');
   const [loadingTimetable, setLoadingTimetable] = useState(true);
   
   // Timetable Assignment Modal Form State
@@ -278,23 +278,17 @@ const TeacherPlanning: React.FC = () => {
         name: doc.data().nom || doc.data().name || doc.data().label || 'Classe sans nom'
       }));
       
-      // Default classes fallback
-      if (fetchedClasses.length === 0) {
-        setClasses([
-          { id: 'c1', name: '6ème A' },
-          { id: 'c2', name: '5ème B' },
-          { id: 'c3', name: '4ème A' },
-          { id: 'c4', name: '3ème C' },
-          { id: 'c5', name: '2nde S' },
-          { id: 'c6', name: '1ère D' },
-          { id: 'c7', name: 'Terminale S' },
-        ]);
+      setClasses(fetchedClasses);
+      // Automatically target first class
+      if (fetchedClasses.length > 0) {
+        setSelectedClassId(prevId => {
+          if (!prevId || !fetchedClasses.some(c => c.id === prevId)) {
+            return fetchedClasses[0].id;
+          }
+          return prevId;
+        });
       } else {
-        setClasses(fetchedClasses);
-        // Automatically target first class
-        if (fetchedClasses.length > 0 && selectedClassId === 'c1') {
-          setSelectedClassId(fetchedClasses[0].id);
-        }
+        setSelectedClassId('');
       }
     });
 
@@ -305,23 +299,11 @@ const TeacherPlanning: React.FC = () => {
         ...doc.data()
       })) as TimetableAssignment[];
 
-      if (items.length === 0) {
-        // Hydrate with local defaults (simulation or seed)
-        setAssignments(DEFAULT_ASSIGNMENTS.map((item, index) => ({
-          id: `seed_${index}`,
-          ...item
-        })) as TimetableAssignment[]);
-      } else {
-        setAssignments(items);
-      }
+      setAssignments(items);
       setLoadingTimetable(false);
     }, (error) => {
-      console.error("Firestore timetable loading failed, fallback to defaults.", error);
-      // Fallback
-      setAssignments(DEFAULT_ASSIGNMENTS.map((item, index) => ({
-        id: `seed_${index}`,
-        ...item
-      })) as TimetableAssignment[]);
+      console.error("Firestore timetable loading failed.", error);
+      setAssignments([]);
       setLoadingTimetable(false);
     });
 
@@ -716,11 +698,12 @@ const TeacherPlanning: React.FC = () => {
   // Helper inside cell renders
   const getAssignmentsForCell = (day: string, slotId: string) => {
     return assignments.filter(a => {
-      // Filter by Class (if not filtered by Teacher)
-      if (selectedTeacherId !== 'all') {
-        return a.dayOfWeek === day && a.slotId === slotId && a.teacherId === selectedTeacherId;
-      }
-      return a.dayOfWeek === day && a.slotId === slotId && a.classId === selectedClassId;
+      if (a.dayOfWeek !== day || a.slotId !== slotId) return false;
+      
+      const matchesClass = a.classId === selectedClassId;
+      const matchesSubject = selectedSubject === 'all' || a.subject.toLowerCase().trim() === selectedSubject.toLowerCase().trim();
+      
+      return matchesClass && matchesSubject;
     });
   };
 
@@ -799,7 +782,7 @@ const TeacherPlanning: React.FC = () => {
                   value={selectedClassId}
                   onChange={(e) => {
                     setSelectedClassId(e.target.value);
-                    setSelectedTeacherId('all');
+                    setSelectedSubject('all');
                   }}
                   className="bg-transparent border-none text-sm font-black text-gray-800 dark:text-white focus:ring-0 outline-none cursor-pointer"
                 >
@@ -811,19 +794,19 @@ const TeacherPlanning: React.FC = () => {
                 </select>
               </div>
 
-              {/* Select teacher filter */}
+              {/* Select subject filter */}
               <div className="flex items-center gap-2 bg-white dark:bg-gray-800 px-3 py-1.5 rounded-xl border border-gray-200 dark:border-gray-700">
-                <span className="text-xs font-bold text-gray-400 uppercase">Enseignant :</span>
+                <span className="text-xs font-bold text-gray-400 uppercase">Matière :</span>
                 <select
-                  value={selectedTeacherId}
+                  value={selectedSubject}
                   onChange={(e) => {
-                    setSelectedTeacherId(e.target.value);
+                    setSelectedSubject(e.target.value);
                   }}
                   className="bg-transparent border-none text-sm font-black text-gray-800 dark:text-white focus:ring-0 outline-none cursor-pointer"
                 >
-                  <option value="all" className="bg-white dark:bg-gray-800">Tous les cours</option>
-                  {realTeachers.map(t => (
-                    <option key={t.id} value={t.id} className="bg-white dark:bg-gray-800">{t.name}</option>
+                  <option value="all" className="bg-white dark:bg-gray-800">Toutes les matières</option>
+                  {realSubjects.map(sub => (
+                    <option key={sub.id} value={sub.name} className="bg-white dark:bg-gray-800">{sub.name}</option>
                   ))}
                 </select>
               </div>
@@ -858,6 +841,16 @@ const TeacherPlanning: React.FC = () => {
               <div className="flex flex-col items-center justify-center py-20 text-center">
                 <RefreshCw size={40} className="animate-spin text-indigo-600 mb-4" />
                 <p className="text-gray-500 font-bold">Optimisation des plages de l'emploi du temps en cours...</p>
+              </div>
+            ) : classes.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-20 px-6 text-center max-w-xl mx-auto">
+                <div className="p-4 bg-amber-50 dark:bg-amber-950/20 text-indigo-600 rounded-full mb-4">
+                  <AlertCircle size={40} className="stroke-[1.5]" />
+                </div>
+                <h3 className="text-base font-black text-gray-900 dark:text-white mb-2">Aucune classe décelée</h3>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
+                  Pour configurer et afficher un emploi du temps en temps réel, vous devez d'abord ajouter des classes réelles dans l'onglet <strong>Classes</strong> du menu de navigation.
+                </p>
               </div>
             ) : (
               <div className="overflow-x-auto">
@@ -896,14 +889,7 @@ const TeacherPlanning: React.FC = () => {
                           </td>
                           {DAYS.map((day) => {
                             const cells = getAssignmentsForCell(day, slot.id);
-                            // Filter only if the subject is recorded in our Firestore database (realSubjects)
-                            // If there are no subjects in the db yet, we show seeds for standard display.
-                            // Real, user-created assignments (id not starting with seed_) are always shown.
-                            const validCourses = cells.filter(course => {
-                              if (!course.id.startsWith('seed_')) return true;
-                              if (realSubjects.length === 0 && realTeachers.length === 0) return true;
-                              return realSubjects.some(sub => sub.name.toLowerCase().trim() === course.subject.toLowerCase().trim());
-                            });
+                            const validCourses = cells;
 
                             return (
                               <td
@@ -969,7 +955,7 @@ const TeacherPlanning: React.FC = () => {
                                           <span className="flex items-center gap-0.5">
                                             <MapPin size={10} /> {course.room}
                                           </span>
-                                          {selectedTeacherId === 'all' && (
+                                          {selectedSubject === 'all' && (
                                             <span className="bg-black/5 dark:bg-white/10 px-1.5 py-0.5 rounded-md uppercase text-[9px]">
                                               {course.className}
                                             </span>

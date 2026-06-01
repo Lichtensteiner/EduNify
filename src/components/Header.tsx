@@ -75,6 +75,7 @@ export default function Header({ activeTab, setActiveTab, onMenuClick }: HeaderP
     { code: 'es', name: 'Español', flag: '🇪🇸' },
     { code: 'zh', name: '中文', flag: '🇨🇳' },
     { code: 'ja', name: '日本語', flag: '🇯🇵' },
+    { code: 'pt', name: 'Português', flag: '🇵🇹' },
   ];
 
   useEffect(() => {

@@ -187,45 +187,24 @@ export default function ResponsibilityZones() {
     // 2. Reading Challenge progress
     if (accessibleResponsibilityIds.includes('responsable_primaire')) {
       const unsubRp = onSnapshot(collection(db, 'resp_reading_progress'), (snapshot) => {
-        if (snapshot.empty) {
-          const defaults = [
-            { name: 'Arthur Durand', booksRead: 4, goal: 8, rating: 'Excellent' },
-            { name: 'Chloé Konan', booksRead: 6, goal: 8, rating: 'Championne' },
-            { name: 'Sébastien Diallo', booksRead: 2, goal: 8, rating: 'En progrès' },
-          ];
-          defaults.forEach(async (item) => {
-            await addDoc(collection(db, 'resp_reading_progress'), item);
-          });
-        } else {
-          setReadingProgress(snapshot.docs.map(doc => ({
-            id: doc.id,
-            name: doc.data().name || '',
-            booksRead: Number(doc.data().booksRead || 0),
-            goal: Number(doc.data().goal || 8),
-            rating: doc.data().rating || 'En progrès'
-          })));
-        }
+        setReadingProgress(snapshot.docs.map(doc => ({
+          id: doc.id,
+          name: doc.data().name || '',
+          booksRead: Number(doc.data().booksRead || 0),
+          goal: Number(doc.data().goal || 8),
+          rating: doc.data().rating || 'En progrès'
+        })));
       }, (err) => handleFirestoreError(err, OperationType.GET, 'resp_reading_progress'));
       unsubs.push(unsubRp);
 
       // Primary Field Trips
       const unsubFt = onSnapshot(collection(db, 'resp_field_trips'), (snapshot) => {
-        if (snapshot.empty) {
-          const defaults = [
-            { destination: 'Musée d\'Histoire Naturelle', date: '25 Mai 2026', status: 'pending' },
-            { destination: 'Parc Botanique National', date: '12 Juin 2026', status: 'approved' }
-          ];
-          defaults.forEach(async (item) => {
-            await addDoc(collection(db, 'resp_field_trips'), item);
-          });
-        } else {
-          setPrimaryFieldTrips(snapshot.docs.map(doc => ({
-            id: doc.id,
-            destination: doc.data().destination || '',
-            date: doc.data().date || '',
-            status: doc.data().status as any
-          })));
-        }
+        setPrimaryFieldTrips(snapshot.docs.map(doc => ({
+          id: doc.id,
+          destination: doc.data().destination || '',
+          date: doc.data().date || '',
+          status: doc.data().status as any
+        })));
       }, (err) => handleFirestoreError(err, OperationType.GET, 'resp_field_trips'));
       unsubs.push(unsubFt);
     }
@@ -233,46 +212,26 @@ export default function ResponsibilityZones() {
     // 3. College Detentions
     if (accessibleResponsibilityIds.includes('responsable_college')) {
       const unsubDet = onSnapshot(collection(db, 'resp_college_detentions'), (snapshot) => {
-        if (snapshot.empty) {
-          const defaults = [
-            { student: 'Marc Ehua', reason: 'Absences répétées non justifiées aux évaluations', teacher: 'M. Ella', date: '22 Mai 2026', hour: '14:00 - 16:00', proctor: 'M. Kouamé' }
-          ];
-          defaults.forEach(async (item) => {
-            await addDoc(collection(db, 'resp_college_detentions'), item);
-          });
-        } else {
-          setCollegeDetentions(snapshot.docs.map(doc => ({
-            id: doc.id,
-            student: doc.data().student || '',
-            reason: doc.data().reason || '',
-            teacher: doc.data().teacher || '',
-            date: doc.data().date || '',
-            hour: doc.data().hour || '',
-            proctor: doc.data().proctor || ''
-          })));
-        }
+        setCollegeDetentions(snapshot.docs.map(doc => ({
+          id: doc.id,
+          student: doc.data().student || '',
+          reason: doc.data().reason || '',
+          teacher: doc.data().teacher || '',
+          date: doc.data().date || '',
+          hour: doc.data().hour || '',
+          proctor: doc.data().proctor || ''
+        })));
       }, (err) => handleFirestoreError(err, OperationType.GET, 'resp_college_detentions'));
       unsubs.push(unsubDet);
 
       // Brevet Chapters
       const unsubChapters = onSnapshot(collection(db, 'resp_brevet_chapters'), (snapshot) => {
-        if (snapshot.empty) {
-          const defaults = [
-            { subject: 'Mathématiques', topic: 'Arithmétique & PGCD', status: 'ready' },
-            { subject: 'Histoire', topic: 'La Première Guerre Mondiale', status: 'ready' },
-            { subject: 'Sciences', topic: 'Génétique & Évolution', status: 'pending' },
-          ];
-          defaults.forEach(async (item) => {
-            await addDoc(collection(db, 'resp_brevet_chapters'), item);
-          });
-        } else {
-          setBrevetChapters(snapshot.docs.map(doc => ({
-            id: doc.id,
-            subject: doc.data().subject || '',
-            topic: doc.data().topic || '',
-            status: doc.data().status as any
-          })));
-        }
+        setBrevetChapters(snapshot.docs.map(doc => ({
+          id: doc.id,
+          subject: doc.data().subject || '',
+          topic: doc.data().topic || '',
+          status: doc.data().status as any
+        })));
       }, (err) => handleFirestoreError(err, OperationType.GET, 'resp_brevet_chapters'));
       unsubs.push(unsubChapters);
     }
@@ -280,45 +239,24 @@ export default function ResponsibilityZones() {
     // Remedial Groups
     if (accessibleResponsibilityIds.includes('responsable_pedagogique')) {
       const unsubRem = onSnapshot(collection(db, 'resp_remedial_groups'), (snapshot) => {
-        if (snapshot.empty) {
-          const defaults = [
-            { studentName: 'Inès Bamba', subject: 'Physique-Chimie', level: '4ème A', date: 'Mercredi 15h' },
-            { studentName: 'Arnaud Yao', subject: 'Mathématiques', level: '3ème B', date: 'Samedi 09h' }
-          ];
-          defaults.forEach(async (item) => {
-            await addDoc(collection(db, 'resp_remedial_groups'), item);
-          });
-        } else {
-          setRemedialGroups(snapshot.docs.map(doc => ({
-            id: doc.id,
-            studentName: doc.data().studentName || '',
-            subject: doc.data().subject || '',
-            level: doc.data().level || '',
-            date: doc.data().date || ''
-          })));
-        }
+        setRemedialGroups(snapshot.docs.map(doc => ({
+          id: doc.id,
+          studentName: doc.data().studentName || '',
+          subject: doc.data().subject || '',
+          level: doc.data().level || '',
+          date: doc.data().date || ''
+        })));
       }, (err) => handleFirestoreError(err, OperationType.GET, 'resp_remedial_groups'));
       unsubs.push(unsubRem);
 
       // Syllabus Rates
       const unsubSyllabus = onSnapshot(collection(db, 'resp_syllabus_rates'), (snapshot) => {
-        if (snapshot.empty) {
-          const defaults = [
-            { course: 'Mathématiques 3e', teacher: 'Armand Ella', rate: 82 },
-            { course: 'Français 4e', teacher: 'Mme Touré', rate: 75 },
-            { course: 'Anglais 5e', teacher: 'Ludovic Dev', rate: 90 },
-          ];
-          defaults.forEach(async (item) => {
-            await addDoc(collection(db, 'resp_syllabus_rates'), item);
-          });
-        } else {
-          setSyllabusRates(snapshot.docs.map(doc => ({
-            id: doc.id,
-            course: doc.data().course || '',
-            teacher: doc.data().teacher || '',
-            rate: Number(doc.data().rate || 0)
-          })));
-        }
+        setSyllabusRates(snapshot.docs.map(doc => ({
+          id: doc.id,
+          course: doc.data().course || '',
+          teacher: doc.data().teacher || '',
+          rate: Number(doc.data().rate || 0)
+        })));
       }, (err) => handleFirestoreError(err, OperationType.GET, 'resp_syllabus_rates'));
       unsubs.push(unsubSyllabus);
     }
@@ -326,23 +264,14 @@ export default function ResponsibilityZones() {
     // Late Slips
     if (accessibleResponsibilityIds.includes('surveillant_general')) {
       const unsubLates = onSnapshot(collection(db, 'resp_late_slips'), (snapshot) => {
-        if (snapshot.empty) {
-          const defaults = [
-            { studentName: 'Hervé Assi', duration: 25, reason: 'Panne de bus de ramassage', date: '21 Mai, 08:35', hasTicket: true }
-          ];
-          defaults.forEach(async (item) => {
-            await addDoc(collection(db, 'resp_late_slips'), item);
-          });
-        } else {
-          setLateSlips(snapshot.docs.map(doc => ({
-            id: doc.id,
-            studentName: doc.data().studentName || '',
-            duration: Number(doc.data().duration || 0),
-            reason: doc.data().reason || '',
-            date: doc.data().date || '',
-            hasTicket: !!doc.data().hasTicket
-          })));
-        }
+        setLateSlips(snapshot.docs.map(doc => ({
+          id: doc.id,
+          studentName: doc.data().studentName || '',
+          duration: Number(doc.data().duration || 0),
+          reason: doc.data().reason || '',
+          date: doc.data().date || '',
+          hasTicket: !!doc.data().hasTicket
+        })));
       }, (err) => handleFirestoreError(err, OperationType.GET, 'resp_late_slips'));
       unsubs.push(unsubLates);
     }
@@ -350,46 +279,26 @@ export default function ResponsibilityZones() {
     // Visitors Log
     if (accessibleResponsibilityIds.includes('surveillant_adjoint')) {
       const unsubVisitors = onSnapshot(collection(db, 'resp_visitors_log'), (snapshot) => {
-        if (snapshot.empty) {
-          const defaults = [
-            { visitorName: 'M. Koffi Kouamé (Parent)', reason: 'Rendez-vous Principal', targetPerson: 'Mme le Proviseur', entryTime: '09:45', status: 'inside' },
-            { visitorName: 'Technicien Orange CI', reason: 'Paneth Internet', targetPerson: 'Responsable IT', entryTime: '08:15', status: 'left' }
-          ];
-          defaults.forEach(async (item) => {
-            await addDoc(collection(db, 'resp_visitors_log'), item);
-          });
-        } else {
-          setVisitorsLog(snapshot.docs.map(doc => ({
-            id: doc.id,
-            visitorName: doc.data().visitorName || '',
-            reason: doc.data().reason || '',
-            targetPerson: doc.data().targetPerson || '',
-            entryTime: doc.data().entryTime || '',
-            status: doc.data().status as any
-          })));
-        }
+        setVisitorsLog(snapshot.docs.map(doc => ({
+          id: doc.id,
+          visitorName: doc.data().visitorName || '',
+          reason: doc.data().reason || '',
+          targetPerson: doc.data().targetPerson || '',
+          entryTime: doc.data().entryTime || '',
+          status: doc.data().status as any
+        })));
       }, (err) => handleFirestoreError(err, OperationType.GET, 'resp_visitors_log'));
       unsubs.push(unsubVisitors);
 
       // Locker Keys
       const unsubLocker = onSnapshot(collection(db, 'resp_locker_keys'), (snapshot) => {
-        if (snapshot.empty) {
-          const defaults = [
-            { lockerNo: 'C-42', student: 'Ismaël Cissé', date: '21 Mai', returned: false },
-            { lockerNo: 'A-108', student: 'Mariam Sidibé', date: '19 Mai', returned: true }
-          ];
-          defaults.forEach(async (item) => {
-            await addDoc(collection(db, 'resp_locker_keys'), item);
-          });
-        } else {
-          setLockerKeys(snapshot.docs.map(doc => ({
-            id: doc.id,
-            lockerNo: doc.data().lockerNo || '',
-            student: doc.data().student || '',
-            date: doc.data().date || '',
-            returned: !!doc.data().returned
-          })));
-        }
+        setLockerKeys(snapshot.docs.map(doc => ({
+          id: doc.id,
+          lockerNo: doc.data().lockerNo || '',
+          student: doc.data().student || '',
+          date: doc.data().date || '',
+          returned: !!doc.data().returned
+        })));
       }, (err) => handleFirestoreError(err, OperationType.GET, 'resp_locker_keys'));
       unsubs.push(unsubLocker);
     }
@@ -397,46 +306,24 @@ export default function ResponsibilityZones() {
     // Clean zones
     if (accessibleResponsibilityIds.includes('dame_menage')) {
       const unsubClean = onSnapshot(collection(db, 'resp_clean_zones'), (snapshot) => {
-        if (snapshot.empty) {
-          const defaults = [
-            { zone: 'Bloc Sanitaire Maternelle', frequency: 'Toutes les 2h', lastCleaned: '10:00 (Aujourd\'hui)', status: 'cleaned' },
-            { zone: 'Réfectoire Cantine', frequency: 'Quotidien', lastCleaned: '14:30 (Hier)', status: 'pending' },
-            { zone: 'Bibliothèque Centrale', frequency: 'Hebdomadaire', lastCleaned: '20 Mai, 16:00', status: 'cleaned' }
-          ];
-          defaults.forEach(async (item) => {
-            await addDoc(collection(db, 'resp_clean_zones'), item);
-          });
-        } else {
-          setCleanZones(snapshot.docs.map(doc => ({
-            id: doc.id,
-            zone: doc.data().zone || '',
-            frequency: doc.data().frequency || '',
-            lastCleaned: doc.data().lastCleaned || '',
-            status: doc.data().status as any
-          })));
-        }
+        setCleanZones(snapshot.docs.map(doc => ({
+          id: doc.id,
+          zone: doc.data().zone || '',
+          frequency: doc.data().frequency || '',
+          lastCleaned: doc.data().lastCleaned || '',
+          status: doc.data().status as any
+        })));
       }, (err) => handleFirestoreError(err, OperationType.GET, 'resp_clean_zones'));
       unsubs.push(unsubClean);
 
       // Cleaning Supplies
       const unsubSupplies = onSnapshot(collection(db, 'resp_cleaning_supplies'), (snapshot) => {
-        if (snapshot.empty) {
-          const defaults = [
-            { item: 'Savon liquide mains', stock: 12, limit: 5 },
-            { item: 'Eau de Javel (bidons 5L)', stock: 2, limit: 4 },
-            { item: 'Papier essuie-tout', stock: 45, limit: 10 }
-          ];
-          defaults.forEach(async (item) => {
-            await addDoc(collection(db, 'resp_cleaning_supplies'), item);
-          });
-        } else {
-          setCleaningSupplies(snapshot.docs.map(doc => ({
-            id: doc.id,
-            item: doc.data().item || '',
-            stock: Number(doc.data().stock || 0),
-            limit: Number(doc.data().limit || 0)
-          })));
-        }
+        setCleaningSupplies(snapshot.docs.map(doc => ({
+          id: doc.id,
+          item: doc.data().item || '',
+          stock: Number(doc.data().stock || 0),
+          limit: Number(doc.data().limit || 0)
+        })));
       }, (err) => handleFirestoreError(err, OperationType.GET, 'resp_cleaning_supplies'));
       unsubs.push(unsubSupplies);
     }
@@ -444,23 +331,13 @@ export default function ResponsibilityZones() {
     // Dossiers (Secrétaire Générale)
     if (accessibleResponsibilityIds.includes('secretaire_generale')) {
       const unsubDos = onSnapshot(collection(db, 'resp_dossiers'), (snapshot) => {
-        if (snapshot.empty) {
-          const defaults = [
-            { name: 'Alix Koné', level: 'Classe de Seconde C', originSchool: 'Collège Moderne Bouaké', status: 'pending' },
-            { name: 'Sarah Beugré', level: 'Classe de 6ème', originSchool: 'EPP Plateau', status: 'accepted' }
-          ];
-          defaults.forEach(async (item) => {
-            await addDoc(collection(db, 'resp_dossiers'), item);
-          });
-        } else {
-          setDossiers(snapshot.docs.map(doc => ({
-            id: doc.id,
-            name: doc.data().name || '',
-            level: doc.data().level || '',
-            originSchool: doc.data().originSchool || '',
-            status: doc.data().status as any
-          })));
-        }
+        setDossiers(snapshot.docs.map(doc => ({
+          id: doc.id,
+          name: doc.data().name || '',
+          level: doc.data().level || '',
+          originSchool: doc.data().originSchool || '',
+          status: doc.data().status as any
+        })));
       }, (err) => handleFirestoreError(err, OperationType.GET, 'resp_dossiers'));
       unsubs.push(unsubDos);
     }
@@ -468,22 +345,13 @@ export default function ResponsibilityZones() {
     // Phone Calls (Secrétaire Adjointe)
     if (accessibleResponsibilityIds.includes('secretaire_adjointe')) {
       const unsubCalls = onSnapshot(collection(db, 'resp_phone_calls'), (snapshot) => {
-        if (snapshot.empty) {
-          const defaults = [
-            { caller: 'Mme Martin (Maman de Léo)', message: 'Sera en retard de 15 minutes ce soir pour la sieste maternelle.', targetStudent: 'Léo Martin', status: 'noted' }
-          ];
-          defaults.forEach(async (item) => {
-            await addDoc(collection(db, 'resp_phone_calls'), item);
-          });
-        } else {
-          setPhoneCalls(snapshot.docs.map(doc => ({
-            id: doc.id,
-            caller: doc.data().caller || '',
-            message: doc.data().message || '',
-            targetStudent: doc.data().targetStudent || '',
-            status: doc.data().status as any
-          })));
-        }
+        setPhoneCalls(snapshot.docs.map(doc => ({
+          id: doc.id,
+          caller: doc.data().caller || '',
+          message: doc.data().message || '',
+          targetStudent: doc.data().targetStudent || '',
+          status: doc.data().status as any
+        })));
       }, (err) => handleFirestoreError(err, OperationType.GET, 'resp_phone_calls'));
       unsubs.push(unsubCalls);
     }
@@ -491,44 +359,25 @@ export default function ResponsibilityZones() {
     // IT Loans & Tickets
     if (accessibleResponsibilityIds.includes('responsable_it')) {
       const unsubLoans = onSnapshot(collection(db, 'resp_it_loans'), (snapshot) => {
-        if (snapshot.empty) {
-          const defaults = [
-            { cartId: 'Chariot Tablettes Android #2', classTarget: 'Terminales S-B', duration: 'Aujourd\'hui 08h - 12h', status: 'borrowed' }
-          ];
-          defaults.forEach(async (item) => {
-            await addDoc(collection(db, 'resp_it_loans'), item);
-          });
-        } else {
-          setItLoans(snapshot.docs.map(doc => ({
-            id: doc.id,
-            cartId: doc.data().cartId || '',
-            classTarget: doc.data().classTarget || '',
-            duration: doc.data().duration || '',
-            status: doc.data().status as any
-          })));
-        }
+        setItLoans(snapshot.docs.map(doc => ({
+          id: doc.id,
+          cartId: doc.data().cartId || '',
+          classTarget: doc.data().classTarget || '',
+          duration: doc.data().duration || '',
+          status: doc.data().status as any
+        })));
       }, (err) => handleFirestoreError(err, OperationType.GET, 'resp_it_loans'));
       unsubs.push(unsubLoans);
 
       // IT Tickets
       const unsubTickets = onSnapshot(collection(db, 'resp_it_tickets'), (snapshot) => {
-        if (snapshot.empty) {
-          const defaults = [
-            { item: 'Vidéo-projecteur Salle Informatique 1', description: 'Lampe décolorée ou bruit de ventilation excessif', severity: 'minor', status: 'investigating' },
-            { item: 'Borne Wifi Récréation Cour A', description: 'Pas de signal DHCP pour les badges biométriques', severity: 'critical', status: 'open' }
-          ];
-          defaults.forEach(async (item) => {
-            await addDoc(collection(db, 'resp_it_tickets'), item);
-          });
-        } else {
-          setItTickets(snapshot.docs.map(doc => ({
-            id: doc.id,
-            item: doc.data().item || '',
-            description: doc.data().description || '',
-            severity: doc.data().severity as any,
-            status: doc.data().status as any
-          })));
-        }
+        setItTickets(snapshot.docs.map(doc => ({
+          id: doc.id,
+          item: doc.data().item || '',
+          description: doc.data().description || '',
+          severity: doc.data().severity as any,
+          status: doc.data().status as any
+        })));
       }, (err) => handleFirestoreError(err, OperationType.GET, 'resp_it_tickets'));
       unsubs.push(unsubTickets);
     }
@@ -537,7 +386,7 @@ export default function ResponsibilityZones() {
     const unsubUsers = onSnapshot(collection(db, 'users'), (snapshot) => {
       const allUsers = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       const students = allUsers.filter((u: any) => u.role === 'élève' || u.role === 'eleve');
-      const surveillants = allUsers.filter((u: any) => 
+      let surveillants = allUsers.filter((u: any) => 
         u.role === 'surveillant' || 
         u.role === 'surveillant_general' || 
         u.role === 'surveillant_adjoint' ||
@@ -549,6 +398,14 @@ export default function ResponsibilityZones() {
         u.responsabilite === 'surveillant' ||
         u.position?.toLowerCase().includes('surveillant')
       );
+      if (surveillants.length === 0) {
+        surveillants = allUsers.filter((u: any) => 
+          u.role === 'admin' || 
+          u.role === 'enseignant' || 
+          u.role === 'personnel administratif' || 
+          u.role === 'personnel'
+        );
+      }
       setDbStudents(students);
       setDbSurveillants(surveillants);
     }, (err) => handleFirestoreError(err, OperationType.GET, 'users'));
@@ -658,7 +515,7 @@ export default function ResponsibilityZones() {
   
   const [formDetStudent, setFormDetStudent] = useState('');
   const [formDetReason, setFormDetReason] = useState('');
-  const [formDetProctor, setFormDetProctor] = useState('M. Kouamé');
+  const [formDetProctor, setFormDetProctor] = useState('');
   
   const [formLedgerType, setFormLedgerType] = useState<'inflow' | 'outflow'>('inflow');
   const [formLedgerPrice, setFormLedgerPrice] = useState('');
@@ -701,6 +558,50 @@ export default function ResponsibilityZones() {
   const [formCallCaller, setFormCallCaller] = useState('');
   const [formCallMsg, setFormCallMsg] = useState('');
   const [formCallStudent, setFormCallStudent] = useState('');
+
+  // Synchronise form dropdown values with Firestore database states smoothly
+  useEffect(() => {
+    if (dbStudents.length > 0) {
+      const names = dbStudents.map(s => `${s.prenom} ${s.nom}`);
+      if (!formDetStudent || !names.includes(formDetStudent)) {
+        setFormDetStudent(names[0]);
+      }
+    }
+  }, [dbStudents, formDetStudent]);
+
+  useEffect(() => {
+    if (dbSurveillants.length > 0) {
+      const names = dbSurveillants.map(s => `${s.prenom} ${s.nom}`);
+      if (!formDetProctor || !names.includes(formDetProctor)) {
+        setFormDetProctor(names[0]);
+      }
+    }
+  }, [dbSurveillants, formDetProctor]);
+
+  useEffect(() => {
+    if (dbStudents.length > 0) {
+      const names = dbStudents.map(s => `${s.prenom} ${s.nom}`);
+      if (!formRemedialStudent || !names.includes(formRemedialStudent)) {
+        setFormRemedialStudent(names[0]);
+      }
+    }
+  }, [dbStudents, formRemedialStudent]);
+
+  useEffect(() => {
+    if (dbSubjects.length > 0) {
+      if (!formBrevetSubject || !dbSubjects.includes(formBrevetSubject)) {
+        setFormBrevetSubject(dbSubjects[0]);
+      }
+    }
+  }, [dbSubjects, formBrevetSubject]);
+
+  useEffect(() => {
+    if (dbSubjects.length > 0) {
+      if (!formRemedialSubject || !dbSubjects.includes(formRemedialSubject)) {
+        setFormRemedialSubject(dbSubjects[0]);
+      }
+    }
+  }, [dbSubjects, formRemedialSubject]);
 
   const activeRespData = administrativeResponsibilities.find(r => r.id === activeRespId);
 
@@ -1921,16 +1822,8 @@ export default function ResponsibilityZones() {
 
               {/* Form 3: College */}
               {activeRespId === 'responsable_college' && (() => {
-                const displayStudents = dbStudents.length > 0 ? dbStudents : [
-                  { id: '1', prenom: 'Arthur', nom: 'Traoré', classe: '3ème A' },
-                  { id: '2', prenom: 'Inès', nom: 'Bamba', classe: '4ème B' },
-                  { id: '3', prenom: 'Arnaud', nom: 'Yao', classe: '3ème B' }
-                ];
-                const displaySurveillants = dbSurveillants.length > 0 ? dbSurveillants : [
-                  { id: 's1', prenom: 'M.', nom: 'Kouamé' },
-                  { id: 's2', prenom: 'Mme', nom: 'Touré' },
-                  { id: 's3', prenom: 'Service', nom: 'Permanence' }
-                ];
+                const displayStudents = dbStudents;
+                const displaySurveillants = dbSurveillants;
                 const displaySubjects = dbSubjects.length > 0 ? dbSubjects : ["Mathématiques", "Physique-Chimie", "Français", "Sciences - SVT", "Anglais", "Histoire-Géographie"];
                 
                 return (
@@ -1966,18 +1859,31 @@ export default function ResponsibilityZones() {
                         onSubmit={async (e) => {
                           e.preventDefault();
                           if (!enforcePermission('responsable_college')) return;
+                          
+                          if (displayStudents.length === 0) {
+                            notifyError("Aucun élève enregistré dans la base de données. Créez des élèves dans l'onglet des utilisateurs.");
+                            return;
+                          }
+                          if (displaySurveillants.length === 0) {
+                            notifyError("Aucun personnel ou surveillant enregistré dans la base de données.");
+                            return;
+                          }
+
                           const studentVal = formDetStudent || `${displayStudents[0].prenom} ${displayStudents[0].nom}`;
                           const proctorVal = formDetProctor || `${displaySurveillants[0].prenom} ${displaySurveillants[0].nom}`;
-                          if (!formDetReason.trim()) return;
+                          if (!formDetReason.trim()) {
+                            notifyError("Veuillez saisir un motif disciplinaire.");
+                            return;
+                          }
 
                           try {
                             await addDoc(collection(db, 'resp_college_detentions'), {
-                              student: studentVal,
-                              reason: formDetReason,
-                              teacher: currentUser?.prenom || 'Direction',
-                              date: '23 Mai 2026',
-                              hour: '13h30 - 15h30',
-                              proctor: proctorVal
+                                student: studentVal,
+                                reason: formDetReason,
+                                teacher: currentUser?.prenom || 'Direction',
+                                date: '23 Mai 2026',
+                                hour: '13h30 - 15h30',
+                                proctor: proctorVal
                             });
                             setFormDetStudent('');
                             setFormDetReason('');
@@ -1989,17 +1895,22 @@ export default function ResponsibilityZones() {
                         className="space-y-3 text-xs"
                       >
                         <div className="space-y-1">
-                          <label className="text-[10px] uppercase font-bold text-gray-400 block">Élève Consigné</label>
+                          <label className="text-[10px] uppercase font-bold text-gray-400 block">Élève Consigné l'élève</label>
                           <select 
                             value={formDetStudent}
                             onChange={(e) => setFormDetStudent(e.target.value)}
                             className="w-full p-2.5 bg-gray-50 border rounded-xl dark:bg-gray-900 dark:border-gray-750 outline-none"
+                            disabled={displayStudents.length === 0}
                           >
-                            {displayStudents.map(student => (
-                              <option key={student.id} value={`${student.prenom} ${student.nom}`}>
-                                {student.prenom} {student.nom} ({student.classe})
-                              </option>
-                            ))}
+                            {displayStudents.length === 0 ? (
+                              <option value="">Aucun élève trouvé dans la base</option>
+                            ) : (
+                              displayStudents.map(student => (
+                                <option key={student.id} value={`${student.prenom} ${student.nom}`}>
+                                  {student.prenom} {student.nom} ({student.classe || 'Sans classe'})
+                                </option>
+                              ))
+                            )}
                           </select>
                         </div>
 
@@ -2020,12 +1931,17 @@ export default function ResponsibilityZones() {
                             value={formDetProctor}
                             onChange={(e) => setFormDetProctor(e.target.value)}
                             className="w-full p-2.5 bg-gray-50 border rounded-xl dark:bg-gray-900 dark:border-gray-750 outline-none"
+                            disabled={displaySurveillants.length === 0}
                           >
-                            {displaySurveillants.map(surv => (
-                              <option key={surv.id} value={`${surv.prenom} ${surv.nom}`}>
-                                {surv.prenom} {surv.nom}
-                              </option>
-                            ))}
+                            {displaySurveillants.length === 0 ? (
+                              <option value="">Aucun surveillant trouvé dans la base</option>
+                            ) : (
+                              displaySurveillants.map(surv => (
+                                <option key={surv.id} value={`${surv.prenom} ${surv.nom}`}>
+                                  {surv.prenom} {surv.nom}
+                                </option>
+                              ))
+                            )}
                           </select>
                         </div>
 
@@ -2198,11 +2114,7 @@ export default function ResponsibilityZones() {
 
               {/* Form 5: Pedagogique */}
               {activeRespId === 'responsable_pedagogique' && (() => {
-                const displayStudents = dbStudents.length > 0 ? dbStudents : [
-                  { id: '1', prenom: 'Arthur', nom: 'Traoré', classe: '3ème A' },
-                  { id: '2', prenom: 'Inès', nom: 'Bamba', classe: '4ème B' },
-                  { id: '3', prenom: 'Arnaud', nom: 'Yao', classe: '3ème B' }
-                ];
+                const displayStudents = dbStudents;
                 const displaySubjects = dbSubjects.length > 0 ? dbSubjects : ["Mathématiques", "Physique-Chimie", "Français", "Sciences - SVT", "Anglais", "Histoire-Géographie"];
 
                 return (
@@ -2210,6 +2122,12 @@ export default function ResponsibilityZones() {
                     onSubmit={async (e) => {
                       e.preventDefault();
                       if (!enforcePermission('responsable_pedagogique')) return;
+                      
+                      if (displayStudents.length === 0) {
+                        notifyError("Aucun élève enregistré dans la base de données. Créez des élèves dans l'onglet des utilisateurs.");
+                        return;
+                      }
+
                       const studentVal = formRemedialStudent || `${displayStudents[0].prenom} ${displayStudents[0].nom}`;
                       const subjectVal = formRemedialSubject || displaySubjects[0];
                       const matchedStudent = displayStudents.find(s => `${s.prenom} ${s.nom}` === studentVal);
@@ -2236,12 +2154,17 @@ export default function ResponsibilityZones() {
                         value={formRemedialStudent}
                         onChange={(e) => setFormRemedialStudent(e.target.value)}
                         className="w-full p-2.5 bg-gray-50 border rounded-xl dark:bg-gray-900 dark:border-gray-750 outline-none"
+                        disabled={displayStudents.length === 0}
                       >
-                        {displayStudents.map(student => (
-                          <option key={student.id} value={`${student.prenom} ${student.nom}`}>
-                            {student.prenom} {student.nom} ({student.classe})
-                          </option>
-                        ))}
+                        {displayStudents.length === 0 ? (
+                          <option value="">Aucun élève trouvé dans la base</option>
+                        ) : (
+                          displayStudents.map(student => (
+                            <option key={student.id} value={`${student.prenom} ${student.nom}`}>
+                              {student.prenom} {student.nom} ({student.classe || 'Sans classe'})
+                            </option>
+                          ))
+                        )}
                       </select>
                     </div>
 

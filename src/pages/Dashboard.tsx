@@ -303,7 +303,7 @@ const AdminDashboard = ({ stats, weeklyData, studentLevelData, userDistribution,
               </div>
 
               <h3 className="text-2xl font-black text-gray-900 dark:text-white mb-4">
-                {detailTab === 'analysis' ? t('admin_analysis_details') : 'Fichier de Stockage'}
+                {detailTab === 'analysis' ? t('admin_analysis_details') : t('storage_file')}
               </h3>
 
               {detailTab === 'analysis' ? (
@@ -320,7 +320,7 @@ const AdminDashboard = ({ stats, weeklyData, studentLevelData, userDistribution,
                     </ul>
                   </div>
                   <p className="text-sm">
-                    Le bouton <strong>Détails</strong> permet d'accéder au rapport complet généré par l'IA, décomposant chaque variable influençant la recommandation actuelle.
+                    Le bouton <strong>{t('details_btn')}</strong> permet d'accéder au rapport complet généré par l'IA, décomposant chaque variable influençant la recommandation actuelle.
                   </p>
                 </div>
               ) : (
@@ -335,7 +335,7 @@ const AdminDashboard = ({ stats, weeklyData, studentLevelData, userDistribution,
                       </span>
                     </div>
                     <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
-                      Chaque optimisation est enregistrée dans un fichier structuré. Les optimisations <strong>disparaissent automatiquement après 48h</strong>.
+                      {t('optimization_file_desc')}
                     </p>
                   </div>
 
@@ -346,16 +346,16 @@ const AdminDashboard = ({ stats, weeklyData, studentLevelData, userDistribution,
                       disabled={optimizationsFile.entries.length === 0}
                       className="flex-1 py-2.5 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/40 dark:hover:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 rounded-xl font-bold text-xs transition-colors flex items-center justify-center gap-2 border border-indigo-100/50 dark:border-indigo-900/40 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                     >
-                      <Download size={14} /> Télécharger (.json)
+                      <Download size={14} /> {t('download_json')}
                     </button>
                     <button
                       type="button"
                       onClick={clearOptimizationsFile}
                       disabled={optimizationsFile.entries.length === 0}
                       className="py-2.5 px-3 bg-red-50 hover:bg-red-100 dark:bg-red-950/30 dark:hover:bg-red-900/30 text-red-600 dark:text-red-400 rounded-xl font-bold text-xs transition-colors flex items-center justify-center gap-2 border border-red-100/50 dark:border-red-900/30 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-                      title="Vider le fichier de logs"
+                      title={t('clear_logs_tooltip')}
                     >
-                      <Trash2 size={14} /> Vider
+                      <Trash2 size={14} /> {t('empty_btn')}
                     </button>
                   </div>
 
@@ -443,13 +443,13 @@ const AdminDashboard = ({ stats, weeklyData, studentLevelData, userDistribution,
                   onClick={() => setIsOptimizeOpen(false)}
                   className="py-4 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-2xl font-black"
                 >
-                  Annuler
+                  {t('cancel')}
                 </button>
                 <button 
                   onClick={handleLaunchOptimization}
                   className="py-4 bg-emerald-600 text-white rounded-2xl font-black shadow-lg shadow-emerald-200 dark:shadow-none hover:bg-emerald-700 transition-all cursor-pointer"
                 >
-                  Lancer l'Action
+                  {t('launch_action')}
                 </button>
               </div>
            </div>
@@ -557,12 +557,12 @@ const AdminDashboard = ({ stats, weeklyData, studentLevelData, userDistribution,
         <div className="lg:col-span-2 bg-white dark:bg-gray-800 p-8 rounded-3xl border border-gray-100 dark:border-gray-700 shadow-sm">
            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4">
               <div>
-                <h3 className="text-xl font-black text-gray-900 dark:text-white">Évolution des Présences</h3>
-                <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">Analyse comparative hebdomadaire</p>
+                <h3 className="text-xl font-black text-gray-900 dark:text-white">{t('attendance_evolution')}</h3>
+                <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">{t('weekly_comparative_analysis')}</p>
               </div>
               <div className="flex gap-4 p-2 bg-gray-50 dark:bg-gray-900/50 rounded-xl">
-                 <div className="flex items-center gap-2"><div className="w-2.5 h-2.5 rounded-full bg-indigo-500 shadow-lg shadow-indigo-500/30" /><span className="text-[10px] font-black text-gray-500 dark:text-gray-400 uppercase">Présents</span></div>
-                 <div className="flex items-center gap-2"><div className="w-2.5 h-2.5 rounded-full bg-amber-500 shadow-lg shadow-amber-500/30" /><span className="text-[10px] font-black text-gray-500 dark:text-gray-400 uppercase">Retards</span></div>
+                 <div className="flex items-center gap-2"><div className="w-2.5 h-2.5 rounded-full bg-indigo-500 shadow-lg shadow-indigo-500/30" /><span className="text-[10px] font-black text-gray-500 dark:text-gray-400 uppercase">{t('presents_label')}</span></div>
+                 <div className="flex items-center gap-2"><div className="w-2.5 h-2.5 rounded-full bg-amber-500 shadow-lg shadow-amber-500/30" /><span className="text-[10px] font-black text-gray-500 dark:text-gray-400 uppercase">{t('lates_label')}</span></div>
               </div>
            </div>
            <div className="h-64">
@@ -667,7 +667,7 @@ const AdminDashboard = ({ stats, weeklyData, studentLevelData, userDistribution,
                 <div className="w-12 h-12 bg-gray-100 dark:bg-gray-800 rounded-2xl flex items-center justify-center mx-auto mb-4 text-gray-300 dark:text-gray-600">
                   <Activity size={24} />
                 </div>
-                <p className="text-sm font-black text-gray-400 uppercase tracking-widest">Initialisation des flux de données...</p>
+                <p className="text-sm font-black text-gray-400 uppercase tracking-widest">{t('data_flow_init')}</p>
              </div>
           )}
         </div>
@@ -691,13 +691,13 @@ const AdminDashboard = ({ stats, weeklyData, studentLevelData, userDistribution,
                     onClick={() => setIsDetailOpen(true)}
                     className="flex-1 py-3 bg-white text-indigo-600 rounded-2xl font-black text-sm hover:bg-white/90 transition-colors"
                   >
-                    Détails
+                    {t('details_btn')}
                   </button>
                   <button 
                     onClick={() => setIsOptimizeOpen(true)}
                     className="flex-1 py-3 bg-white/10 text-white rounded-2xl font-black text-sm hover:bg-white/20 transition-colors border border-white/20"
                   >
-                    Optimiser
+                    {t('optimize_btn')}
                   </button>
                </div>
             </div>
