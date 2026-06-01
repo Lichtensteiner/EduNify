@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { collection, onSnapshot, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../lib/firebase';
+import { motion, AnimatePresence } from 'motion/react';
 
 export default function Login() {
   const [isRegisteringState, setIsRegisteringState] = useState(false);
@@ -373,26 +374,69 @@ export default function Login() {
     }
   };
 
+  const containerVariants: any = {
+    hidden: { opacity: 0 },
+    visible: {
+      opacity: 1,
+      transition: {
+        staggerChildren: 0.08
+      }
+    }
+  };
+
+  const cardVariants: any = {
+    hidden: { opacity: 0, y: 30, scale: 0.98 },
+    visible: { 
+      opacity: 1, 
+      y: 0, 
+      scale: 1,
+      transition: { duration: 0.5, ease: [0.16, 1, 0.3, 1] } 
+    }
+  };
+
+  const fadeUpVariants: any = {
+    hidden: { opacity: 0, y: 15 },
+    visible: { 
+      opacity: 1, 
+      y: 0, 
+      transition: { duration: 0.4, ease: "easeOut" } 
+    }
+  };
+
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col justify-center py-12 px-4 sm:px-6 lg:px-8 transition-colors duration-200">
-      <div className="sm:mx-auto sm:w-full sm:max-w-2xl text-center space-y-4">
-        <div className="inline-flex p-3 bg-indigo-50 dark:bg-indigo-950/40 rounded-3xl border border-indigo-100 dark:border-indigo-900/60 shadow-inner">
+      <motion.div 
+        initial={{ opacity: 0, scale: 0.88 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ duration: 0.5, ease: "easeOut" }}
+        className="sm:mx-auto sm:w-full sm:max-w-2xl text-center space-y-4"
+      >
+        <div className="inline-flex p-3 bg-indigo-50 dark:bg-indigo-950/40 rounded-3xl border border-indigo-100 dark:border-indigo-900/60 shadow-inner hover:scale-105 transition-transform duration-300">
           <img src="/logo.png" alt="Edu-Nify Logo" className="h-16 w-16 object-contain" />
         </div>
         <div>
-          <h2 className="text-3xl font-black text-gray-900 dark:text-white tracking-tight">Edu-Nify</h2>
           <p className="mt-1 text-sm text-gray-600 dark:text-gray-400 uppercase font-black tracking-widest text-[11px]">
             {t('attendance_management_system')}
           </p>
         </div>
-      </div>
+      </motion.div>
 
-      <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-2xl">
+      <motion.div 
+        initial="hidden"
+        animate="visible"
+        variants={cardVariants}
+        className="mt-8 sm:mx-auto sm:w-full sm:max-w-2xl"
+      >
         <div className="bg-white dark:bg-slate-900 py-8 px-6 sm:px-10 shadow-xl rounded-3xl border border-gray-100 dark:border-slate-800 transition-all">
           
           {/* Form Header with Stepper Progress Bar */}
           {isRegistering ? (
-            <div className="mb-8 space-y-4">
+            <motion.div 
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3 }}
+              className="mb-8 space-y-4"
+            >
               <div className="flex justify-between items-center text-sm font-extrabold text-indigo-600 dark:text-indigo-400">
                 <span className="bg-indigo-50 dark:bg-indigo-950/70 px-3 py-1 rounded-full text-xs">
                   {step === 1 ? "Étape 1 : Choix du Profil" : "Étape 2 : Formulaire d'information"}
@@ -401,9 +445,11 @@ export default function Login() {
               </div>
               
               <div className="w-full bg-gray-100 dark:bg-slate-800 h-2.5 rounded-full overflow-hidden">
-                <div 
-                  className="bg-indigo-600 h-full transition-all duration-500 ease-out rounded-full"
-                  style={{ width: step === 1 ? '50%' : '100%' }}
+                <motion.div 
+                  className="bg-indigo-600 h-full rounded-full"
+                  initial={{ width: "0%" }}
+                  animate={{ width: step === 1 ? '50%' : '100%' }}
+                  transition={{ duration: 0.5, ease: "easeOut" }}
                 />
               </div>
 
@@ -421,26 +467,39 @@ export default function Login() {
                   }
                 </p>
               </div>
-            </div>
+            </motion.div>
           ) : (
-            <div className="mb-6 text-center space-y-1">
+            <motion.div 
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3 }}
+              className="mb-8 text-center space-y-1"
+            >
               <h3 className="text-2xl font-black text-slate-900 dark:text-white">Connexion Espace Membre</h3>
               <p className="text-xs text-gray-500 dark:text-gray-400">Saisissez vos identifiants pour entrer sur la plateforme Edu-Nify</p>
-            </div>
+            </motion.div>
           )}
 
           {error && (
-            <div className="mb-6 bg-rose-50 dark:bg-rose-950/30 text-rose-600 dark:text-rose-400 p-4 rounded-2xl text-xs border border-rose-100 dark:border-rose-900/40 flex items-start gap-2 animate-shake">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="mb-6 bg-rose-50 dark:bg-rose-950/30 text-rose-600 dark:text-rose-400 p-4 rounded-2xl text-xs border border-rose-100 dark:border-rose-900/40 flex items-start gap-2 animate-shake"
+            >
               <ShieldAlert className="shrink-0 mt-0.5 text-rose-500" size={16} />
               <div className="font-semibold leading-relaxed">{error}</div>
-            </div>
+            </motion.div>
           )}
 
           {success && (
-            <div className="mb-6 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 p-4 rounded-2xl text-xs border border-emerald-100 dark:border-emerald-950 flex items-start gap-2">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="mb-6 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 p-4 rounded-2xl text-xs border border-emerald-100 dark:border-emerald-950 flex items-start gap-2"
+            >
               <UserCheck className="shrink-0 mt-0.5 text-emerald-500" size={16} />
               <div className="font-semibold leading-relaxed">{success}</div>
-            </div>
+            </motion.div>
           )}
 
           {isRegistering ? (
@@ -448,16 +507,24 @@ export default function Login() {
               
               {/* STEP 1: CARD SELECTION */}
               {step === 1 && (
-                <div className="space-y-6">
+                <motion.div 
+                  variants={containerVariants}
+                  initial="hidden"
+                  animate="visible"
+                  className="space-y-6"
+                >
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     
                     {/* card student */}
-                    <div 
+                    <motion.div 
+                      variants={fadeUpVariants}
+                      whileHover={{ scale: 1.015, translateY: -2 }}
+                      whileTap={{ scale: 0.985 }}
                       onClick={() => setSelectedProfile('élève')}
-                      className={`relative cursor-pointer p-5 rounded-2xl border-2 transition-all flex flex-col justify-between h-36 ${
+                      className={`relative cursor-pointer p-5 rounded-2xl border-2 transition-colors flex flex-col justify-between h-36 duration-200 ${
                         selectedProfile === 'élève' 
-                          ? 'border-indigo-600 bg-indigo-50/40 dark:bg-indigo-950/20 shadow-md transform scale-[1.01]' 
-                          : 'border-gray-200 dark:border-gray-800 bg-white dark:bg-slate-900 hover:border-indigo-300 hover:shadow-sm'
+                          ? 'border-indigo-600 bg-indigo-50/40 dark:bg-indigo-950/20 shadow-md' 
+                          : 'border-gray-200 dark:border-gray-800 bg-white dark:bg-slate-900 hover:border-indigo-300'
                       }`}
                     >
                       <div className="flex items-center justify-between">
@@ -472,15 +539,18 @@ export default function Login() {
                         <h4 className="font-black text-slate-900 dark:text-white text-md">Élève / Étudiant</h4>
                         <p className="text-[11px] text-gray-500 dark:text-gray-400 leading-normal mt-0.5 truncate">Fiche d'apprentissage académique, classe & maison</p>
                       </div>
-                    </div>
+                    </motion.div>
 
                     {/* card parent */}
-                    <div 
+                    <motion.div 
+                      variants={fadeUpVariants}
+                      whileHover={{ scale: 1.015, translateY: -2 }}
+                      whileTap={{ scale: 0.985 }}
                       onClick={() => setSelectedProfile('parent')}
-                      className={`relative cursor-pointer p-5 rounded-2xl border-2 transition-all flex flex-col justify-between h-36 ${
+                      className={`relative cursor-pointer p-5 rounded-2xl border-2 transition-colors flex flex-col justify-between h-36 duration-200 ${
                         selectedProfile === 'parent' 
-                          ? 'border-indigo-600 bg-indigo-50/40 dark:bg-indigo-950/20 shadow-md transform scale-[1.01]' 
-                          : 'border-gray-200 dark:border-gray-800 bg-white dark:bg-slate-900 hover:border-indigo-300 hover:shadow-sm'
+                          ? 'border-indigo-600 bg-indigo-50/40 dark:bg-indigo-950/20 shadow-md' 
+                          : 'border-gray-200 dark:border-gray-800 bg-white dark:bg-slate-900 hover:border-indigo-300'
                       }`}
                     >
                       <div className="flex items-center justify-between">
@@ -495,15 +565,18 @@ export default function Login() {
                         <h4 className="font-black text-slate-900 dark:text-white text-md">Parent / Tuteur</h4>
                         <p className="text-[11px] text-gray-500 dark:text-gray-400 leading-normal mt-0.5 truncate">Suivi assiduité, notes scolaires et frais de cantine</p>
                       </div>
-                    </div>
+                    </motion.div>
 
                     {/* card teacher */}
-                    <div 
+                    <motion.div 
+                      variants={fadeUpVariants}
+                      whileHover={{ scale: 1.015, translateY: -2 }}
+                      whileTap={{ scale: 0.985 }}
                       onClick={() => setSelectedProfile('enseignant')}
-                      className={`relative cursor-pointer p-5 rounded-2xl border-2 transition-all flex flex-col justify-between h-36 ${
+                      className={`relative cursor-pointer p-5 rounded-2xl border-2 transition-colors flex flex-col justify-between h-36 duration-200 ${
                         selectedProfile === 'enseignant' 
-                          ? 'border-indigo-600 bg-indigo-50/40 dark:bg-indigo-950/20 shadow-md transform scale-[1.01]' 
-                          : 'border-gray-200 dark:border-gray-800 bg-white dark:bg-slate-900 hover:border-indigo-300 hover:shadow-sm'
+                          ? 'border-indigo-600 bg-indigo-50/40 dark:bg-indigo-950/20 shadow-md' 
+                          : 'border-gray-200 dark:border-gray-800 bg-white dark:bg-slate-900 hover:border-indigo-300'
                       }`}
                     >
                       <div className="flex items-center justify-between">
@@ -518,15 +591,18 @@ export default function Login() {
                         <h4 className="font-black text-slate-900 dark:text-white text-md">Enseignant / Professeur</h4>
                         <p className="text-[11px] text-gray-500 dark:text-gray-400 leading-normal mt-0.5 truncate">Appel journalier, bulletin & évaluations pédagogiques</p>
                       </div>
-                    </div>
+                    </motion.div>
 
                     {/* card staff */}
-                    <div 
+                    <motion.div 
+                      variants={fadeUpVariants}
+                      whileHover={{ scale: 1.015, translateY: -2 }}
+                      whileTap={{ scale: 0.985 }}
                       onClick={() => setSelectedProfile('personnel administratif')}
-                      className={`relative cursor-pointer p-5 rounded-2xl border-2 transition-all flex flex-col justify-between h-36 ${
+                      className={`relative cursor-pointer p-5 rounded-2xl border-2 transition-colors flex flex-col justify-between h-36 duration-200 ${
                         selectedProfile === 'personnel administratif' 
-                          ? 'border-indigo-600 bg-indigo-50/40 dark:bg-indigo-950/20 shadow-md transform scale-[1.01]' 
-                          : 'border-gray-200 dark:border-gray-800 bg-white dark:bg-slate-900 hover:border-indigo-300 hover:shadow-sm'
+                          ? 'border-indigo-600 bg-indigo-50/40 dark:bg-indigo-950/20 shadow-md' 
+                          : 'border-gray-200 dark:border-gray-800 bg-white dark:bg-slate-900 hover:border-indigo-300'
                       }`}
                     >
                       <div className="flex items-center justify-between">
@@ -541,12 +617,15 @@ export default function Login() {
                         <h4 className="font-black text-slate-900 dark:text-white text-md">Personnel Administratif</h4>
                         <p className="text-[11px] text-gray-500 dark:text-gray-400 leading-normal mt-0.5 truncate">Responsables, secrétaires, comptabilité de l'école</p>
                       </div>
-                    </div>
+                    </motion.div>
 
                   </div>
 
                   {/* Optional Administrative Back Door Code Toggle for Martinien Admin */}
-                  <div className="pt-4 border-t border-gray-100 dark:border-gray-800 text-center">
+                  <motion.div 
+                    variants={fadeUpVariants}
+                    className="pt-4 border-t border-gray-100 dark:border-gray-800 text-center"
+                  >
                     <button
                       type="button"
                       onClick={() => {
@@ -557,9 +636,12 @@ export default function Login() {
                     >
                       🔒 Vous êtes administrateur principal ? S'inscrire ici
                     </button>
-                  </div>
+                  </motion.div>
 
-                  <div className="flex justify-end pt-4">
+                  <motion.div 
+                    variants={fadeUpVariants}
+                    className="flex justify-end pt-4"
+                  >
                     <button
                       type="button"
                       onClick={handleNextToStep2}
@@ -569,8 +651,8 @@ export default function Login() {
                       Continuer vers le formulaire
                       <ChevronRight size={18} />
                     </button>
-                  </div>
-                </div>
+                  </motion.div>
+                </motion.div>
               )}
 
               {/* STEP 2: DYNAMIC FORM TAILORED FIELDS */}
@@ -904,9 +986,15 @@ export default function Login() {
           ) : (
             
             /* Standard Login Form */
-            <form className="space-y-6" onSubmit={handleSubmit}>
+            <motion.form 
+              variants={containerVariants}
+              initial="hidden"
+              animate="visible"
+              className="space-y-6" 
+              onSubmit={handleSubmit}
+            >
               
-              <div>
+              <motion.div variants={fadeUpVariants}>
                 <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider flex items-center gap-1.5">
                   <Mail size={14} className="text-gray-400" />
                   {t('email')}
@@ -921,9 +1009,9 @@ export default function Login() {
                     placeholder="nom@edu-nify.com"
                   />
                 </div>
-              </div>
+              </motion.div>
 
-              <div>
+              <motion.div variants={fadeUpVariants}>
                 <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider flex items-center gap-1.5">
                   <Lock size={14} className="text-gray-400" />
                   {t('password')}
@@ -938,13 +1026,13 @@ export default function Login() {
                     placeholder="••••••••"
                   />
                 </div>
-              </div>
+              </motion.div>
 
-              <div>
+              <motion.div variants={fadeUpVariants}>
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-full flex justify-center items-center gap-2 py-3 px-4 border border-transparent rounded-xl shadow-sm text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:bg-indigo-400 transition-colors shadow-lg shadow-indigo-600/10"
+                  className="w-full flex justify-center items-center gap-2 py-3 px-4 border border-transparent rounded-xl shadow-sm text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:bg-indigo-400 transition-colors shadow-lg shadow-indigo-600/10 animate-pulse-subtle"
                 >
                   {loading ? (
                     <RefreshCw className="animate-spin" size={20} />
@@ -953,8 +1041,8 @@ export default function Login() {
                   )}
                   {loading ? t('verifying') : t('login_button')}
                 </button>
-              </div>
-            </form>
+              </motion.div>
+            </motion.form>
           )}
           
           {/* Footer toggle Login vs SignUp */}
@@ -983,7 +1071,7 @@ export default function Login() {
           </div>
 
         </div>
-      </div>
+      </motion.div>
     </div>
   );
 }
