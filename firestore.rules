@@ -212,6 +212,7 @@ service cloud.firestore {
       allow read: if isAuthenticated() && request.auth.uid in resource.data.participants;
       allow create: if isAuthenticated();
       allow update: if isAuthenticated() && request.auth.uid in resource.data.participants;
+      allow delete: if isAuthenticated() && (request.auth.uid in resource.data.participants || isAdmin());
     }
 
     // Messages Collection (subcollection of conversations)

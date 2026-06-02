@@ -1328,7 +1328,7 @@ const Grades: React.FC = () => {
                   {!editingGrade && (
                     <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <label className="block text-[10px] font-black text-gray-400 uppercase tracking-wider mb-1">Classe d'Abidjan</label>
+                        <label className="block text-[10px] font-black text-gray-400 uppercase tracking-wider mb-1">Classe</label>
                         <select
                           required
                           value={newGrade.classId}

@@ -117,6 +117,10 @@ export default function Staff() {
   });
 
   const handleDeleteStaff = async (id: string) => {
+    if (currentUser?.role === 'enseignant') {
+      notifyError("Les enseignants ne sont pas autorisés à supprimer des membres du personnel.");
+      return;
+    }
     if (!window.confirm(t('staff_delete_confirm'))) return;
     try {
       await deleteDoc(doc(db, 'users', id));
@@ -310,13 +314,15 @@ export default function Staff() {
                           >
                             <ExternalLink size={18} />
                           </button>
-                          <button 
-                            onClick={() => handleDeleteStaff(member.id)}
-                            className="p-2 text-gray-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-all"
-                            title={t('delete')}
-                          >
-                            <Trash2 size={18} />
-                          </button>
+                          {currentUser?.role !== 'enseignant' && (
+                            <button 
+                              onClick={() => handleDeleteStaff(member.id)}
+                              className="p-2 text-gray-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-all"
+                              title={t('delete')}
+                            >
+                              <Trash2 size={18} />
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>

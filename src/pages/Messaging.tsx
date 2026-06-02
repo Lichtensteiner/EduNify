@@ -18,6 +18,7 @@ interface Conversation {
   isGroup: boolean;
   groupName?: string;
   unreadCounts?: Record<string, number>;
+  createdBy?: string;
 }
 
 interface MessagingProps {
@@ -274,7 +275,8 @@ export default function Messaging({ initialChatTargetId, onClearTarget }: Messag
         lastMessage: '',
         lastMessageTime: serverTimestamp(),
         createdAt: serverTimestamp(),
-        unreadCounts
+        unreadCounts,
+        createdBy: currentUser.id
       });
       setSelectedConversationId(newConvRef.id);
       window.history.pushState({ modal: 'chat' }, '');
@@ -408,13 +410,24 @@ export default function Messaging({ initialChatTargetId, onClearTarget }: Messag
     try {
       const convRef = doc(db, 'conversations', conv.id);
       const newParticipants = conv.participants.filter(id => id !== currentUser.id);
+      const userName = `${currentUser.prenom || ''} ${currentUser.nom || ''}`.trim() || currentUser.email?.split('@')[0] || "Un utilisateur";
+      const leaveText = `${userName} a quitté le groupe`;
       
       if (newParticipants.length === 0) {
         await deleteDoc(convRef);
       } else {
+        // Send a system action message to the conversation's message subcollection
+        await addDoc(collection(db, `conversations/${conv.id}/messages`), {
+          senderId: 'system',
+          isSystem: true,
+          text: leaveText,
+          createdAt: serverTimestamp(),
+          isDelivered: true
+        });
+
         await updateDoc(convRef, {
           participants: newParticipants,
-          lastMessage: `${currentUser.prenom || 'Un utilisateur'} a quitté le groupe`,
+          lastMessage: leaveText,
           lastMessageTime: serverTimestamp()
         });
       }
@@ -426,8 +439,15 @@ export default function Messaging({ initialChatTargetId, onClearTarget }: Messag
     }
   };
 
-  const handleDeleteGroup = async (convId: string) => {
-    if (!currentUser || currentUser.role !== 'admin') return;
+  const handleDeleteGroup = async (convId: string, conv?: Conversation) => {
+    const isAllowed = currentUser && (
+      currentUser.role === 'admin' ||
+      currentUser.role === 'personnel administratif' ||
+      currentUser.role === 'enseignant' ||
+      conv?.createdBy === currentUser.id ||
+      !conv?.createdBy
+    );
+    if (!currentUser || !isAllowed) return;
     if (!window.confirm("Supprimer ce groupe définitivement pour tous ?")) return;
 
     try {
@@ -589,18 +609,22 @@ export default function Messaging({ initialChatTargetId, onClearTarget }: Messag
                                 <LogOut size={16} />
                                 Quitter le groupe
                               </button>
-                              {currentUser?.role === 'admin' && (
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleDeleteGroup(conv.id);
-                                  }}
-                                  className="w-full text-left px-4 py-2 text-sm text-red-600 font-bold hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2"
-                                >
-                                  <Trash2 size={16} />
-                                  Supprimer le groupe
-                                </button>
-                              )}
+                               {(currentUser?.role === 'admin' ||
+                                 currentUser?.role === 'personnel administratif' ||
+                                 currentUser?.role === 'enseignant' ||
+                                 conv.createdBy === currentUser?.id ||
+                                 !conv.createdBy) && (
+                                 <button
+                                   onClick={(e) => {
+                                     e.stopPropagation();
+                                     handleDeleteGroup(conv.id, conv);
+                                   }}
+                                   className="w-full text-left px-4 py-2 text-sm text-red-600 font-bold hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2"
+                                 >
+                                   <Trash2 size={16} />
+                                   Supprimer le groupe
+                                 </button>
+                               )}
                             </div>
                           )}
                         </div>

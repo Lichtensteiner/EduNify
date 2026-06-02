@@ -201,7 +201,13 @@ export default function Chat({ conversationId, onBack }: ChatProps) {
           };
           fetchParticipants();
         }
+      } else {
+        notifyError("Ce groupe n'existe plus ou a été supprimé.");
+        onBack();
       }
+    }, (error) => {
+      console.warn("Conversation snapshot error (likely left or deleted):", error);
+      onBack();
     });
 
     const q = query(
@@ -224,6 +230,8 @@ export default function Chat({ conversationId, onBack }: ChatProps) {
 
       setMessages(msgs);
       scrollToBottom();
+    }, (error) => {
+      console.warn("Messages snapshot error:", error);
     });
 
     return () => {
@@ -369,13 +377,24 @@ export default function Chat({ conversationId, onBack }: ChatProps) {
     try {
       const convRef = doc(db, 'conversations', conversationId);
       const newParticipants = (conversationData.participants || []).filter((id: string) => id !== currentUser.id);
-      
+      const userName = `${currentUser.prenom || ''} ${currentUser.nom || ''}`.trim() || currentUser.email?.split('@')[0] || "Un utilisateur";
+      const leaveText = `${userName} a quitté le groupe`;
+
       if (newParticipants.length === 0) {
         await deleteDoc(convRef);
       } else {
+        // Send a system action message to the conversation's message subcollection
+        await addDoc(collection(db, `conversations/${conversationId}/messages`), {
+          senderId: 'system',
+          isSystem: true,
+          text: leaveText,
+          createdAt: serverTimestamp(),
+          isDelivered: true
+        });
+
         await updateDoc(convRef, {
           participants: newParticipants,
-          lastMessage: `${currentUser.prenom || 'Un utilisateur'} a quitté le groupe`,
+          lastMessage: leaveText,
           lastMessageTime: serverTimestamp()
         });
       }
@@ -410,16 +429,19 @@ export default function Chat({ conversationId, onBack }: ChatProps) {
   };
 
   const handleDeleteGroup = async () => {
-    if (!conversationId || !currentUser || currentUser.role !== 'admin' || !conversationData?.isGroup) return;
+    const isAllowed = currentUser && (
+      currentUser.role === 'admin' ||
+      currentUser.role === 'personnel administratif' ||
+      currentUser.role === 'enseignant' ||
+      conversationData?.createdBy === currentUser.id ||
+      !conversationData?.createdBy
+    );
+    if (!conversationId || !currentUser || !isAllowed || !conversationData?.isGroup) return;
     if (!window.confirm("Supprimer ce groupe définitivement pour TOUS les participants ? Cette action est irréversible.")) return;
 
     try {
       // Delete the conversation document
       await deleteDoc(doc(db, 'conversations', conversationId));
-      
-      // In a real app, we might also want to delete all messages in a subcollection
-      // but Firestore doesn't support recursive deletion easily from the client.
-      // However, for this project, deleting the parent doc is the primary goal.
       
       setShowOptions(false);
       onBack();
@@ -630,7 +652,11 @@ export default function Chat({ conversationId, onBack }: ChatProps) {
                     <LogOut size={16} />
                     Quitter le groupe
                   </button>
-                  {currentUser?.role === 'admin' && (
+                  {(currentUser?.role === 'admin' ||
+                    currentUser?.role === 'personnel administratif' ||
+                    currentUser?.role === 'enseignant' ||
+                    conversationData?.createdBy === currentUser?.id ||
+                    !conversationData?.createdBy) && (
                     <button 
                       onClick={handleDeleteGroup}
                       className="w-full text-left px-4 py-2.5 text-sm text-red-600 font-bold hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors flex items-center gap-2"
@@ -719,6 +745,18 @@ export default function Chat({ conversationId, onBack }: ChatProps) {
       {/* Messages Area */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50 dark:bg-gray-900 custom-scrollbar">
         {messages.map((msg) => {
+          const isSystem = msg.senderId === 'system' || (msg as any).isSystem;
+          
+          if (isSystem) {
+            return (
+              <div key={msg.id} className="flex justify-center my-3 animate-in fade-in duration-300">
+                <div className="bg-gray-200/70 dark:bg-gray-800/70 text-gray-600 dark:text-gray-300 text-[10px] sm:text-[11px] font-sans px-3 py-1 rounded-full text-center max-w-[85%] font-semibold tracking-wide uppercase border border-gray-100/50 dark:border-gray-700/50">
+                  {msg.text}
+                </div>
+              </div>
+            );
+          }
+
           const isMine = msg.senderId === currentUser?.id;
           const isScheduled = msg.scheduledFor && msg.scheduledFor.toDate() > new Date() && !msg.isDelivered;
           

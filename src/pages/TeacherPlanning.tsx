@@ -317,14 +317,12 @@ const TeacherPlanning: React.FC = () => {
   useEffect(() => {
     if (!currentUser) return;
 
-    const startLimit = new Date();
-    startLimit.setHours(0, 0, 0, 0);
+    const fiveDaysAgo = new Date();
+    fiveDaysAgo.setDate(fiveDaysAgo.getDate() - 5);
+    fiveDaysAgo.setHours(0, 0, 0, 0);
 
-    let qAgenda = query(collection(db, 'teacher_planning'), orderBy('startTime', 'asc'));
-
-    if (isTeacher) {
-      qAgenda = query(collection(db, 'teacher_planning'), where('teacherId', '==', currentUser.id));
-    }
+    // Fetch all plannings so that admins, students, and other teachers can see them.
+    const qAgenda = query(collection(db, 'teacher_planning'));
 
     const unsubscribeAgenda = onSnapshot(qAgenda, (snapshot) => {
       let items = snapshot.docs.map(doc => ({
@@ -334,7 +332,8 @@ const TeacherPlanning: React.FC = () => {
 
       items = items.filter(item => {
         const itemDate = item.startTime?.toDate?.() || new Date(0);
-        return itemDate >= startLimit;
+        // Disappear from planning exactly after 5 days (itemDate must be greater/newer than 5 days ago)
+        return itemDate >= fiveDaysAgo;
       });
 
       // Sort
@@ -347,7 +346,7 @@ const TeacherPlanning: React.FC = () => {
       setPlanning(items);
       setLoadingAgenda(false);
     }, (error) => {
-      console.warn("Agenda query warning (index missing fallback): ", error);
+      console.warn("Agenda query error: ", error);
       setLoadingAgenda(false);
     });
 
@@ -628,7 +627,16 @@ const TeacherPlanning: React.FC = () => {
       };
 
       if (editingAgendaItem) {
-        await updateDoc(doc(db, 'teacher_planning', editingAgendaItem.id), data);
+        if (editingAgendaItem.teacherId !== currentUser.id) {
+          notifyError("Vous ne pouvez pas modifier le planning d'un autre enseignant.");
+          return;
+        }
+        await updateDoc(doc(db, 'teacher_planning', editingAgendaItem.id), {
+          ...data,
+          // Keep original creator info
+          teacherId: editingAgendaItem.teacherId,
+          teacherName: editingAgendaItem.teacherName
+        });
         notifySuccess("Activité répertoriée modifiée !");
       } else {
         await addDoc(collection(db, 'teacher_planning'), {
@@ -662,6 +670,11 @@ const TeacherPlanning: React.FC = () => {
   };
 
   const handleDeleteAgendaItem = async (id: string) => {
+    const item = planning.find(p => p.id === id);
+    if (!isTeacher || (item && item.teacherId !== currentUser?.id)) {
+      notifyError("Vous n'êtes pas autorisé à supprimer ce planning (réservé à l'enseignant propriétaire).");
+      return;
+    }
     if (!window.confirm("Archiver cet élément du planning ?")) return;
     try {
       await deleteDoc(doc(db, 'teacher_planning', id));
