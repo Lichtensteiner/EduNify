@@ -25,6 +25,45 @@ const translations: Translations = {
   'install_app': { fr: 'Installer l\'App', en: 'Install App', es: 'Instalar App', zh: '安装应用', ja: 'アプリをインストール' },
   'dashboard': { fr: 'Tableau de bord', en: 'Dashboard', es: 'Panel', zh: '仪表板', ja: 'ダッシュボード' },
   'teacher_greeting': { fr: 'Bonjour, Prof', en: 'Hello, Teacher', es: 'Hola, Profesor', zh: '你好，老师', ja: 'こんにちは、先生' },
+  'teacher_greeting_desc': { 
+    fr: 'Accédez à vos classes, gérez les devoirs de vos élèves et suivez l\'emploi du temps en temps réel.', 
+    en: 'Access your classes, manage homework, and track your schedule in real-time.', 
+    es: 'Accede a tus clases, gestiona tareas y sigue tu horario en tiempo real.', 
+    zh: '访问您的班级，管理作业并实时跟踪您的日程安排。', 
+    ja: 'クラスにアクセスし、宿題を管理し、スケジュールをリアルタイムで追跡します。' 
+  },
+  'my_classes': { 
+    fr: 'Mes Classes', 
+    en: 'My Classes', 
+    es: 'Mis Clases', 
+    zh: '我的班级', 
+    ja: 'マイクラス' 
+  },
+
+  'tasks_and_homework': { 
+    fr: 'Tâches & Devoirs', 
+    en: 'Tasks & Homework', 
+    es: 'Tareas y Deberes', 
+    zh: '任务与作业', 
+    ja: 'タスクと宿題' 
+  },
+  'new_task_placeholder': { 
+    fr: 'Saisir une nouvelle tâche...', 
+    en: 'Enter a new task...', 
+    es: 'Ingrese una nouvelle tâche...', 
+    zh: '输入新任务...', 
+    ja: '新しいタスクを入力...' 
+  },
+  'priority_label': { 
+    fr: 'Priorité', 
+    en: 'Priority', 
+    es: 'Prioridad', 
+    zh: '优先级', 
+    ja: '優先度' 
+  },
+
+
+
   'student_greeting': { fr: 'Bonjour, Élève', en: 'Hello, Student', es: 'Hola, Estudiante', zh: '你好，学生', ja: 'こんにちは、学生' },
   'student_dashboard': { fr: 'Tableau de bord Élève', en: 'Student Dashboard', es: 'Panel de Estudiante', zh: '学生仪表板', ja: '学生ダッシュボード' },
   'student_card': { fr: 'Carte Utilisateur', en: 'User Card', es: 'Tarjeta de Usuario', zh: '用户卡', ja: 'ユーザーカード' },
@@ -1024,7 +1063,7 @@ const translations: Translations = {
   'average': { fr: 'Moyenne', en: 'Average', es: 'Promedio', zh: '平均分', ja: '平均' },
   'not_enough_data_chart': { fr: 'Pas assez de données pour générer le graphique', en: 'Not enough data to generate the chart', es: 'No hay suficientes datos para generar el gráfico', zh: '数据不足以生成图表', ja: 'チャートを生成するためのデータが不足しています' },
   'new_message_in': { fr: 'Nouveau message dans', en: 'New message in', es: 'Nuevo message en', zh: '新消息在', ja: '新しいメッセージ:' },
-  'class_tracking': { fr: 'Suivre_Classe', en: 'Track Class', es: 'Seguir Clase', zh: '跟踪班级', ja: 'クラスを追跡' },
+  'class_tracking': { fr: 'Suivi de classe', en: 'Class Tracking', es: 'Seguir Clase', zh: '跟踪班级', ja: 'クラスを追跡' },
   'admin_analysis_details': { fr: 'Détails de l\'Analyse Administrative', en: 'Administrative Analysis Details', es: 'Detalles de Análisis Administrativo', pt: 'Detalhes da Análise Administrativa', zh: '行政分析详细信息', ja: '管理分析の詳細' },
   'admin_insights_desc': { fr: 'Analyse statistique et IA temps réel du niveau global d\'engagement, ponctualité et comportement.', en: 'Real-time statistical and AI analysis of overall engagement, punctuality, and behavior.', es: 'Análisis estadístico e IA en tiempo real del nivel general de compromiso, puntualidad y comportamiento.', pt: 'Análise estatística e de IA em tempo real do nível global de engajamento, pontualidade e comportamento.', zh: '总体参与度、准时度和行为的实时统计和 AI 分析。', ja: '全体的なエンゲージメント、時間厳守、および行動のリアルタイムの統計およびAI分析。' },
   'data_sources': { fr: 'Sources de Données', en: 'Data Sources', es: 'Fuentes de Datos', pt: 'Fontes de Dados', zh: '数据源', ja: 'データソース' },

@@ -554,7 +554,7 @@ export default function Messaging({ initialChatTargetId, onClearTarget }: Messag
                             {conv.groupName}
                           </h3>
                           <p className={`text-sm dark:text-gray-400 line-clamp-1 ${conv.unreadCounts?.[currentUser.id] ? 'text-gray-900 dark:text-gray-200 font-semibold' : 'text-gray-500'}`}>
-                            {conv.isGroup && conv.lastMessage.includes(': ') ? (
+                            {conv.isGroup && conv.lastMessage && conv.lastMessage.includes(': ') ? (
                               <>
                                 <span className="font-bold text-gray-700 dark:text-gray-300">{conv.lastMessage.split(': ')[0]}: </span>
                                 {conv.lastMessage.split(': ').slice(1).join(': ')}
