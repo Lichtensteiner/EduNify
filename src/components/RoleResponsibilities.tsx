@@ -191,6 +191,9 @@ export default function RoleResponsibilities() {
   const [selectedPage, setSelectedPage] = useState<string>('dashboard');
   const [searchTerm, setSearchTerm] = useState('');
   
+  // Real-time users list from database
+  const [usersList, setUsersList] = useState<any[]>([]);
+
   // Custom editing states
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const [editingMissionText, setEditingMissionText] = useState('');
@@ -205,6 +208,98 @@ export default function RoleResponsibilities() {
     canDelete: false,
     mission: ''
   });
+
+  useEffect(() => {
+    if (!isFirebaseConfigured) return;
+    const unsubscribeUsers = onSnapshot(collection(db, 'users'), (snapshot) => {
+      const u = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setUsersList(u);
+    }, (err) => {
+      console.error("Error watching users for counts:", err);
+    });
+    return () => unsubscribeUsers();
+  }, []);
+
+  const getRegisteredUserCount = (roleId: string) => {
+    const isResponsibility = [
+      'responsable_maternelle', 'responsable_primaire', 'responsable_college', 
+      'gestionnaire_comptable', 'responsable_pedagogique', 'surveillant_general', 
+      'surveillant_adjoint', 'dame_menage', 'secretaire_generale', 
+      'secretaire_adjointe', 'responsable_it'
+    ].includes(roleId);
+
+    return usersList.filter(user => {
+      const userRole = (user.role || '').toLowerCase();
+      const userResp = Array.isArray(user.responsibilities) ? user.responsibilities : [];
+      
+      if (roleId === 'admin') {
+        return userRole === 'admin';
+      }
+      if (roleId === 'personnel administratif') {
+        return userRole === 'personnel administratif';
+      }
+      if (roleId === 'enseignant') {
+        return userRole === 'enseignant';
+      }
+      if (roleId === 'élève' || roleId === 'eleve') {
+        return userRole === 'élève' || userRole === 'eleve';
+      }
+      if (roleId === 'parent') {
+        return userRole === 'parent';
+      }
+      if (roleId === 'cuisinier') {
+        return userRole === 'cuisinier' || userResp.includes('cuisinier');
+      }
+      
+      if (isResponsibility) {
+        return userResp.includes(roleId) || userRole === roleId;
+      }
+      
+      return userRole === roleId;
+    }).length;
+  };
+
+  const getUsersInRole = (roleId: string) => {
+    const isResponsibility = [
+      'responsable_maternelle', 'responsable_primaire', 'responsable_college', 
+      'gestionnaire_comptable', 'responsable_pedagogique', 'surveillant_general', 
+      'surveillant_adjoint', 'dame_menage', 'secretaire_generale', 
+      'secretaire_adjointe', 'responsable_it'
+    ].includes(roleId);
+
+    return usersList.filter(user => {
+      const userRole = (user.role || '').toLowerCase();
+      const userResp = Array.isArray(user.responsibilities) ? user.responsibilities : [];
+      
+      if (roleId === 'admin') {
+        return userRole === 'admin';
+      }
+      if (roleId === 'personnel administratif') {
+        return userRole === 'personnel administratif';
+      }
+      if (roleId === 'enseignant') {
+        return userRole === 'enseignant';
+      }
+      if (roleId === 'élève' || roleId === 'eleve') {
+        return userRole === 'élève' || userRole === 'eleve';
+      }
+      if (roleId === 'parent') {
+        return userRole === 'parent';
+      }
+      if (roleId === 'cuisinier') {
+        return userRole === 'cuisinier' || userResp.includes('cuisinier');
+      }
+      
+      if (isResponsibility) {
+        return userResp.includes(roleId) || userRole === roleId;
+      }
+      
+      return userRole === roleId;
+    });
+  };
 
   useEffect(() => {
     if (!isFirebaseConfigured) {
@@ -523,21 +618,25 @@ export default function RoleResponsibilities() {
             <div className="space-y-1.5">
               {viewMode === 'by_role' ? (
                 systemRoles.map(role => {
-                  const itemsCount = items.filter(i => i.role === role.id).length;
+                  const realUserCount = getRegisteredUserCount(role.id);
                   return (
                     <button
                       key={role.id}
                       type="button"
                       onClick={() => setSelectedRole(role.id)}
-                      className={`w-full text-left px-3.5 py-3 rounded-2xl text-xs font-bold transition-all flex items-center justify-between ${
+                      className={`w-full text-left px-3.5 py-3 rounded-2xl text-xs font-bold transition-all flex items-center justify-between gap-2 ${
                         selectedRole === role.id
                           ? 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-400 ring-1 ring-indigo-100 dark:ring-indigo-900/40'
                           : 'hover:bg-gray-50 dark:hover:bg-gray-700/40 text-gray-600 dark:text-gray-400'
                       }`}
                     >
-                      <span className="capitalize">{role.label}</span>
-                      <span className="text-[10px] bg-gray-200/50 dark:bg-gray-700 px-2 py-0.5 rounded-full font-black">
-                        {itemsCount}
+                      <span className="capitalize truncate shrink-0 max-w-[130px]" title={role.label}>{role.label}</span>
+                      <span className={`text-[9px] px-2 py-0.5 rounded-full font-black uppercase tracking-wider shrink-0 whitespace-nowrap ${
+                        realUserCount > 0 
+                          ? 'bg-indigo-500/15 text-indigo-700 dark:text-indigo-400' 
+                          : 'bg-gray-100 dark:bg-gray-750 text-gray-400 dark:text-gray-500'
+                      }`}>
+                        {realUserCount} {realUserCount > 1 ? 'membres' : 'membre'}
                       </span>
                     </button>
                   );
@@ -574,6 +673,52 @@ export default function RoleResponsibilities() {
 
         {/* Content Area - Responsive Table / Interactive Cards */}
         <div className="lg:col-span-3 space-y-4">
+          {viewMode === 'by_role' && (
+            <div className="bg-gradient-to-r from-indigo-50/70 to-purple-50/70 dark:from-indigo-950/20 dark:to-purple-950/20 rounded-3xl p-5 border border-indigo-100/60 dark:border-indigo-900/30 shadow-sm">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <span className="p-1.5 bg-indigo-100 dark:bg-indigo-900/45 text-indigo-650 dark:text-indigo-400 rounded-xl">
+                    <UserCheck size={16} />
+                  </span>
+                  <h3 className="text-xs font-black text-gray-900 dark:text-white uppercase tracking-wider">
+                    Membres Réels de l'Établissement ({getUsersInRole(selectedRole).length})
+                  </h3>
+                </div>
+                <span className="text-[9px] font-black tracking-widest text-indigo-650 dark:text-indigo-400 bg-indigo-100/60 dark:bg-indigo-900/30 px-2 py-0.5 rounded-full uppercase">
+                  Temps Réel Database
+                </span>
+              </div>
+              
+              {getUsersInRole(selectedRole).length === 0 ? (
+                <div className="text-center py-5 text-xs text-gray-500 dark:text-gray-400 bg-white/70 dark:bg-gray-800/70 rounded-2xl border border-dashed border-gray-150 dark:border-gray-700">
+                  Aucun compte d'utilisateur n'est actuellement enregistré avec le rôle ou la responsabilité "<span className="font-bold text-indigo-600 dark:text-indigo-400 capitalize">{systemRoles.find(r => r.id === selectedRole)?.label || selectedRole}</span>" dans la base de données d'Abidjan. Vous pouvez ajouter des membres dans le personnel administratif.
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+                  {getUsersInRole(selectedRole).map((user) => (
+                    <div key={user.id} className="flex items-center gap-2.5 bg-white dark:bg-gray-800 p-2.5 rounded-2xl border border-gray-100 dark:border-gray-750 shadow-xs">
+                      {user.photo ? (
+                        <img src={user.photo} alt="" className="w-8 h-8 rounded-xl object-cover" referrerPolicy="no-referrer" />
+                      ) : (
+                        <div className="w-8 h-8 rounded-xl bg-indigo-50 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-black text-[10px] uppercase shadow-inner">
+                          {user.prenom?.[0] || ''}{user.nom?.[0] || 'U'}
+                        </div>
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs font-bold text-gray-900 dark:text-white truncate">
+                          {user.prenom} {user.nom}
+                        </p>
+                        <p className="text-[10px] text-gray-450 dark:text-gray-450 truncate">
+                          {user.email || 'Sans adresse-email'}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
           {loading ? (
             <div className="flex flex-col items-center justify-center py-20 bg-white dark:bg-gray-800 rounded-3xl border border-gray-100 dark:border-gray-700">
               <RefreshCw className="animate-spin text-indigo-650 mb-2" size={32} />
