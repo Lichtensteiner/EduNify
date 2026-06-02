@@ -83,27 +83,100 @@ const defaultResponsibilities: Omit<ResponsibilityItem, 'id'>[] = [
   // Admin 
   { pageId: 'dashboard', pageLabel: 'Tableau de Bord', role: 'admin', canView: true, canEdit: true, canDelete: true, mission: 'Pilotage stratégique, supervision globale des indicateurs de l\'établissement et des alertes IA.', lastUpdated: new Date().toISOString() },
   { pageId: 'directory', pageLabel: 'Annuaire & Profils', role: 'admin', canView: true, canEdit: true, canDelete: true, mission: 'Gestion complète des comptes utilisateurs, validation des rôles et contrôle des fiches personnelles.', lastUpdated: new Date().toISOString() },
-  { pageId: 'finance', pageLabel: 'Suivi Financier', role: 'admin', canView: true, canEdit: true, canDelete: true, mission: 'Gestion des frais de scolarité, encaissements, balances budgétaires et émission des reçus officiels.', lastUpdated: new Date().toISOString() },
+  { pageId: 'messaging', pageLabel: 'Messagerie Intégrée', role: 'admin', canView: true, canEdit: true, canDelete: true, mission: 'Supervision et modération des canaux d\'échange de l\'école.', lastUpdated: new Date().toISOString() },
+  { pageId: 'grades', pageLabel: 'Notes & Bulletins', role: 'admin', canView: true, canEdit: true, canDelete: true, mission: 'Supervision des évaluations scolaires et révision administrative globale des bulletins.', lastUpdated: new Date().toISOString() },
+  { pageId: 'finance', pageLabel: 'Suivi Financier', role: 'admin', canView: true, canEdit: true, canDelete: true, mission: 'Gestion globale des frais de scolarité, encaissements, balances budgétaires et émission des reçus officiels.', lastUpdated: new Date().toISOString() },
   { pageId: 'discipline', pageLabel: 'Discipline & Sanctions', role: 'admin', canView: true, canEdit: true, canDelete: true, mission: 'Supervision disciplinaire, validation définitive des sanctions graves et attribution des récompenses de maisons.', lastUpdated: new Date().toISOString() },
-  { pageId: 'strategic_optimizations', pageLabel: 'Optimisations IA', role: 'admin', canView: true, canEdit: true, canDelete: true, mission: 'Déclenchement et validation des recommandations d\'assiduité par l\'IA.', lastUpdated: new Date().toISOString() },
+  { pageId: 'strategic_optimizations', pageLabel: 'Optimisations IA', role: 'admin', canView: true, canEdit: true, canDelete: true, mission: 'Déclenchement et validation des recommandations d\'assiduité et d\'organisation scolaire générées par l\'IA.', lastUpdated: new Date().toISOString() },
   
   // Administrative staff
   { pageId: 'dashboard', pageLabel: 'Tableau de Bord', role: 'personnel administratif', canView: true, canEdit: true, canDelete: false, mission: 'Suivi opérationnel quotidien des absences, retards et alertes d\'assiduité actives.', lastUpdated: new Date().toISOString() },
-  { pageId: 'directory', pageLabel: 'Annuaire & Profils', role: 'personnel administratif', canView: true, canEdit: true, canDelete: false, mission: 'Saisie administrative, mise à jour des coordonnées des élèves et impression des justificatifs.', lastUpdated: new Date().toISOString() },
+  { pageId: 'directory', pageLabel: 'Annuaire & Profils', role: 'personnel administratif', canView: true, canEdit: true, canDelete: false, mission: 'Saisie administrative, mise à jour des coordonnées des élèves et parents, et impression des justificatifs.', lastUpdated: new Date().toISOString() },
   { pageId: 'canteen', pageLabel: 'Restauration / Cantine', role: 'personnel administratif', canView: true, canEdit: true, canDelete: false, mission: 'Suivi du planning des repas, gestion des régimes et validation des réservations.', lastUpdated: new Date().toISOString() },
-  { pageId: 'discipline', pageLabel: 'Discipline & Sanctions', role: 'personnel administratif', canView: true, canEdit: true, canDelete: false, mission: 'Enregistrement des signalements de retard, retards récurrents et transmission aux familles.', lastUpdated: new Date().toISOString() },
+  { pageId: 'discipline', pageLabel: 'Discipline & Sanctions', role: 'personnel administratif', canView: true, canEdit: true, canDelete: false, mission: 'Enregistrement des signalements de retards réguliers et transmission des convocations aux familles.', lastUpdated: new Date().toISOString() },
   { pageId: 'document_generator', pageLabel: 'Générateur de Documents', role: 'personnel administratif', canView: true, canEdit: true, canDelete: true, mission: 'Production en masse des certificats de scolarité, fiches de présence et bulletins administratifs.', lastUpdated: new Date().toISOString() },
 
   // Teacher 
   { pageId: 'dashboard', pageLabel: 'Tableau de Bord', role: 'enseignant', canView: true, canEdit: false, canDelete: false, mission: 'Visualisation des statistiques d\'assiduité de ses propres classes et recommandations IA.', lastUpdated: new Date().toISOString() },
   { pageId: 'homework', pageLabel: 'Devoirs & Leçons', role: 'enseignant', canView: true, canEdit: true, canDelete: true, mission: 'Attribution, planification et correction des travaux à restituer par matière.', lastUpdated: new Date().toISOString() },
   { pageId: 'grades', pageLabel: 'Notes & Bulletins', role: 'enseignant', canView: true, canEdit: true, canDelete: false, mission: 'Saisie des notes d\'évaluation, appréciations trimestrielles et calcul des moyennes de matières.', lastUpdated: new Date().toISOString() },
-  { pageId: 'discipline', pageLabel: 'Discipline & Sanctions', role: 'enseignant', canView: true, canEdit: true, canDelete: false, mission: 'Déclaration des incidents de comportement en classe et alertes de ponctualité.', lastUpdated: new Date().toISOString() },
+  { pageId: 'planning', pageLabel: 'Emploi du Temps', role: 'enseignant', canView: true, canEdit: false, canDelete: false, mission: 'Consultation du calendrier des cours, des salles attribuées et des réunions pédagogiques.', lastUpdated: new Date().toISOString() },
+  { pageId: 'discipline', pageLabel: 'Discipline & Sanctions', role: 'enseignant', canView: true, canEdit: true, canDelete: false, mission: 'Déclaration des incidents de comportement en classe et alertes de ponctualité ou de participation.', lastUpdated: new Date().toISOString() },
 
   // Student
   { pageId: 'dashboard', pageLabel: 'Tableau de Bord', role: 'élève', canView: true, canEdit: false, canDelete: false, mission: 'Suivi personnel de son assiduité, de ses retards et du total des points de maison.', lastUpdated: new Date().toISOString() },
   { pageId: 'homework', pageLabel: 'Devoirs & Leçons', role: 'élève', canView: true, canEdit: false, canDelete: false, mission: 'Visualisation quotidienne des travaux à faire et déclaration d\'achèvement.', lastUpdated: new Date().toISOString() },
-  { pageId: 'library', pageLabel: 'Bibliothèque Numérique', role: 'élève', canView: true, canEdit: false, canDelete: false, mission: 'Recherche et consultation des documents pédagogiques et livres disponibles.', lastUpdated: new Date().toISOString() }
+  { pageId: 'library', pageLabel: 'Bibliothèque Numérique', role: 'élève', canView: true, canEdit: false, canDelete: false, mission: 'Recherche et consultation des documents pédagogiques et livres disponibles.', lastUpdated: new Date().toISOString() },
+
+  // Parent
+  { pageId: 'dashboard', pageLabel: 'Tableau de Bord', role: 'parent', canView: true, canEdit: false, canDelete: false, mission: 'Suivi global des enfants : assiduité, alertes de comportement, points et bulletins.', lastUpdated: new Date().toISOString() },
+  { pageId: 'planning', pageLabel: 'Emploi du Temps', role: 'parent', canView: true, canEdit: false, canDelete: false, mission: 'Consultation du calendrier des cours et des événements nécessitant une présence.', lastUpdated: new Date().toISOString() },
+  { pageId: 'grades', pageLabel: 'Notes & Bulletins', role: 'parent', canView: true, canEdit: false, canDelete: false, mission: 'Consultation en direct des évaluations de ses enfants et signature numérique des bulletins.', lastUpdated: new Date().toISOString() },
+
+  // Cuisinier
+  { pageId: 'dashboard', pageLabel: 'Tableau de Bord', role: 'cuisinier', canView: true, canEdit: false, canDelete: false, mission: 'Accès aux notifications de service ou aux demandes particulières.', lastUpdated: new Date().toISOString() },
+  { pageId: 'canteen', pageLabel: 'Restauration / Cantine', role: 'cuisinier', canView: true, canEdit: true, canDelete: false, mission: 'Mise à jour quotidienne du menu, gestion des stocks d\'ingrédients et des restrictions alimentaires.', lastUpdated: new Date().toISOString() },
+
+  // Responsable Maternelle
+  { pageId: 'dashboard', pageLabel: 'Tableau de Bord', role: 'responsable_maternelle', canView: true, canEdit: false, canDelete: false, mission: 'Observation des statistiques d\'assiduité, de sieste, et des activités d\'éveil de la maternelle (en temps réel).', lastUpdated: new Date().toISOString() },
+  { pageId: 'directory', pageLabel: 'Annuaire & Profils', role: 'responsable_maternelle', canView: true, canEdit: true, canDelete: false, mission: 'Suivi des fiches d\'inscription spécifiques des tout-petits et des fiches de contact des familles (en temps réel).', lastUpdated: new Date().toISOString() },
+  { pageId: 'messaging', pageLabel: 'Messagerie Intégrée', role: 'responsable_maternelle', canView: true, canEdit: true, canDelete: false, mission: 'Communication directe et sereine en temps réel avec les assistantes maternelles et les parents.', lastUpdated: new Date().toISOString() },
+  { pageId: 'planning', pageLabel: 'Emploi du Temps', role: 'responsable_maternelle', canView: true, canEdit: true, canDelete: false, mission: 'Gestion de l\'agenda des ateliers d\'éveil, des plages de sieste et des récréations adaptées.', lastUpdated: new Date().toISOString() },
+  { pageId: 'discipline', pageLabel: 'Discipline & Sanctions', role: 'responsable_maternelle', canView: true, canEdit: true, canDelete: false, mission: 'Suivi bienveillant de l\'évolution comportementale et d\'autonomie en section maternelle.', lastUpdated: new Date().toISOString() },
+
+  // Responsable Primaire
+  { pageId: 'dashboard', pageLabel: 'Tableau de Bord', role: 'responsable_primaire', canView: true, canEdit: false, canDelete: false, mission: 'Tableau de bord de suivi de l\'assiduité et du niveau global du cycle primaire de l\'école.', lastUpdated: new Date().toISOString() },
+  { pageId: 'directory', pageLabel: 'Annuaire & Profils', role: 'responsable_primaire', canView: true, canEdit: true, canDelete: false, mission: 'Accès à l\'annuaire des instituteurs, élèves de primaire et gestion des fiches d\'informations.', lastUpdated: new Date().toISOString() },
+  { pageId: 'messaging', pageLabel: 'Messagerie Intégrée', role: 'responsable_primaire', canView: true, canEdit: true, canDelete: false, mission: 'Échanges d\'informations réguliers et coordination pédagogique avec les enseignants du primaire.', lastUpdated: new Date().toISOString() },
+  { pageId: 'homework', pageLabel: 'Devoirs & Leçons', role: 'responsable_primaire', canView: true, canEdit: true, canDelete: false, mission: 'Suivi de la régularité des devoirs et cahiers de texte numériques du primaire.', lastUpdated: new Date().toISOString() },
+  { pageId: 'grades', pageLabel: 'Notes & Bulletins', role: 'responsable_primaire', canView: true, canEdit: false, canDelete: false, mission: 'Consultation et préparation des conseils de classe et des livrets de compétences primaires.', lastUpdated: new Date().toISOString() },
+
+  // Responsable Collège
+  { pageId: 'dashboard', pageLabel: 'Tableau de Bord', role: 'responsable_college', canView: true, canEdit: false, canDelete: false, mission: 'Supervision des indicateurs de réussite, d\'absentéisme et d\'alertes comportementales du collège (temps réel).', lastUpdated: new Date().toISOString() },
+  { pageId: 'directory', pageLabel: 'Annuaire & Profils', role: 'responsable_college', canView: true, canEdit: true, canDelete: false, mission: 'Supervision des profils d\'élèves de la 6ème à la 3ème et de leur affectation de classe.', lastUpdated: new Date().toISOString() },
+  { pageId: 'messaging', pageLabel: 'Messagerie Intégrée', role: 'responsable_college', canView: true, canEdit: true, canDelete: false, mission: 'Messagerie avec les professeurs principaux, parents d\'élèves de collège et délégations.', lastUpdated: new Date().toISOString() },
+  { pageId: 'grades', pageLabel: 'Notes & Bulletins', role: 'responsable_college', canView: true, canEdit: true, canDelete: false, mission: 'Validation pédagogique et verrouillage des bulletins du collège avant émission trimestrielle.', lastUpdated: new Date().toISOString() },
+  { pageId: 'discipline', pageLabel: 'Discipline & Sanctions', role: 'responsable_college', canView: true, canEdit: true, canDelete: false, mission: 'Suivi et enregistrement des heures de colle, des punitions et des conseils de discipline.', lastUpdated: new Date().toISOString() },
+
+  // Gestionnaire Comptable
+  { pageId: 'dashboard', pageLabel: 'Tableau de Bord', role: 'gestionnaire_comptable', canView: true, canEdit: false, canDelete: false, mission: 'Visualisation synthétique des entrées de fonds, des factures émises et des alertes de caisse en temps réel.', lastUpdated: new Date().toISOString() },
+  { pageId: 'finance', pageLabel: 'Suivi Financier', role: 'gestionnaire_comptable', canView: true, canEdit: true, canDelete: true, mission: 'Encaissement des frais scolaires, gestion des tableaux d\'échéanciers et contrôle budgétaire de l\'école.', lastUpdated: new Date().toISOString() },
+  { pageId: 'document_generator', pageLabel: 'Générateur de Documents', role: 'gestionnaire_comptable', canView: true, canEdit: true, canDelete: false, mission: 'Impression en temps réel des reçus règlementaires libératoires et bordereaux financiers.', lastUpdated: new Date().toISOString() },
+
+  // Responsable Pédagogique
+  { pageId: 'dashboard', pageLabel: 'Tableau de Bord', role: 'responsable_pedagogique', canView: true, canEdit: false, canDelete: false, mission: 'Analyse des statistiques éducatives de réussite, d\'assiduité par matière et de progression.', lastUpdated: new Date().toISOString() },
+  { pageId: 'homework', pageLabel: 'Devoirs & Leçons', role: 'responsable_pedagogique', canView: true, canEdit: true, canDelete: false, mission: 'Coordination et suivi du respect des programmes officiels à travers les fiches de leçons.', lastUpdated: new Date().toISOString() },
+  { pageId: 'grades', pageLabel: 'Notes & Bulletins', role: 'responsable_pedagogique', canView: true, canEdit: true, canDelete: false, mission: 'Harmonisation académique, contrôle de la pondération des notes et de la qualité des évaluations.', lastUpdated: new Date().toISOString() },
+  { pageId: 'library', pageLabel: 'Bibliothèque Numérique', role: 'responsable_pedagogique', canView: true, canEdit: true, canDelete: false, mission: 'Validation et enrichissement régulier du fonds documentaire éducatif accessible aux classes.', lastUpdated: new Date().toISOString() },
+
+  // Surveillant Général
+  { pageId: 'dashboard', pageLabel: 'Tableau de Bord', role: 'surveillant_general', canView: true, canEdit: false, canDelete: false, mission: 'Observations des taux de présence instantanés, de l\'assiduité du jour et retards enregistrés.', lastUpdated: new Date().toISOString() },
+  { pageId: 'directory', pageLabel: 'Annuaire & Profils', role: 'surveillant_general', canView: true, canEdit: false, canDelete: false, mission: 'Consultation de l\'annuaire pour accéder rapidement aux fiches de contact urgence des familles.', lastUpdated: new Date().toISOString() },
+  { pageId: 'discipline', pageLabel: 'Discipline & Sanctions', role: 'surveillant_general', canView: true, canEdit: true, canDelete: true, mission: 'Exécution rigoureuse de la politique d\'assiduité : gestion des absences, retards, et exclusions temporaires.', lastUpdated: new Date().toISOString() },
+  { pageId: 'planning', pageLabel: 'Emploi du Temps', role: 'surveillant_general', canView: true, canEdit: false, canDelete: false, mission: 'Suivi des permanences, de l\'occupation des salles d\'étude et du contrôle des heures libres.', lastUpdated: new Date().toISOString() },
+
+  // Surveillant Adjoint
+  { pageId: 'dashboard', pageLabel: 'Tableau de Bord', role: 'surveillant_adjoint', canView: true, canEdit: false, canDelete: false, mission: 'Vérification en temps réel des alertes d\'absence ou de comportement transmises pour contrôle.', lastUpdated: new Date().toISOString() },
+  { pageId: 'discipline', pageLabel: 'Discipline & Sanctions', role: 'surveillant_adjoint', canView: true, canEdit: true, canDelete: false, mission: 'Saisie terrain immédiate des retards, vérification des billets d\'entrée et contrôle des circulations.', lastUpdated: new Date().toISOString() },
+
+  // Dame de Ménage
+  { pageId: 'dashboard', pageLabel: 'Tableau de Bord', role: 'dame_menage', canView: true, canEdit: false, canDelete: false, mission: 'Prendre connaissance des informations institutionnelles générales et consignes sanitaires (temps réel).', lastUpdated: new Date().toISOString() },
+  { pageId: 'canteen', pageLabel: 'Restauration / Cantine', role: 'dame_menage', canView: true, canEdit: false, canDelete: false, mission: 'Horaires du réfectoire, coordination avec l\'équipe cuisine pour la propreté du self-service.', lastUpdated: new Date().toISOString() },
+
+  // Secrétaire Générale
+  { pageId: 'dashboard', pageLabel: 'Tableau de Bord', role: 'secretaire_generale', canView: true, canEdit: false, canDelete: false, mission: 'Information globale de l\'établissement, suivi du calendrier des réunions institutionnelles en temps réel.', lastUpdated: new Date().toISOString() },
+  { pageId: 'directory', pageLabel: 'Annuaire & Profils', role: 'secretaire_generale', canView: true, canEdit: true, canDelete: false, mission: 'Saisie qualifiée, création de dossiers familles d\'élèves et validation des statuts d\'inscription (temps réel).', lastUpdated: new Date().toISOString() },
+  { pageId: 'messaging', pageLabel: 'Messagerie Intégrée', role: 'secretaire_generale', canView: true, canEdit: true, canDelete: false, mission: 'Point d\'entrée et dispatching officiel des correspondances reçues par l\'établissement.', lastUpdated: new Date().toISOString() },
+  { pageId: 'document_generator', pageLabel: 'Générateur de Documents', role: 'secretaire_generale', canView: true, canEdit: true, canDelete: true, mission: 'Production légale assistée de certificats d\'assiduité, d\'inscriptions, et circulaires de direction.', lastUpdated: new Date().toISOString() },
+
+  // Secrétaire Adjointe
+  { pageId: 'dashboard', pageLabel: 'Tableau de Bord', role: 'secretaire_adjointe', canView: true, canEdit: false, canDelete: false, mission: 'Tenue des agendas opérationnels et convocations d\'élèves ou d\'intervenants.', lastUpdated: new Date().toISOString() },
+  { pageId: 'directory', pageLabel: 'Annuaire & Profils', role: 'secretaire_adjointe', canView: true, canEdit: true, canDelete: false, mission: 'Enregistrement de base des fiches d\'adresses, téléphones et correctifs d\'état civil.', lastUpdated: new Date().toISOString() },
+  { pageId: 'document_generator', pageLabel: 'Générateur de Documents', role: 'secretaire_adjointe', canView: true, canEdit: true, canDelete: false, mission: 'Impression quotidienne des lettres de relance pour documents administratifs manquants.', lastUpdated: new Date().toISOString() },
+
+  // Responsable du Matériel Informatique (Responsable IT)
+  { pageId: 'dashboard', pageLabel: 'Tableau de Bord', role: 'responsable_it', canView: true, canEdit: false, canDelete: false, mission: 'Suivi de l\'état d\'activité des serveurs de l\'école, des terminaux et de la bande passante (temps réel).', lastUpdated: new Date().toISOString() },
+  { pageId: 'document_generator', pageLabel: 'Générateur de Documents', role: 'responsable_it', canView: true, canEdit: true, canDelete: false, mission: 'Génération de fiches d\'inventaire matériel informatique d\'élèves et de professeurs.', lastUpdated: new Date().toISOString() }
 ];
 
 export default function RoleResponsibilities() {
@@ -138,7 +211,19 @@ export default function RoleResponsibilities() {
       // Offline fallback: load from standard localStorage with defaults
       const saved = localStorage.getItem('role_responsibilities_local');
       if (saved) {
-        setItems(JSON.parse(saved));
+        const loadedLocal = JSON.parse(saved) as ResponsibilityItem[];
+        const loadedIds = new Set(loadedLocal.map(item => item.id));
+        const missingDefaults = defaultResponsibilities
+          .map(r => ({ id: `${r.role}_${r.pageId}`, ...r } as ResponsibilityItem))
+          .filter(r => !loadedIds.has(r.id));
+        
+        if (missingDefaults.length > 0) {
+          const merged = [...loadedLocal, ...missingDefaults];
+          localStorage.setItem('role_responsibilities_local', JSON.stringify(merged));
+          setItems(merged);
+        } else {
+          setItems(loadedLocal);
+        }
       } else {
         const withIds = defaultResponsibilities.map(r => ({
           id: `${r.role}_${r.pageId}`,
@@ -152,29 +237,35 @@ export default function RoleResponsibilities() {
     }
 
     const unsubscribe = onSnapshot(collection(db, 'role_responsibilities'), async (snapshot) => {
-      if (snapshot.empty) {
-        // Bootstrap defaults to Firestore if collection does not exist or has 0 items
+      const loaded = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      } as ResponsibilityItem));
+
+      const loadedIds = new Set(loaded.map(item => item.id));
+      const missingDefaults = defaultResponsibilities.filter(r => !loadedIds.has(`${r.role}_${r.pageId}`));
+
+      if (missingDefaults.length > 0) {
+        // We have missing roles configurations, write them to Firestore
         try {
           const batch = writeBatch(db);
-          defaultResponsibilities.forEach(r => {
+          missingDefaults.forEach(r => {
             const id = `${r.role}_${r.pageId}`;
             const ref = doc(db, 'role_responsibilities', id);
             batch.set(ref, r);
           });
           await batch.commit();
         } catch (err) {
-          console.error("Bootstrapping permissions failed:", err);
+          console.error("Bootstrapping missing permissions failed:", err);
+          setItems(loaded);
+          setLoading(false);
         }
       } else {
-        const loaded = snapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        } as ResponsibilityItem));
         setItems(loaded);
         setLoading(false);
       }
     }, (error) => {
-      console.error(error);
+      console.error("Error watching role responsibilities:", error);
       setLoading(false);
     });
 
@@ -510,7 +601,7 @@ export default function RoleResponsibilities() {
                     <div className="flex-1 space-y-3 min-w-0">
                       <div className="flex items-center justify-between">
                         <span className="text-[10px] font-black uppercase tracking-wider text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/30 px-3 py-1 rounded-xl">
-                          {viewMode === 'by_role' ? item.pageLabel : `Role: ${item.role}`}
+                          {viewMode === 'by_role' ? item.pageLabel : `Rôle : ${systemRoles.find(r => r.id === item.role)?.label || item.role}`}
                         </span>
                         
                         <div className="flex items-center gap-1.5">
