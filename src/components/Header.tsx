@@ -4,7 +4,6 @@ import { useAuth } from '../contexts/AuthContext';
 import { useLanguage, Language } from '../contexts/LanguageContext';
 import { collection, query, where, orderBy, onSnapshot, updateDoc, doc, deleteDoc } from 'firebase/firestore';
 import { db, isFirebaseConfigured } from '../lib/firebase';
-import { usePWA } from '../hooks/usePWA';
 
 interface Notification {
   id: string;
@@ -26,7 +25,6 @@ interface HeaderProps {
 export default function Header({ activeTab, setActiveTab, onMenuClick }: HeaderProps) {
   const { currentUser } = useAuth();
   const { language, setLanguage, t } = useLanguage();
-  const { isStandalone } = usePWA();
   const [time, setTime] = useState(new Date());
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [showNotifications, setShowNotifications] = useState(false);
@@ -328,17 +326,6 @@ export default function Header({ activeTab, setActiveTab, onMenuClick }: HeaderP
             </div>
           )}
         </div>
-
-        {!isStandalone && (
-          <button 
-            onClick={() => window.dispatchEvent(new CustomEvent('open-pwa-install-guide'))}
-            className="flex items-center gap-1.5 px-3 py-2 bg-indigo-50 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 border border-indigo-100/40 dark:border-indigo-900/30 rounded-xl hover:bg-indigo-100 dark:hover:bg-indigo-900/50 hover:shadow-sm transition-all text-xs font-black shrink-0 cursor-pointer"
-            title="Installer Edu-Nify"
-          >
-            <Download size={15} className="animate-bounce shrink-0 text-indigo-600 dark:text-indigo-400" />
-            <span className="hidden sm:inline">Installer Edu-Nify</span>
-          </button>
-        )}
 
         <button 
           onClick={() => setActiveTab && setActiveTab('settings')}
