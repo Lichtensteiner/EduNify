@@ -2,9 +2,41 @@ import express from "express";
 import path from "path";
 import { fileURLToPath } from "url";
 import { createServer as createViteServer } from "vite";
+import { GoogleGenAI } from "@google/genai";
+import "dotenv/config";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+let genAI: GoogleGenAI | null = null;
+const getGeminiClient = () => {
+  if (!genAI) {
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      throw new Error("L'Assistant IA n'est pas encore configuré sur le serveur. Veuillez configurer la variable GEMINI_API_KEY.");
+    }
+    genAI = new GoogleGenAI({
+      apiKey,
+      httpOptions: {
+        headers: {
+          'User-Agent': 'aistudio-build',
+        }
+      }
+    });
+  }
+  return genAI;
+};
+
+function normalizeContents(contents: any) {
+  if (Array.isArray(contents)) return contents;
+  if (contents && contents.contents) {
+    return Array.isArray(contents.contents) ? contents.contents : [contents.contents];
+  }
+  if (contents && contents.parts) {
+    return [{ parts: contents.parts }];
+  }
+  return [contents];
+}
 
 async function startServer() {
   const app = express();
@@ -156,6 +188,46 @@ async function startServer() {
   // API routes go here FIRST
   app.get("/api/health", (req, res) => {
     res.json({ status: "ok" });
+  });
+
+  app.post("/api/gemini/generate", async (req, res) => {
+    try {
+      const { request } = req.body;
+      if (!request) {
+        return res.status(400).json({ error: "Requête manquante" });
+      }
+
+      const client = getGeminiClient();
+      const contents = normalizeContents(request.contents);
+      
+      let modelName = request.model || "gemini-3.5-flash";
+      if (modelName === "gemini-1.5-flash" || modelName === "gemini-1.5-pro" || modelName === "gemini-pro" || modelName === "gemini-3-flash-preview") {
+        modelName = "gemini-3.5-flash";
+      }
+
+      const result = await client.models.generateContent({
+        model: modelName,
+        contents,
+        config: request.config
+      });
+
+      if (!result.text) {
+        throw new Error("L'IA a retourné une réponse vide.");
+      }
+
+      return res.json({ text: result.text });
+    } catch (error: any) {
+      console.error("Server AI Service Error:", error);
+      let userMessage = error.message || "Erreur lors de la génération avec l'IA";
+      if (error.message?.includes("API_KEY_INVALID") || error.message?.includes("400")) {
+        userMessage = "Clé API Gemini invalide. Veuillez vérifier votre configuration dans Paramètres > Secrets.";
+      } else if (error.message?.includes("PERMISSION_DENIED") || error.message?.includes("403")) {
+        userMessage = "Accès refusé. Veuillez vérifier les permissions de votre clé API Gemini dans Paramètres > Secrets.";
+      } else if (error.message?.includes("RESOURCE_EXHAUSTED") || error.message?.includes("429")) {
+        userMessage = "Quota épuisé. Si vous utilisez le compte gratuit, attendez ou configurez une clé payante.";
+      }
+      return res.status(500).json({ error: userMessage });
+    }
   });
 
   // Vite middleware for development
