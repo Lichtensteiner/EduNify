@@ -47,6 +47,7 @@ import {
 } from 'recharts';
 
 import { usePWA } from '../hooks/usePWA';
+import { updateClientSideApiKey, generateAIContent } from '../services/aiService';
 
 export default function Settings() {
   const { theme, setTheme } = useTheme();
@@ -86,6 +87,50 @@ export default function Settings() {
   const [formCover, setFormCover] = useState(currentUser?.cover_photo || '');
   const [saving, setSaving] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
+
+  const [geminiKey, setGeminiKey] = useState(() => {
+    try {
+      return localStorage.getItem('GEMINI_API_KEY') || '';
+    } catch {
+      return '';
+    }
+  });
+  const [showGeminiKey, setShowGeminiKey] = useState(false);
+  const [testingAI, setTestingAI] = useState(false);
+  const [aiTestResult, setAiTestResult] = useState<{ status: 'idle' | 'success' | 'error'; message: string }>({ status: 'idle', message: '' });
+
+  const handleSaveAndTestAI = async () => {
+    setTestingAI(true);
+    setAiTestResult({ status: 'idle', message: '' });
+    try {
+      // 1. Save internally and clear memory cache
+      updateClientSideApiKey(geminiKey);
+      
+      // 2. Test direct generation
+      const res = await generateAIContent({
+        contents: [{ parts: [{ text: "Dis exactement le mot 'Succès' sans ponctuation." }] }]
+      });
+      
+      if (res && res.text) {
+        setAiTestResult({ 
+          status: 'success', 
+          message: `Connexion à l'IA établie avec succès ! (Réponse IA: "${res.text.trim()}")` 
+        });
+        addLog("Clé de l'Assistant IA mise à jour et testée avec succès", "system");
+      } else {
+        throw new Error("L'IA n'a retourné aucune réponse.");
+      }
+    } catch (err: any) {
+      console.error(err);
+      setAiTestResult({ 
+        status: 'error', 
+        message: err.message || "Échec de connexion : Vérifiez la validité de votre clé API Gemini." 
+      });
+      addLog("Échec de la configuration de l'Assistant IA", "system");
+    } finally {
+      setTestingAI(false);
+    }
+  };
 
   const isAdmin = currentUser?.role === 'admin';
 
@@ -677,6 +722,90 @@ export default function Settings() {
 
               {activeTab === 'system' && (
                 <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                  {/* Configuration Assistant IA Gemini */}
+                  <div className="bg-gradient-to-br from-indigo-50 to-indigo-100/50 dark:from-indigo-950/20 dark:to-indigo-900/10 p-6 sm:p-8 rounded-3xl border border-indigo-100/80 dark:border-indigo-900/50 space-y-6 relative overflow-hidden">
+                    <div className="absolute top-0 right-0 p-6 opacity-5 sm:opacity-10 pointer-events-none">
+                      <Cpu size={120} className="text-indigo-600 dark:text-indigo-400" />
+                    </div>
+                    
+                    <div className="relative z-10 max-w-3xl space-y-4">
+                      <div>
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest bg-indigo-600 text-white shadow-sm mb-3">
+                          <Cpu size={11} className="animate-spin-slow animate-pulse" /> Assistant Intelligent
+                        </span>
+                        <h4 className="text-xl font-black text-gray-900 dark:text-white">Configuration de l'Assistant IA (Gemini)</h4>
+                        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1 font-medium leading-relaxed">
+                          La clé API Gemini permet à l'application de générer des appréciations détaillées de bulletins scolaires via l'IA sur Vercel. 
+                          Insérez votre clé API ci-dessous pour qu'elle soit stockée de manière transparente et sécurisée dans votre navigateur.
+                        </p>
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className="text-xs font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest pl-1">Clé API Gemini</label>
+                        <div className="relative flex items-center">
+                          <input 
+                            type={showGeminiKey ? 'text' : 'password'}
+                            value={geminiKey}
+                            onChange={(e) => setGeminiKey(e.target.value)}
+                            placeholder="AIzaSy..."
+                            className="w-full pl-4 pr-32 py-3.5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-2xl text-sm font-mono focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all shadow-sm"
+                          />
+                          <div className="absolute right-2 flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setShowGeminiKey(!showGeminiKey)}
+                              className="text-xs font-bold text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 px-3 py-1.5 rounded-lg transition-colors"
+                            >
+                              {showGeminiKey ? 'Masquer' : 'Afficher'}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={handleSaveAndTestAI}
+                              disabled={testingAI}
+                              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white font-bold text-xs rounded-xl transition-all shadow-md shadow-indigo-100 dark:shadow-none flex items-center gap-1.5"
+                            >
+                              {testingAI ? (
+                                <RefreshCw size={12} className="animate-spin" />
+                              ) : null}
+                              {testingAI ? 'Test...' : 'Enregistrer'}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+
+                      {aiTestResult.status !== 'idle' && (
+                        <motion.div 
+                          initial={{ opacity: 0, y: 5 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          className={`p-4 rounded-2xl border flex items-start gap-3 text-xs font-bold ${
+                            aiTestResult.status === 'success' 
+                              ? 'border-emerald-100 bg-emerald-50 text-emerald-800 dark:border-emerald-900/30 dark:bg-emerald-950/10 dark:text-emerald-400' 
+                              : 'border-red-100 bg-red-50 text-red-800 dark:border-red-900/30 dark:bg-red-950/10 dark:text-red-400'
+                          }`}
+                        >
+                          <div className="mt-0.5 shrink-0">
+                            {aiTestResult.status === 'success' ? (
+                              <CheckCircle2 size={16} className="text-emerald-500" />
+                            ) : (
+                              <AlertCircle size={16} className="text-red-500" />
+                            )}
+                          </div>
+                          <div>
+                            <p className="font-extrabold uppercase text-[10px] tracking-wider mb-0.5">
+                              {aiTestResult.status === 'success' ? 'Vérification réussie ✓' : 'Échec de la configuration'}
+                            </p>
+                            <p className="font-medium leading-relaxed">{aiTestResult.message}</p>
+                          </div>
+                        </motion.div>
+                      )}
+
+                      <div className="pt-2 flex items-center gap-2 text-xs font-medium text-gray-400">
+                        <AlertCircle size={14} className="text-indigo-400" />
+                        <span>Comment obtenir une clé ? Rendez-vous sur <a href="https://aistudio.google.com/" target="_blank" rel="noopener noreferrer" className="text-indigo-600 dark:text-indigo-400 hover:underline font-bold">Google AI Studio</a> pour créer une clé API gratuite.</span>
+                      </div>
+                    </div>
+                  </div>
+
                   <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                     <div>
                       <h3 className="text-2xl font-black text-gray-900 dark:text-white flex items-center gap-3">

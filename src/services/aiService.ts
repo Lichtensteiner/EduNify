@@ -9,6 +9,20 @@ export interface AIRequest {
 // Lazy initialization of GoogleGenAI for client-side fallback
 let genAI: GoogleGenAI | null = null;
 
+export const updateClientSideApiKey = (key: string) => {
+  try {
+    if (key) {
+      localStorage.setItem("GEMINI_API_KEY", key);
+    } else {
+      localStorage.removeItem("GEMINI_API_KEY");
+    }
+  } catch (e) {
+    console.error("Failed to update localStorage", e);
+  }
+  // Clear cached instance to trigger re-creation with the new key
+  genAI = null;
+};
+
 const getClientSideApiKey = (): string | null => {
   // 1. Try Vite env first
   if (typeof import.meta !== "undefined" && import.meta.env && import.meta.env.VITE_GEMINI_API_KEY) {
