@@ -104,16 +104,93 @@ export default function Classes() {
     e.preventDefault();
     setActionLoading(true);
     try {
+      const prevName = selectedClass?.nom || '';
+      const newName = formData.nom;
+      
+      const prevPrincipalId = selectedClass?.professeur_principal_id || '';
+      const newPrincipalId = formData.professeur_principal_id;
+      
+      const prevEnseignantsIds = selectedClass?.enseignants_ids || [];
+      const newEnseignantsIds = formData.enseignants_ids || [];
+
       if (modalMode === 'create') {
-        await addDoc(collection(db, 'classes'), {
+        const docRef = await addDoc(collection(db, 'classes'), {
           ...formData,
           timestamp: new Date().toISOString()
         });
+        
+        // SYNC: Update teachers' profiles to include this class name
+        const assignedTeacherIds = new Set<string>([
+          ...(newPrincipalId ? [newPrincipalId] : []),
+          ...newEnseignantsIds
+        ]);
+        
+        for (const tId of assignedTeacherIds) {
+          const tDoc = teachers.find(t => t.id === tId);
+          if (tDoc) {
+            const currentClasses = Array.isArray(tDoc.classes) ? [...tDoc.classes] : [];
+            if (!currentClasses.includes(newName)) {
+              await updateDoc(doc(db, 'users', tId), {
+                classes: [...currentClasses, newName]
+              });
+            }
+          }
+        }
       } else if (modalMode === 'edit' && selectedClass) {
         await updateDoc(doc(db, 'classes', selectedClass.id), {
           ...formData,
           updatedAt: new Date().toISOString()
         });
+
+        // SYNC: Keep all teachers' classes arrays in sync
+        const assignedTeacherIds = new Set<string>([
+          ...(newPrincipalId ? [newPrincipalId] : []),
+          ...newEnseignantsIds
+        ]);
+
+        const oldTeacherIds = new Set<string>([
+          ...(prevPrincipalId ? [prevPrincipalId] : []),
+          ...prevEnseignantsIds
+        ]);
+
+        const allConcernedTeacherIds = new Set([...assignedTeacherIds, ...oldTeacherIds]);
+
+        for (const tId of allConcernedTeacherIds) {
+          const tDoc = teachers.find(t => t.id === tId);
+          if (tDoc) {
+            let currentClasses = Array.isArray(tDoc.classes) ? [...tDoc.classes] : [];
+            const isCurrentlyAssigned = assignedTeacherIds.has(tId);
+
+            let updatedClasses = [...currentClasses];
+            let countChanged = false;
+
+            if (isCurrentlyAssigned) {
+              if (prevName && prevName !== newName) {
+                updatedClasses = updatedClasses.filter(c => c !== prevName);
+                countChanged = true;
+              }
+              if (!updatedClasses.includes(newName)) {
+                updatedClasses.push(newName);
+                countChanged = true;
+              }
+            } else {
+              if (prevName && updatedClasses.includes(prevName)) {
+                updatedClasses = updatedClasses.filter(c => c !== prevName);
+                countChanged = true;
+              }
+              if (updatedClasses.includes(newName)) {
+                updatedClasses = updatedClasses.filter(c => c !== newName);
+                countChanged = true;
+              }
+            }
+
+            if (countChanged) {
+              await updateDoc(doc(db, 'users', tId), {
+                classes: updatedClasses
+              });
+            }
+          }
+        }
       }
       closeModal();
     } catch (error) {
@@ -128,7 +205,20 @@ export default function Classes() {
     e.stopPropagation();
     if (window.confirm("Êtes-vous sûr de vouloir supprimer cette classe ?")) {
       try {
+        const classItem = classes.find(c => c.id === id);
         await deleteDoc(doc(db, 'classes', id));
+
+        // SYNC: Remove class name from teacher classes profiles
+        if (classItem && classItem.nom) {
+          for (const t of teachers) {
+            if (t.classes && Array.isArray(t.classes) && t.classes.includes(classItem.nom)) {
+              const updated = t.classes.filter((c: string) => c !== classItem.nom);
+              await updateDoc(doc(db, 'users', t.id), {
+                classes: updated
+              });
+            }
+          }
+        }
       } catch (error) {
         console.error("Erreur lors de la suppression:", error);
       }
@@ -149,18 +239,40 @@ export default function Classes() {
   const handleQuickAssignTeacher = async (classId: string, teacherId: string) => {
     if (!teacherId || !classId) return;
     try {
+      const classItem = classes.find(c => c.id === classId);
+      if (!classItem) return;
+
+      const prevPrincipalId = classItem.professeur_principal_id;
+
       await updateDoc(doc(db, 'classes', classId), { 
         professeur_principal_id: teacherId,
         updatedAt: new Date().toISOString()
       });
       
-      // Optionally also update the teacher's record to link them to this class
-      const classItem = classes.find(c => c.id === classId);
-      if (classItem) {
+      // Sync new principal teacher
+      const newTeacher = teachers.find(t => t.id === teacherId);
+      if (newTeacher) {
+        let currentClasses = Array.isArray(newTeacher.classes) ? [...newTeacher.classes] : [];
+        if (!currentClasses.includes(classItem.nom)) {
+          currentClasses.push(classItem.nom);
+        }
         await updateDoc(doc(db, 'users', teacherId), {
           classe: classItem.nom,
-          // If they have multiple classes, we might want to append, but usually a "principal" is for one.
+          classes: currentClasses
         });
+      }
+
+      // Sync previous principal teacher if changed and not assigned as regular teacher
+      if (prevPrincipalId && prevPrincipalId !== teacherId) {
+        const prevTeacher = teachers.find(t => t.id === prevPrincipalId);
+        const isStillRegularTeacher = classItem.enseignants_ids && classItem.enseignants_ids.includes(prevPrincipalId);
+        if (prevTeacher && !isStillRegularTeacher) {
+          let currentClasses = Array.isArray(prevTeacher.classes) ? [...prevTeacher.classes] : [];
+          currentClasses = currentClasses.filter((c: string) => c !== classItem.nom);
+          await updateDoc(doc(db, 'users', prevPrincipalId), {
+            classes: currentClasses
+          });
+        }
       }
     } catch (err) {
       console.error("Error assigned principal teacher:", err);
@@ -263,7 +375,18 @@ export default function Classes() {
                   <div className="space-y-3">
                     <div className="flex items-center gap-3 text-sm text-gray-600">
                       <GraduationCap size={16} className="text-gray-400" />
-                      <span><span className="font-medium text-gray-900">{(cls.enseignants_ids?.length || 0) + (cls.professeur_principal_id ? 1 : 0)}</span> enseignants assignés</span>
+                      <span><span className="font-medium text-gray-900">{
+                        (() => {
+                          const uniqueIds = new Set<string>();
+                          if (cls.professeur_principal_id) {
+                            uniqueIds.add(cls.professeur_principal_id);
+                          }
+                          if (cls.enseignants_ids && Array.isArray(cls.enseignants_ids)) {
+                            cls.enseignants_ids.forEach((id: string) => uniqueIds.add(id));
+                          }
+                          return uniqueIds.size;
+                        })()
+                      }</span> enseignants assignés</span>
                     </div>
                     <div className="flex items-center gap-3 text-sm text-gray-600">
                       <Users size={16} className="text-gray-400" />

@@ -186,8 +186,7 @@ export default function ClassDetailsView({ classId, className, onClose }: ClassD
         const allTeachers = teachersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as any[];
         
         const filtered = allTeachers.filter(t => 
-          teacherIds.includes(t.id) || 
-          (t.classes && Array.isArray(t.classes) && t.classes.includes(classData.nom))
+          teacherIds.includes(t.id)
         );
         
         setClassTeachers(filtered);
