@@ -209,7 +209,7 @@ export default function Sidebar({ activeTab, setActiveTab, isMobileOpen, setIsMo
               )}
               <div className="min-w-0">
                 <p className="text-sm font-bold text-gray-900 dark:text-white truncate">
-                  {currentUser.prenom || currentUser.nom ? `${currentUser.prenom || ''} ${currentUser.nom || ''}`.trim() : currentUser.email.split('@')[0]}
+                  {currentUser.prenom || currentUser.nom ? `${currentUser.prenom || ''} ${currentUser.nom || ''}`.trim() : currentUser.email?.split('@')[0] || 'Utilisateur'}
                 </p>
                 <p className="text-xs text-gray-500 dark:text-gray-400 capitalize truncate">{tData(currentUser.role)}</p>
               </div>
