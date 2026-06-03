@@ -723,88 +723,118 @@ export default function Settings() {
               {activeTab === 'system' && (
                 <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
                   {/* Configuration Assistant IA Gemini */}
-                  <div className="bg-gradient-to-br from-indigo-50 to-indigo-100/50 dark:from-indigo-950/20 dark:to-indigo-900/10 p-6 sm:p-8 rounded-3xl border border-indigo-100/80 dark:border-indigo-900/50 space-y-6 relative overflow-hidden">
-                    <div className="absolute top-0 right-0 p-6 opacity-5 sm:opacity-10 pointer-events-none">
-                      <Cpu size={120} className="text-indigo-600 dark:text-indigo-400" />
-                    </div>
-                    
-                    <div className="relative z-10 max-w-3xl space-y-4">
-                      <div>
-                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest bg-indigo-600 text-white shadow-sm mb-3">
-                          <Cpu size={11} className="animate-spin-slow animate-pulse" /> Assistant Intelligent
-                        </span>
-                        <h4 className="text-xl font-black text-gray-900 dark:text-white">Configuration de l'Assistant IA (Gemini)</h4>
-                        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1 font-medium leading-relaxed">
-                          La clé API Gemini permet à l'application de générer des appréciations détaillées de bulletins scolaires via l'IA sur Vercel. 
-                          Insérez votre clé API ci-dessous pour qu'elle soit stockée de manière transparente et sécurisée dans votre navigateur.
-                        </p>
+                  {isAdmin && (
+                    <div className="bg-gradient-to-br from-indigo-50 to-indigo-100/50 dark:from-indigo-950/20 dark:to-indigo-900/10 p-6 sm:p-8 rounded-3xl border border-indigo-100/80 dark:border-indigo-900/50 space-y-6 relative overflow-hidden">
+                      <div className="absolute top-0 right-0 p-6 opacity-5 sm:opacity-10 pointer-events-none">
+                        <Cpu size={120} className="text-indigo-600 dark:text-indigo-400" />
                       </div>
+                      
+                      <div className="relative z-10 max-w-3xl space-y-4">
+                        <div>
+                          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest bg-indigo-600 text-white shadow-sm mb-3">
+                            <Cpu size={11} className="animate-spin-slow animate-pulse" /> Assistant Intelligent
+                          </span>
+                          <h4 className="text-xl font-black text-gray-900 dark:text-white">Configuration de l'Assistant IA (Gemini)</h4>
+                          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1 font-medium leading-relaxed">
+                            La clé API Gemini permet à l'application de générer des appréciations détaillées de bulletins scolaires via l'IA sur Vercel. 
+                            Insérez votre clé API ci-dessous pour qu'elle soit stockée de manière transparente et sécurisée dans votre navigateur.
+                          </p>
+                        </div>
 
-                      <div className="space-y-2">
-                        <label className="text-xs font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest pl-1">Clé API Gemini</label>
-                        <div className="relative flex items-center">
-                          <input 
-                            type={showGeminiKey ? 'text' : 'password'}
-                            value={geminiKey}
-                            onChange={(e) => setGeminiKey(e.target.value)}
-                            placeholder="AIzaSy..."
-                            className="w-full pl-4 pr-32 py-3.5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-2xl text-sm font-mono focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all shadow-sm"
-                          />
-                          <div className="absolute right-2 flex items-center gap-2">
-                            <button
-                              type="button"
-                              onClick={() => setShowGeminiKey(!showGeminiKey)}
-                              className="text-xs font-bold text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 px-3 py-1.5 rounded-lg transition-colors"
-                            >
-                              {showGeminiKey ? 'Masquer' : 'Afficher'}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={handleSaveAndTestAI}
-                              disabled={testingAI}
-                              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white font-bold text-xs rounded-xl transition-all shadow-md shadow-indigo-100 dark:shadow-none flex items-center gap-1.5"
-                            >
-                              {testingAI ? (
-                                <RefreshCw size={12} className="animate-spin" />
-                              ) : null}
-                              {testingAI ? 'Test...' : 'Enregistrer'}
-                            </button>
+                        <div className="space-y-2">
+                          <label className="text-xs font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest pl-1">Clé API Gemini</label>
+                          <div className="relative flex items-center">
+                            <input 
+                              type={showGeminiKey ? 'text' : 'password'}
+                              value={geminiKey}
+                              onChange={(e) => setGeminiKey(e.target.value)}
+                              placeholder="AIzaSy..."
+                              className="w-full pl-4 pr-32 py-3.5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-2xl text-sm font-mono focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all shadow-sm"
+                            />
+                            <div className="absolute right-2 flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => setShowGeminiKey(!showGeminiKey)}
+                                className="text-xs font-bold text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 px-3 py-1.5 rounded-lg transition-colors"
+                              >
+                                {showGeminiKey ? 'Masquer' : 'Afficher'}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={handleSaveAndTestAI}
+                                disabled={testingAI}
+                                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white font-bold text-xs rounded-xl transition-all shadow-md shadow-indigo-100 dark:shadow-none flex items-center gap-1.5"
+                              >
+                                {testingAI ? (
+                                  <RefreshCw size={12} className="animate-spin" />
+                                ) : null}
+                                {testingAI ? 'Test...' : 'Enregistrer'}
+                              </button>
+                            </div>
                           </div>
                         </div>
-                      </div>
 
-                      {aiTestResult.status !== 'idle' && (
-                        <motion.div 
-                          initial={{ opacity: 0, y: 5 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          className={`p-4 rounded-2xl border flex items-start gap-3 text-xs font-bold ${
-                            aiTestResult.status === 'success' 
-                              ? 'border-emerald-100 bg-emerald-50 text-emerald-800 dark:border-emerald-900/30 dark:bg-emerald-950/10 dark:text-emerald-400' 
-                              : 'border-red-100 bg-red-50 text-red-800 dark:border-red-900/30 dark:bg-red-950/10 dark:text-red-400'
-                          }`}
-                        >
-                          <div className="mt-0.5 shrink-0">
-                            {aiTestResult.status === 'success' ? (
-                              <CheckCircle2 size={16} className="text-emerald-500" />
-                            ) : (
-                              <AlertCircle size={16} className="text-red-500" />
+                        {aiTestResult.status !== 'idle' && (
+                          <div className="space-y-4">
+                            <motion.div 
+                              initial={{ opacity: 0, y: 5 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              className={`p-4 rounded-2xl border flex items-start gap-3 text-xs font-bold ${
+                                aiTestResult.status === 'success' 
+                                  ? 'border-emerald-100 bg-emerald-50 text-emerald-800 dark:border-emerald-900/30 dark:bg-emerald-950/10 dark:text-emerald-400' 
+                                  : 'border-red-100 bg-red-50 text-red-800 dark:border-red-900/30 dark:bg-red-950/10 dark:text-red-400'
+                              }`}
+                            >
+                              <div className="mt-0.5 shrink-0">
+                                {aiTestResult.status === 'success' ? (
+                                  <CheckCircle2 size={16} className="text-emerald-500" />
+                                ) : (
+                                  <AlertCircle size={16} className="text-red-500" />
+                                )}
+                              </div>
+                              <div>
+                                <p className="font-extrabold uppercase text-[10px] tracking-wider mb-0.5">
+                                  {aiTestResult.status === 'success' ? 'Vérification réussie ✓' : 'Échec de la configuration'}
+                                </p>
+                                <p className="font-medium leading-relaxed">{aiTestResult.message}</p>
+                              </div>
+                            </motion.div>
+
+                            {aiTestResult.status === 'error' && (
+                              <motion.div 
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                className="p-5 bg-amber-50/50 dark:bg-amber-950/10 border border-amber-100 dark:border-amber-900/40 rounded-2xl text-xs text-amber-900 dark:text-amber-300 space-y-3"
+                              >
+                                <p className="font-black uppercase tracking-wider text-[10px] text-amber-700 dark:text-amber-400 flex items-center gap-1.5">
+                                  <AlertCircle size={13} /> Résoudre l'erreur d'Accès Refusé (Permission Denied) :
+                                </p>
+                                <ul className="list-decimal list-inside space-y-2 font-medium leading-relaxed">
+                                  <li>
+                                    <span className="font-bold">Créer une clé via Google AI Studio (Recommandé & Rapide)</span> : 
+                                    Rendez-vous sur <a href="https://aistudio.google.com/" target="_blank" rel="noopener noreferrer" className="underline font-bold text-indigo-600 dark:text-indigo-400">Google AI Studio</a>, cliquez sur <span className="font-bold">Get API Key</span> puis créez une nouvelle clé. Ces clés gratuites ont toutes les permissions de Gemini pré-activées d'office !
+                                  </li>
+                                  <li>
+                                    <span className="font-bold">Activer l'API (Si la clé vient de Google Cloud Console)</span> : 
+                                    Allez sur votre console Google Cloud, sélectionnez votre projet, recherchez l'API nommée <span className="font-mono bg-white dark:bg-gray-900 px-1 py-0.5 rounded border">Generative Language API</span>, et cliquez sur <span className="font-bold">Activer</span>.
+                                  </li>
+                                  <li>
+                                    <span className="font-bold">Vérifier les restrictions de clé</span> : 
+                                    Dans Google Cloud Console &gt; <span className="font-bold font-mono">Identifiants</span>, cliquez sur votre clé API. Si vous avez défini des restrictions d'API, assurez-vous d'ajouter <span className="font-bold">Generative Language API</span> à la liste des API autorisées.
+                                  </li>
+                                </ul>
+                              </motion.div>
                             )}
                           </div>
-                          <div>
-                            <p className="font-extrabold uppercase text-[10px] tracking-wider mb-0.5">
-                              {aiTestResult.status === 'success' ? 'Vérification réussie ✓' : 'Échec de la configuration'}
-                            </p>
-                            <p className="font-medium leading-relaxed">{aiTestResult.message}</p>
-                          </div>
-                        </motion.div>
-                      )}
+                        )}
 
-                      <div className="pt-2 flex items-center gap-2 text-xs font-medium text-gray-400">
-                        <AlertCircle size={14} className="text-indigo-400" />
-                        <span>Comment obtenir une clé ? Rendez-vous sur <a href="https://aistudio.google.com/" target="_blank" rel="noopener noreferrer" className="text-indigo-600 dark:text-indigo-400 hover:underline font-bold">Google AI Studio</a> pour créer une clé API gratuite.</span>
+                        <div className="pt-2 flex items-center gap-2 text-xs font-medium text-gray-400">
+                          <AlertCircle size={14} className="text-indigo-400" />
+                          <span>Comment obtenir une clé ? Rendez-vous sur <a href="https://aistudio.google.com/" target="_blank" rel="noopener noreferrer" className="text-indigo-600 dark:text-indigo-400 hover:underline font-bold">Google AI Studio</a> pour créer une clé API gratuite.</span>
+                        </div>
                       </div>
                     </div>
-                  </div>
+                  )}
 
                   <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                     <div>

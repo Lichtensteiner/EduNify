@@ -169,9 +169,9 @@ const LudoAIPlus: React.FC = () => {
 
       const result = JSON.parse(response.text || '{}') as AnalysisResult;
       setAnalysis(result);
-    } catch (err) {
+    } catch (err: any) {
       console.error("AI Analysis Error:", err);
-      setError("Ludo AI+ a rencontré une erreur lors de l'analyse de vos performances.");
+      setError(`Ludo AI+ a rencontré une erreur lors de l'analyse : ${err?.message || "Erreur de connexion"}`);
     } finally {
       setAnalyzing(false);
     }

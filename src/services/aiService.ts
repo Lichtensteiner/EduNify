@@ -100,17 +100,45 @@ export const generateAIContent = async (request: AIRequest): Promise<{ text: str
       modelName = "gemini-3.5-flash";
     }
 
-    const response = await client.models.generateContent({
-      model: modelName,
-      contents,
-      config: request.config
-    });
+    const fallbackChain = [modelName];
+    if (modelName === "gemini-3.5-flash") {
+      fallbackChain.push("gemini-3.1-flash-lite", "gemini-flash-latest");
+    }
 
-    if (!response.text) {
+    let result = null;
+    let lastError: any = null;
+
+    for (const modelToTry of fallbackChain) {
+      try {
+        console.log(`[aiService/Client] Trying model: ${modelToTry}`);
+        const response = await client.models.generateContent({
+          model: modelToTry,
+          contents,
+          config: request.config
+        });
+        if (response && response.text) {
+          result = response;
+          break;
+        }
+      } catch (err: any) {
+        console.warn(`[aiService/Client] Model ${modelToTry} failed:`, err.message || err);
+        lastError = err;
+        const errMsg = String(err.message || "");
+        if (errMsg.includes("API_KEY_INVALID") || errMsg.includes("400") || errMsg.includes("PERMISSION_DENIED") || errMsg.includes("403")) {
+          break;
+        }
+      }
+    }
+
+    if (!result && lastError) {
+      throw lastError;
+    }
+
+    if (!result || !result.text) {
       throw new Error("L'IA a retourné une réponse vide.");
     }
 
-    return { text: response.text };
+    return { text: result.text };
   } catch (error: any) {
     console.error("AI Client Service Error:", error);
     
