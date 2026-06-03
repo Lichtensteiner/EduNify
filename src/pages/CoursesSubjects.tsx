@@ -22,7 +22,8 @@ import {
   Plus, 
   Paperclip, 
   Download, 
-  RefreshCw 
+  RefreshCw,
+  Check
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useNotification } from '../contexts/NotificationContext';
@@ -64,6 +65,10 @@ export default function CoursesSubjects({ initialPrepId }: CoursesSubjectsProps)
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [uploadedUrl, setUploadedUrl] = useState<string>('');
+  const [uploadedName, setUploadedName] = useState<string>('');
+  const [savingCourse, setSavingCourse] = useState(false);
+  const [allDbClasses, setAllDbClasses] = useState<any[]>([]);
   const [newCourse, setNewCourse] = useState({
     topic: '',
     subject: '',
@@ -84,6 +89,20 @@ export default function CoursesSubjects({ initialPrepId }: CoursesSubjectsProps)
       }
     }
   }, [initialPrepId, preparations]);
+
+  useEffect(() => {
+    // Dynamic fetch of all registered classes in the database
+    const q = query(collection(db, 'classes'));
+    const unsubscribe = onSnapshot(q, (snap) => {
+      const loadedClasses = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      // Sort classes alphabetically by name
+      loadedClasses.sort((a: any, b: any) => (a.nom || '').localeCompare(b.nom || ''));
+      setAllDbClasses(loadedClasses);
+    }, (error) => {
+      console.error("Error loading all db classes:", error);
+    });
+    return () => unsubscribe();
+  }, []);
 
   useEffect(() => {
     if (!currentUser) return;
@@ -363,6 +382,50 @@ export default function CoursesSubjects({ initialPrepId }: CoursesSubjectsProps)
     }
   };
 
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files ? e.target.files[0] : null;
+    if (!file) return;
+
+    setUploading(true);
+    setUploadProgress(0);
+    setSelectedFile(file);
+    setUploadedUrl('');
+    setUploadedName('');
+
+    try {
+      const fileRef = ref(storage, `courses/${Date.now()}_${file.name}`);
+      const { uploadBytesResumable } = await import('firebase/storage');
+      const uploadTask = uploadBytesResumable(fileRef, file);
+
+      uploadTask.on('state_changed',
+        (snapshot) => {
+          const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+          setUploadProgress(Math.round(progress));
+        },
+        (error) => {
+          console.error("Error uploading file:", error);
+          notifyError(`Erreur de téléversement : ${error.message}`);
+          setUploading(false);
+          setUploadProgress(null);
+          setSelectedFile(null);
+        },
+        async () => {
+          const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+          setUploadedUrl(downloadURL);
+          setUploadedName(file.name);
+          setUploadProgress(100);
+          setUploading(false);
+          notifySuccess("Fichier joint et prêt à 100% !");
+        }
+      );
+    } catch (error: any) {
+      console.error("Error initiating file upload:", error);
+      notifyError("Une erreur est survenue lors de l'importation.");
+      setUploading(false);
+      setUploadProgress(null);
+    }
+  };
+
   const handleCreateCourse = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!currentUser) return;
@@ -371,52 +434,20 @@ export default function CoursesSubjects({ initialPrepId }: CoursesSubjectsProps)
       return;
     }
 
-    setUploading(true);
-    setUploadProgress(10);
+    if (uploading) {
+      notifyError("Veuillez attendre que le téléversement du fichier soit terminé.");
+      return;
+    }
+
+    setSavingCourse(true);
     try {
       let fileData = {};
-      if (selectedFile) {
-        const fileRef = ref(storage, `courses/${Date.now()}_${selectedFile.name}`);
-        
-        // Optimization: Use uploadBytes for files < 5MB
-        if (selectedFile.size < 5 * 1024 * 1024) {
-          const progressInterval = setInterval(() => {
-            setUploadProgress(prev => (prev !== null && prev < 90) ? prev + 15 : prev);
-          }, 400);
-
-          try {
-            await uploadBytes(fileRef, selectedFile);
-            clearInterval(progressInterval);
-            setUploadProgress(95);
-            const url = await getDownloadURL(fileRef);
-            fileData = { fileUrl: url, fileName: selectedFile.name };
-          } catch (error) {
-            clearInterval(progressInterval);
-            throw error;
-          }
-        } else {
-          const { uploadBytesResumable } = await import('firebase/storage');
-          const uploadTask = uploadBytesResumable(fileRef, selectedFile);
-          
-          const url = await new Promise<string>((resolve, reject) => {
-            uploadTask.on('state_changed',
-              (snapshot) => {
-                const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 90;
-                setUploadProgress(10 + progress);
-              },
-              (error) => reject(error),
-              async () => {
-                const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
-                resolve(downloadURL);
-              }
-            );
-          });
-
-          fileData = { fileUrl: url, fileName: selectedFile.name };
-        }
+      if (uploadedUrl && uploadedName) {
+        fileData = { 
+          fileUrl: uploadedUrl, 
+          fileName: uploadedName 
+        };
       }
-
-      setUploadProgress(95);
 
       await addDoc(collection(db, 'preparations'), {
         ...newCourse,
@@ -436,21 +467,19 @@ export default function CoursesSubjects({ initialPrepId }: CoursesSubjectsProps)
       });
 
       notifyAdd(`Le cours ${newCourse.topic}`);
-      setUploadProgress(100);
 
-      setTimeout(() => {
-        setShowAddModal(false);
-        setNewCourse({ topic: '', subject: '', grade: '', content: '', type: 'course' });
-        setSelectedFile(null);
-        setUploadProgress(null);
-        setUploading(false);
-      }, 500);
+      // Reset modal and inputs
+      setShowAddModal(false);
+      setNewCourse({ topic: '', subject: '', grade: '', content: '', type: 'course' });
+      setSelectedFile(null);
+      setUploadProgress(null);
+      setUploadedUrl('');
+      setUploadedName('');
     } catch (error) {
       console.error("Error adding course:", error);
       notifyError("Erreur lors de l'ajout du cours.");
     } finally {
-      setUploading(false);
-      setUploadProgress(null);
+      setSavingCourse(false);
     }
   };
   
@@ -1255,30 +1284,35 @@ export default function CoursesSubjects({ initialPrepId }: CoursesSubjectsProps)
 
       {/* Add Course Modal */}
       {showAddModal && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[70] flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-gray-800 rounded-3xl shadow-xl w-full max-w-xl animate-in fade-in zoom-in-95 duration-200 overflow-hidden">
-            <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center bg-gray-50/50 dark:bg-gray-800/50">
-              <h2 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                <Plus className="text-indigo-600" size={24} />
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[70] flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white dark:bg-gray-800 rounded-3xl shadow-2xl w-full max-w-xl mx-auto my-8 animate-in fade-in zoom-in-95 duration-200 overflow-hidden flex flex-col max-h-[calc(100vh-4rem)] border border-gray-100 dark:border-gray-700">
+            <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center bg-gray-50/50 dark:bg-gray-800/50 sticky top-0 z-10 shrink-0">
+              <h2 className="text-xl font-extrabold text-gray-900 dark:text-white flex items-center gap-2 font-sans tracking-tight">
+                <Plus className="text-indigo-600 dark:text-indigo-400" size={24} />
                 Nouveau cours
               </h2>
               <button 
-                onClick={() => setShowAddModal(false)}
-                className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                onClick={() => {
+                  if (uploading) {
+                    if (!window.confirm("Un téléversement est en cours. Voulez-vous vraiment annuler ?")) return;
+                  }
+                  setShowAddModal(false);
+                }}
+                className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition"
               >
-                <X size={24} />
+                <X size={20} />
               </button>
             </div>
             
-            <form onSubmit={handleCreateCourse} className="p-6 space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+            <form onSubmit={handleCreateCourse} className="p-6 space-y-4 overflow-y-auto flex-1">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Matière</label>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-1.5">Matière</label>
                   <select
                     required
                     value={newCourse.subject}
                     onChange={(e) => setNewCourse({ ...newCourse, subject: e.target.value })}
-                    className="w-full px-4 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 appearance-none cursor-pointer"
+                    className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-750 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 text-sm font-semibold text-gray-800 dark:text-gray-250 appearance-none cursor-pointer shadow-sm"
                   >
                     <option value="">Sélectionner une matière</option>
                     {(subjects.length > 0 ? subjects.map(s => s.name) : SCHOOL_SUBJECTS).map(subj => (
@@ -1287,100 +1321,147 @@ export default function CoursesSubjects({ initialPrepId }: CoursesSubjectsProps)
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Classe / Niveau</label>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-1.5">Classe / Niveau</label>
                   <select
                     required
                     value={newCourse.grade}
                     onChange={(e) => setNewCourse({ ...newCourse, grade: e.target.value })}
-                    className="w-full px-4 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 appearance-none cursor-pointer"
+                    className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-750 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 text-sm font-semibold text-gray-800 dark:text-gray-250 appearance-none cursor-pointer shadow-sm"
                   >
                     <option value="">Sélectionner une classe</option>
-                    {SCHOOL_CLASSES.map(cls => (
-                      <option key={cls} value={cls}>{cls}</option>
+                    {(allDbClasses.length > 0 ? allDbClasses.map(c => c.nom) : SCHOOL_CLASSES).map(clsNom => (
+                      <option key={clsNom} value={clsNom}>{clsNom}</option>
                     ))}
                   </select>
                 </div>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Sujet du cours</label>
+                <label className="block text-xs font-bold uppercase tracking-wider text-gray-505 dark:text-gray-400 mb-1.5">Sujet du cours / Titre</label>
                 <input
                   type="text"
                   required
                   value={newCourse.topic}
                   onChange={(e) => setNewCourse({ ...newCourse, topic: e.target.value })}
-                  placeholder="Ex: Les fractions"
-                  className="w-full px-4 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500"
+                  placeholder="Ex: Les fractions ou La Révolution Française"
+                  className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-750 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 text-sm font-medium text-gray-850 dark:text-white"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Description (Optionnel)</label>
+                <label className="block text-xs font-bold uppercase tracking-wider text-gray-505 dark:text-gray-400 mb-1.5">Description / Contenu textuel</label>
                 <textarea
                   value={newCourse.content}
                   onChange={(e) => setNewCourse({ ...newCourse, content: e.target.value })}
-                  placeholder="Contenu textuel du cours..."
-                  className="w-full h-32 px-4 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
+                  placeholder="Écrivez ou collez les instructions, le résumé ou le contenu textuel du cours..."
+                  className="w-full h-28 px-4 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-750 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 text-sm resize-none"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Document de cours (PDF/Image)</label>
+                <label className="block text-xs font-bold uppercase tracking-wider text-gray-505 dark:text-gray-400 mb-1.5">Document de cours (PDF / Image)</label>
+                
+                {/* File input and interactive label */}
                 <div className="relative">
                   <input
                     type="file"
                     id="course-file"
                     className="hidden"
-                    onChange={(e) => setSelectedFile(e.target.files ? e.target.files[0] : null)}
+                    onChange={handleFileChange}
                     accept=".pdf,image/*"
+                    disabled={uploading}
                   />
                   <label 
                     htmlFor="course-file"
-                    className="flex items-center justify-between w-full px-4 py-3 bg-gray-50 dark:bg-gray-700 border-2 border-dashed border-gray-200 dark:border-gray-600 rounded-xl cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 transition-all"
+                    className={`flex flex-col items-center justify-center w-full px-6 py-6 border-2 border-dashed rounded-2xl cursor-pointer transition-all ${
+                      uploading 
+                        ? 'bg-gray-50/50 dark:bg-gray-900/10 border-indigo-200 dark:border-indigo-900/30 cursor-not-allowed opacity-70' 
+                        : 'bg-gray-50 dark:bg-gray-900/30 border-gray-200 dark:border-gray-700 hover:border-indigo-400 dark:hover:border-indigo-500 hover:bg-gray-100/50 dark:hover:bg-gray-900/50'
+                    }`}
                   >
-                    <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
-                      <Paperclip size={18} />
-                      <span className="font-medium">{selectedFile ? selectedFile.name : "Cliquez pour joindre un fichier"}</span>
+                    <div className="flex flex-col items-center text-center gap-1.5">
+                      <Paperclip className="text-gray-400 dark:text-gray-500" size={24} />
+                      <p className="text-sm font-bold text-gray-700 dark:text-gray-300">
+                        {selectedFile ? "Sélectionner un autre fichier" : "Cliquez ou glissez pour joindre un fichier"}
+                      </p>
+                      <p className="text-[11px] text-gray-400 dark:text-gray-505">
+                        Formats acceptés : PDF ou Images
+                      </p>
                     </div>
-                    {selectedFile && (
-                      <button 
-                        type="button"
-                        onClick={(e) => { e.preventDefault(); setSelectedFile(null); }}
-                        className="p-1 hover:bg-red-50 text-red-500 rounded-full"
-                      >
-                        <X size={16} />
-                      </button>
-                    )}
                   </label>
                 </div>
+
+                {/* Progress bar and successfully loaded preview card */}
+                {(uploadProgress !== null || uploadedUrl) && (
+                  <div className="mt-3 p-3.5 bg-indigo-50/55 dark:bg-indigo-950/20 rounded-xl border border-indigo-100/70 dark:border-indigo-950/40 flex items-center justify-between shadow-sm animate-in fade-in slide-in-from-top-1 duration-200">
+                    <div className="flex items-center gap-3">
+                      {uploadedUrl && uploadedName.match(/\.(jpg|jpeg|png|gif|webp)$/i) ? (
+                        <img 
+                          src={uploadedUrl} 
+                          alt="Prévisualisation" 
+                          className="w-10 h-10 object-cover rounded-lg border border-indigo-200 dark:border-indigo-900/40"
+                          referrerPolicy="no-referrer"
+                        />
+                      ) : (
+                        <div className="w-10 h-10 bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 rounded-lg flex items-center justify-center">
+                          <FileText size={20} />
+                        </div>
+                      )}
+                      <div className="text-left">
+                        <p className="text-xs font-bold text-gray-800 dark:text-gray-200 truncate max-w-[200px] sm:max-w-xs">{uploadedName || selectedFile?.name}</p>
+                        <div className="flex items-center gap-2 mt-1">
+                          {uploadProgress !== null && uploadProgress < 100 ? (
+                            <div className="flex items-center gap-2 w-32 sm:w-48">
+                              <div className="w-full bg-gray-200 dark:bg-gray-700 h-1.5 rounded-full overflow-hidden">
+                                <div className="bg-indigo-600 h-full transition-all duration-300" style={{ width: `${uploadProgress}%` }}></div>
+                              </div>
+                              <span className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 whitespace-nowrap">{uploadProgress}%</span>
+                            </div>
+                          ) : (
+                            <span className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1 bg-emerald-50 dark:bg-emerald-950/30 px-2 py-0.5 rounded-full border border-emerald-100/50 dark:border-emerald-900/30">
+                              <Check className="text-emerald-600 dark:text-emerald-400" size={12} />
+                              Joint à 100% (Prêt pour enregistrement)
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedFile(null);
+                        setUploadProgress(null);
+                        setUploadedUrl('');
+                        setUploadedName('');
+                      }}
+                      className="p-1.5 hover:bg-rose-50 dark:hover:bg-rose-950/30 text-rose-500 hover:text-rose-600 rounded-lg transition-colors shadow-none"
+                      title="Retirer le fichier"
+                    >
+                      <X size={16} />
+                    </button>
+                  </div>
+                )}
               </div>
 
-              <div className="flex gap-4 pt-2">
+              {/* Action buttons (footer is inside the form, perfectly sticky/scrolling) */}
+              <div className="flex gap-4 pt-3 sticky bottom-0 bg-white dark:bg-gray-800 py-3 mt-4 border-t border-gray-100 dark:border-gray-700">
                 <button
                   type="button"
                   onClick={() => setShowAddModal(false)}
-                  disabled={uploading}
-                  className="flex-1 py-3 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 font-bold rounded-2xl hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors disabled:opacity-50"
+                  disabled={uploading || savingCourse}
+                  className="flex-1 py-3 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 font-bold rounded-xl hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors disabled:opacity-50 text-sm"
                 >
                   Annuler
                 </button>
                 <button
                   type="submit"
-                  disabled={uploading}
-                  className="flex-1 py-3 bg-indigo-600 text-white font-bold rounded-2xl hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-200 disabled:bg-indigo-400 flex items-center justify-center gap-2 relative overflow-hidden"
+                  disabled={uploading || savingCourse || !newCourse.topic || !newCourse.subject || !newCourse.grade}
+                  className="flex-1 py-3 bg-indigo-600 text-white font-extrabold rounded-xl hover:bg-indigo-700 transition-all shadow-md shadow-indigo-150 dark:shadow-none disabled:bg-gray-300 dark:disabled:bg-gray-700 disabled:text-gray-500 dark:disabled:text-gray-400 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm"
                 >
-                  {uploading ? (
+                  {savingCourse ? (
                     <>
-                      <div className="relative z-10 flex items-center gap-2">
-                        <RefreshCw className="animate-spin" size={20} />
-                        <span>{uploadProgress !== null ? `${Math.round(uploadProgress)}%` : 'Publication...'}</span>
-                      </div>
-                      {uploadProgress !== null && (
-                        <div 
-                          className="absolute inset-0 bg-white/20 transition-all duration-300"
-                          style={{ width: `${uploadProgress}%` }}
-                        />
-                      )}
+                      <RefreshCw className="animate-spin" size={18} />
+                      Enregistrement...
                     </>
                   ) : "Ajouter le cours"}
                 </button>

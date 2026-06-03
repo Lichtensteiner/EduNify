@@ -15,6 +15,10 @@ const updateSW = registerSW({
   },
 });
 
+if (typeof window !== 'undefined') {
+  (window as any).reactMounted = true;
+}
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <BrowserRouter>

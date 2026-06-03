@@ -357,19 +357,45 @@ export default function Login() {
         await login(loginEmail, loginPassword);
       }
     } catch (err: any) {
-      console.error(err);
-      if (err.code === 'auth/email-already-in-use') {
+      console.error("Authentication error details:", err);
+      const errCode = err?.code || '';
+      const errMsg = err?.message || '';
+      const isInvalidCredential = 
+        errCode === 'auth/invalid-credential' || 
+        errCode === 'auth/user-not-found' || 
+        errCode === 'auth/wrong-password' ||
+        errMsg.includes('auth/invalid-credential') ||
+        errMsg.includes('auth/user-not-found') ||
+        errMsg.includes('auth/wrong-password');
+
+      const isEmailInUse = 
+        errCode === 'auth/email-already-in-use' || 
+        errMsg.includes('auth/email-already-in-use');
+
+      const isWeakPassword = 
+        errCode === 'auth/weak-password' || 
+        errMsg.includes('auth/weak-password');
+
+      const isConfigNotFound = 
+        errCode === 'auth/configuration-not-found' || 
+        errMsg.includes('auth/configuration-not-found');
+
+      const isNetworkException = 
+        errCode === 'auth/network-request-failed' || 
+        errMsg.includes('auth/network-request-failed');
+
+      if (isEmailInUse) {
         setError(t('email_already_used'));
-      } else if (err.code === 'auth/invalid-credential' || err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password') {
+      } else if (isInvalidCredential) {
         setError(t('incorrect_email_password'));
-      } else if (err.code === 'auth/weak-password') {
+      } else if (isWeakPassword) {
         setError(t('password_min_length'));
-      } else if (err.code === 'auth/configuration-not-found') {
+      } else if (isConfigNotFound) {
         setError(t('auth_not_enabled'));
-      } else if (err.code === 'auth/network-request-failed') {
+      } else if (isNetworkException) {
         setError(t('network_error'));
       } else {
-        setError(err.message || t('error_occurred'));
+        setError(errMsg || t('error_occurred'));
       }
     }
   };

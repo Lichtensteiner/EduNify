@@ -142,6 +142,27 @@ const Grades: React.FC = () => {
   // History logs and Audit logs state
   const [historyLogs, setHistoryLogs] = useState<GradeHistoryLog[]>([]);
   const [safetyLogs, setSafetyLogs] = useState<SafetyAuditLog[]>([]);
+  const [dbSubjects, setDbSubjects] = useState<string[]>(STATIC_SUBJECTS);
+
+  // Load subjects from dynamic database collection 'subjects'
+  useEffect(() => {
+    const unsubscribe = onSnapshot(collection(db, 'subjects'), (snapshot) => {
+      const loaded = snapshot.docs.map(doc => {
+        const data = doc.data();
+        return data.name || '';
+      }).filter(name => name.trim() !== '');
+      
+      if (loaded.length > 0) {
+        setDbSubjects(loaded.sort());
+      } else {
+        setDbSubjects(STATIC_SUBJECTS);
+      }
+    }, (error) => {
+      console.error("Error fetching dynamic subjects from Firestore:", error);
+      setDbSubjects(STATIC_SUBJECTS);
+    });
+    return () => unsubscribe();
+  }, []);
 
   // New Grade edit/create state
   const [editingGrade, setEditingGrade] = useState<Grade | null>(null);
@@ -453,6 +474,10 @@ const Grades: React.FC = () => {
     const isOwner = grade.teacherId === currentUser?.id;
     if (!isOwner) return false;
 
+    // Restrict teacher to only their assigned subjects
+    const teacherSubjects = currentUser?.matieres || (currentUser?.matiere ? [currentUser.matiere] : []);
+    if (!teacherSubjects.includes(grade.subject)) return false;
+
     // Check lock state
     const { isLocked } = evaluateLockState(grade);
     return !isLocked;
@@ -501,6 +526,15 @@ const Grades: React.FC = () => {
     e.preventDefault();
     if (!currentUser) return;
     
+    // Security check: teachers are restricted to their assigned subjects
+    if (isTeacher) {
+      const teacherSubjects = currentUser?.matieres || (currentUser?.matiere ? [currentUser.matiere] : []);
+      if (!teacherSubjects.includes(newGrade.subject)) {
+        notifyError(`Action refusée : Vous n'êtes pas autorisé à attribuer ou modifier des notes pour la matière "${newGrade.subject}".`);
+        return;
+      }
+    }
+
     const parsedScore = parseFloat(newGrade.score);
     const parsedMax = parseFloat(newGrade.maxScore);
 
@@ -1038,7 +1072,7 @@ const Grades: React.FC = () => {
                   className="pl-3 pr-8 py-2 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-xl text-xs outline-none cursor-pointer appearance-none"
                 >
                   <option value="all">Toutes les matières</option>
-                  {STATIC_SUBJECTS.map(subject => (
+                  {dbSubjects.map(subject => (
                     <option key={subject} value={subject}>{subject}</option>
                   ))}
                 </select>
@@ -1324,6 +1358,18 @@ const Grades: React.FC = () => {
               <div className="flex-1 overflow-y-auto p-6 space-y-4">
                 <form id="gradeForm" onSubmit={handleSaveGrade} className="space-y-4 text-left">
                   
+                  {isTeacher && (currentUser?.matieres || (currentUser?.matiere ? [currentUser.matiere] : [])).length === 0 && (
+                    <div className="p-4 bg-rose-50 dark:bg-rose-950/20 border border-rose-100 dark:border-rose-900/30 rounded-2xl flex gap-3 text-xs text-rose-800 dark:text-rose-400">
+                      <AlertTriangle className="shrink-0 text-rose-500" size={16} />
+                      <div>
+                        <p className="font-extrabold uppercase tracking-wide text-[10px] mb-0.5">⚠️ Accès Restreint : Aucune matière assignée</p>
+                        <p className="font-medium leading-relaxed">
+                          La sécurité d'Edu-Nify vous interdit de saisir ou modifier des notes tant qu'aucune matière ne vous est spécifiquement assignée dans votre profil. Veuillez contacter votre administration pour mettre à jour vos matières d'enseignement.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
                   {/* Select class and student if new */}
                   {!editingGrade && (
                     <div className="grid grid-cols-2 gap-3">
@@ -1369,12 +1415,27 @@ const Grades: React.FC = () => {
                         required
                         value={newGrade.subject}
                         onChange={(e) => setNewGrade({ ...newGrade, subject: e.target.value })}
-                        className="w-full px-3.5 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-750 rounded-xl outline-none text-xs"
+                        disabled={isTeacher && (currentUser?.matieres || (currentUser?.matiere ? [currentUser.matiere] : [])).length === 0}
+                        className={`w-full px-3.5 py-2.5 border rounded-xl outline-none text-xs transition-all ${
+                          isTeacher && (currentUser?.matieres || (currentUser?.matiere ? [currentUser.matiere] : [])).length === 0
+                            ? 'bg-rose-50/50 border-rose-200 dark:bg-rose-950/10 dark:border-rose-900/30 text-rose-500 font-bold'
+                            : 'bg-gray-50 dark:bg-gray-900 border-gray-200 dark:border-gray-750'
+                        }`}
                       >
-                        <option value="">Sélectionner</option>
-                        {STATIC_SUBJECTS.map(sub => (
-                          <option key={sub} value={sub}>{sub}</option>
-                        ))}
+                        <option value="">
+                          {isTeacher && (currentUser?.matieres || (currentUser?.matiere ? [currentUser.matiere] : [])).length === 0
+                            ? 'Aucune matière assignée'
+                            : 'Sélectionner'}
+                        </option>
+                        {isTeacher ? (
+                          (currentUser?.matieres || (currentUser?.matiere ? [currentUser.matiere] : [])).map(sub => (
+                            <option key={sub} value={sub}>{sub}</option>
+                          ))
+                        ) : (
+                          dbSubjects.map(sub => (
+                            <option key={sub} value={sub}>{sub}</option>
+                          ))
+                        )}
                       </select>
                     </div>
 
@@ -1462,8 +1523,8 @@ const Grades: React.FC = () => {
                   <div className="pt-2">
                     <button
                       type="submit"
-                      disabled={isSaving}
-                      className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-extrabold uppercase tracking-widest transition-all justify-center items-center flex"
+                      disabled={isSaving || (isTeacher && (currentUser?.matieres || (currentUser?.matiere ? [currentUser.matiere] : [])).length === 0)}
+                      className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-350 disabled:cursor-not-allowed dark:disabled:bg-gray-700 text-white rounded-xl text-xs font-extrabold uppercase tracking-widest transition-all justify-center items-center flex"
                     >
                       {isSaving ? "Traitement de l'intégrité..." : "Chiffrer et Conserver la note"}
                     </button>

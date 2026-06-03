@@ -103,9 +103,21 @@ export default function Profile() {
       setConfirmPassword('');
     } catch (err: any) {
       console.error(err);
-      if (err.code === 'auth/invalid-credential' || err.code === 'auth/wrong-password') {
+      const errCode = err?.code || '';
+      const errMsg = err?.message || '';
+      const isInvalidCredential = 
+        errCode === 'auth/invalid-credential' || 
+        errCode === 'auth/wrong-password' ||
+        errMsg.includes('auth/invalid-credential') ||
+        errMsg.includes('auth/wrong-password');
+
+      const isTooManyRequests = 
+        errCode === 'auth/too-many-requests' || 
+        errMsg.includes('auth/too-many-requests');
+
+      if (isInvalidCredential) {
         setError(t('wrong_password_error'));
-      } else if (err.code === 'auth/too-many-requests') {
+      } else if (isTooManyRequests) {
         setError(t('too_many_requests'));
       } else {
         setError(t('update_error'));

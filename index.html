@@ -52,6 +52,56 @@
         document.getElementById('error-details').textContent = 
           'Promesse rejetée non gérée: ' + event.reason;
       };
+
+      // Smart Auto-Heal: if application screen hangs, unregister bad service workers, clear caches and reload once
+      setTimeout(function() {
+        var loader = document.getElementById('loading-display');
+        var errorDisplay = document.getElementById('error-display');
+        var hasMounted = window.reactMounted || (loader && loader.style.display === 'none') || !loader;
+        
+        if (!hasMounted && (!errorDisplay || errorDisplay.style.display !== 'block')) {
+          console.warn("Edu-Nify: Loading hung or white screen detected. Auto-repairing caches...");
+          
+          var reloadCount = parseInt(sessionStorage.getItem('autoHealReloadCount') || '0', 10);
+          if (reloadCount < 2) {
+            sessionStorage.setItem('autoHealReloadCount', (reloadCount + 1).toString());
+            
+            // Unregister service workers
+            if ('serviceWorker' in navigator) {
+              navigator.serviceWorker.getRegistrations().then(function(registrations) {
+                for(var i = 0; i < registrations.length; i++) {
+                  registrations[i].unregister();
+                }
+              });
+            }
+            
+            // Clear caches
+            if ('caches' in window) {
+              caches.keys().then(function(keys) {
+                keys.forEach(function(key) { caches.delete(key); });
+              });
+            }
+            
+            // Clear storage and reload
+            localStorage.clear();
+            setTimeout(function() {
+              window.location.reload(true);
+            }, 600);
+          } else {
+            // If already reloaded 2 times, don't loop endlessly. Show the manual reset option.
+            if (loader) {
+              loader.innerHTML = '<div style="text-align: center; padding: 20px;">' +
+                '<h2 style="color: #4f46e5; margin-bottom: 10px;">Problème de démarrage persistant</h2>' +
+                '<p style="color: #4b5563; margin-bottom: 20px;">Le navigateur conserve des ressources obsolètes ou corrompues.</p>' +
+                '<button onclick="localStorage.clear(); sessionStorage.clear(); sessionStorage.removeItem(\'autoHealReloadCount\'); caches.keys().then(names => names.forEach(name => caches.delete(name))); location.reload(true);" ' +
+                'style="padding: 10px 20px; background-color: #4f46e5; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; box-shadow: 0 4px 6px -1px rgba(79, 70, 229, 0.4);">' +
+                'Vider le Cache & Forcer le Rechargement' +
+                '</button>' +
+                '</div>';
+            }
+          }
+        }
+      }, 5500);
     </script>
     <style>
       @keyframes spin { to { transform: rotate(360deg); } }
