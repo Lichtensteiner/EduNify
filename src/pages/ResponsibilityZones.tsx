@@ -88,12 +88,72 @@ export default function ResponsibilityZones() {
 
   const [activeRespId, setActiveRespId] = useState<string>('');
 
+  const hasExplicitResponsibility = (respId: string): boolean => {
+    const configured = currentUser?.responsibilities || [];
+    const fromPosition = currentUser?.position ? mapPositionToResponsibility(currentUser.position) : [];
+    return configured.includes(respId) || fromPosition.includes(respId);
+  };
+
+  const canWrite = (respId: string): boolean => {
+    return hasExplicitResponsibility(respId) || isGlobalAdmin;
+  };
+
   const enforcePermission = (respId: string): boolean => {
-    if (accessibleResponsibilityIds.includes(respId)) {
+    if (canWrite(respId)) {
       return true;
     }
-    notifyError("Sécurité : Action non autorisée pour vos responsabilités.");
+    notifyError("Sécurité : Droits d'écriture réservés au responsable titulaire de ce service.");
     return false;
+  };
+
+  const getSecurityBadge = (respId: string) => {
+    const hasExplicit = hasExplicitResponsibility(respId);
+
+    if (hasExplicit) {
+      return (
+        <div className="bg-emerald-50 dark:bg-emerald-950/25 text-emerald-700 dark:text-emerald-400 p-4 rounded-3xl border border-emerald-100 dark:border-emerald-800/40 flex items-center gap-3 shadow-sm border-dashed">
+          <div className="p-2.5 bg-emerald-100 dark:bg-emerald-900/40 rounded-2xl text-emerald-600 dark:text-emerald-400">
+            <ShieldCheck size={20} />
+          </div>
+          <div>
+            <p className="text-xs font-black uppercase tracking-wider">Accréditation Active & Sécurisée</p>
+            <p className="text-[10px] text-emerald-600/80 dark:text-emerald-400/80 mt-0.5">
+              Vous pilotez ce service en tant que Responsable Titulaire. Vos droits d'ajout, modification et suppression sont exclusifs.
+            </p>
+          </div>
+        </div>
+      );
+    }
+
+    if (isGlobalAdmin) {
+      return (
+        <div className="bg-indigo-50 dark:bg-indigo-950/25 text-indigo-700 dark:text-indigo-400 p-4 rounded-3xl border border-indigo-100 dark:border-indigo-800/40 flex items-center gap-3 shadow-sm border-dashed">
+          <div className="p-2.5 bg-indigo-100 dark:bg-indigo-900/40 rounded-2xl text-indigo-650 dark:text-indigo-400">
+            <Eye size={20} />
+          </div>
+          <div>
+            <p className="text-xs font-black uppercase tracking-wider">Mode Supervision Directeur</p>
+            <p className="text-[10px] text-indigo-650/80 dark:text-indigo-400/80 mt-0.5">
+              Supervision Générale : Vous visualisez et modifiez les registres en vertu de vos accréditations d'Administrateur Général.
+            </p>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="bg-amber-50 dark:bg-amber-950/25 text-amber-700 dark:text-amber-400 p-4 rounded-3xl border border-amber-100 dark:border-amber-800/40 flex items-center gap-3 shadow-sm border-dashed">
+        <div className="p-2.5 bg-amber-100 dark:bg-amber-900/40 rounded-2xl text-amber-500">
+          <Key size={20} className="animate-pulse" />
+        </div>
+        <div>
+          <p className="text-xs font-black uppercase tracking-wider">Lecture Seule (Accès Limité Sûr)</p>
+          <p className="text-[10px] text-amber-655/80 dark:text-amber-400/80 mt-0.5">
+            Sécurisation Ordonnée : Séance de consultation uniquement. Les droits de mise à jour, de modification ou d'insertion sont désactivés.
+          </p>
+        </div>
+      </div>
+    );
   };
 
   useEffect(() => {
@@ -705,7 +765,10 @@ export default function ResponsibilityZones() {
 
       {/* active board layout */}
       {activeRespData && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="space-y-6">
+          {getSecurityBadge(activeRespId)}
+          
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           
           {/* Main Controls Panel (Left size 2cols) */}
           <div className="lg:col-span-2 space-y-6">
@@ -1738,7 +1801,19 @@ export default function ResponsibilityZones() {
                 </h3>
               </div>
 
-              {/* Form 1: Maternelle */}
+              {!canWrite(activeRespId) ? (
+                <div className="p-6 bg-amber-50/20 dark:bg-amber-950/5 border border-amber-100/35 dark:border-amber-900/10 rounded-2xl text-center space-y-3">
+                  <div className="p-3 bg-amber-100/50 dark:bg-amber-950/20 text-amber-600 rounded-full w-fit mx-auto">
+                    <Key size={20} className="animate-pulse" />
+                  </div>
+                  <h4 className="text-xs font-black text-amber-800 dark:text-amber-300">Formulaire Surtitré</h4>
+                  <p className="text-[10px] text-gray-450 leading-normal">
+                    Seul le responsable désigné de la direction **{activeRespData.label}** possède les permissions d'insertion pour ce registre.
+                  </p>
+                </div>
+              ) : (
+                <>
+                  {/* Form 1: Maternelle */}
               {activeRespId === 'responsable_maternelle' && (
                 <form 
                   onSubmit={async (e) => {
@@ -2651,6 +2726,8 @@ export default function ResponsibilityZones() {
                   </div>
                 );
               })()}
+              </>
+              )}
 
             </div>
 
@@ -2668,6 +2745,7 @@ export default function ResponsibilityZones() {
           </div>
 
         </div>
+      </div>
       )}
 
     </div>
