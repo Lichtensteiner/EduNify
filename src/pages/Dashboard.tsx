@@ -49,11 +49,12 @@ import {
 import { collection, getDocs, query, where, onSnapshot, limit, orderBy, updateDoc, doc, serverTimestamp, addDoc, Timestamp, deleteDoc, writeBatch } from 'firebase/firestore';
 import { db, isFirebaseConfigured, handleFirestoreError, OperationType } from '../lib/firebase';
 import LiveClock from '../components/LiveClock';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth, mapPositionToResponsibility } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { useNotification } from '../contexts/NotificationContext';
 import NewUserAnnouncement from '../components/NewUserAnnouncement';
+import ResponsibilityZones from './ResponsibilityZones';
 
 const COLORS = ['#4f46e5', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
 
@@ -1208,6 +1209,12 @@ const ChevronRightIcon = ({ className, size = 18 }: any) => (
 export default function Dashboard({ onNavigate }: any) {
   const { currentUser } = useAuth();
   const { t, tData } = useLanguage();
+  
+  const configuredResps = currentUser?.responsibilities || [];
+  const fromPositionResps = currentUser?.position ? mapPositionToResponsibility(currentUser.position) : [];
+  const combinedResps = Array.from(new Set([...configuredResps, ...fromPositionResps]));
+  const hasStaffResponsibilities = combinedResps.length > 0;
+
   const [stats, setStats] = useState({ presents: 0, retards: 0, absents: 0, total: 0 });
   const [weeklyData, setWeeklyData] = useState<any[]>([]);
   const [studentLevelData, setStudentLevelData] = useState<any[]>([]);
@@ -1431,7 +1438,25 @@ export default function Dashboard({ onNavigate }: any) {
 
       <NewUserAnnouncement />
 
-      {currentUser?.role === 'admin' || currentUser?.role === 'personnel administratif' ? (
+      {currentUser?.role === 'admin' ? (
+        <AdminDashboard 
+          stats={stats} 
+          weeklyData={weeklyData} 
+          studentLevelData={studentLevelData} 
+          userDistribution={userDistribution}
+          classData={classData}
+          recommendation={recommendation}
+          houses={houses}
+          alerts={alerts}
+          ecoStats={ecoStats}
+          mood={mood}
+          handleMoodSelect={handleMoodSelect}
+          t={t}
+          tData={tData}
+        />
+      ) : hasStaffResponsibilities ? (
+        <ResponsibilityZones />
+      ) : currentUser?.role === 'personnel administratif' ? (
         <AdminDashboard 
           stats={stats} 
           weeklyData={weeklyData} 
