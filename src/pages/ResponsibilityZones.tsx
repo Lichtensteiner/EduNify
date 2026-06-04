@@ -45,8 +45,25 @@ export default function ResponsibilityZones() {
     return administrativeResponsibilities.map(r => r.id);
   }, []);
 
+  const getResponsibilityIcon = (id: string) => {
+    switch (id) {
+      case 'responsable_maternelle': return Baby;
+      case 'responsable_primaire': return BookOpen;
+      case 'responsable_college': return GraduationCap;
+      case 'gestionnaire_comptable': return Wallet;
+      case 'responsable_pedagogique': return FileCheck;
+      case 'surveillant_general': return ShieldAlert;
+      case 'surveillant_adjoint': return Clock;
+      case 'dame_menage': return Sparkle;
+      case 'secretaire_generale': return FileText;
+      case 'secretaire_adjointe': return Phone;
+      case 'responsable_it': return Laptop;
+      default: return ShieldCheck;
+    }
+  };
+
   // Check which responsibilities are active for the logged-in user
-  // If admin, they can manage and view ALL responsibilities EXCEPT 'responsable_maternelle' (Gestion de la Maternelle is removed from admin's Bureau Direction tabs)
+  // If admin, they can manage and view ALL 11 responsibilities dynamically
   const isGlobalAdmin = currentUser?.role === 'admin';
   const responsibilitiesString = (currentUser?.responsibilities || []).join(',');
   
@@ -62,7 +79,7 @@ export default function ResponsibilityZones() {
     }
 
     if (isGlobalAdmin) {
-      return availableResponsibilityIds.filter(id => id !== 'responsable_maternelle');
+      return availableResponsibilityIds;
     }
 
     return [];
@@ -667,6 +684,7 @@ export default function ResponsibilityZones() {
             .filter(r => accessibleResponsibilityIds.includes(r.id))
             .map(resp => {
               const isActive = activeRespId === resp.id;
+              const IconComp = getResponsibilityIcon(resp.id);
               return (
                 <button
                   key={resp.id}
@@ -677,7 +695,7 @@ export default function ResponsibilityZones() {
                       : 'bg-gray-50 hover:bg-gray-100 dark:bg-gray-900 dark:hover:bg-gray-750 text-gray-500 hover:text-gray-900 border border-gray-100 dark:border-gray-750'
                   }`}
                 >
-                  <Sparkles size={11} className="opacity-70" />
+                  <IconComp size={12} className="opacity-80" />
                   {resp.label}
                 </button>
               );
