@@ -369,7 +369,22 @@ service cloud.firestore {
 
     // Candidate dossiers
     match /resp_dossiers/{dosId} {
-      allow read, write: if hasResponsibility('secretaire_generale');
+      allow read, write: if hasResponsibility('secretaire_generale')
+        || hasResponsibility('responsable_pedagogique')
+        || hasResponsibility('responsable_maternelle')
+        || hasResponsibility('responsable_college')
+        || hasResponsibility('responsable_primaire')
+        || hasResponsibility('responsable_it');
+    }
+
+    // Secretary General Tasks
+    match /resp_secretaire_tasks/{taskId} {
+      allow read, write: if hasResponsibility('secretaire_generale')
+        || hasResponsibility('responsable_pedagogique')
+        || hasResponsibility('responsable_maternelle')
+        || hasResponsibility('responsable_college')
+        || hasResponsibility('responsable_primaire')
+        || hasResponsibility('responsable_it');
     }
 
     // Phone calls logs

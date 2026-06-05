@@ -263,6 +263,8 @@ export default function ResponsibilityZones() {
 
   // 9. Secrétaire Générale
   const [dossiers, setDossiers] = useState<Array<{id: string, name: string, level: string, originSchool: string, status: 'pending' | 'accepted' | 'rejected'}>>([]);
+  const [secTasks, setSecTasks] = useState<Array<{id: string, title: string, description: string, dueDate: string, priority: 'low' | 'medium' | 'high', scope: 'Secrétariat Général' | 'Bureau Direction', completed: boolean}>>([]);
+  const [taskFilter, setTaskFilter] = useState<'all' | 'sec' | 'dir'>('all');
 
   // 10. Secrétaire Adjointe
   const [phoneCalls, setPhoneCalls] = useState<Array<{id: string, caller: string, message: string, targetStudent: string, status: 'noted' | 'relayed'}>>([]);
@@ -417,8 +419,8 @@ export default function ResponsibilityZones() {
       unsubs.push(unsubSupplies);
     }
 
-    // Dossiers (Secrétaire Générale)
-    if (accessibleResponsibilityIds.includes('secretaire_generale')) {
+    // Dossiers & Secretary Tasks (Secrétaire Générale & Target managers)
+    if (accessibleResponsibilityIds.some(id => ['secretaire_generale', 'responsable_pedagogique', 'responsable_maternelle', 'responsable_college', 'responsable_primaire', 'responsable_it'].includes(id))) {
       const unsubDos = onSnapshot(collection(db, 'resp_dossiers'), (snapshot) => {
         setDossiers(snapshot.docs.map(doc => ({
           id: doc.id,
@@ -429,6 +431,19 @@ export default function ResponsibilityZones() {
         })));
       }, (err) => handleFirestoreError(err, OperationType.GET, 'resp_dossiers'));
       unsubs.push(unsubDos);
+
+      const unsubTasks = onSnapshot(collection(db, 'resp_secretaire_tasks'), (snapshot) => {
+        setSecTasks(snapshot.docs.map(doc => ({
+          id: doc.id,
+          title: doc.data().title || '',
+          description: doc.data().description || '',
+          dueDate: doc.data().dueDate || '',
+          priority: doc.data().priority || 'medium',
+          scope: doc.data().scope || 'Bureau Direction',
+          completed: !!doc.data().completed
+        })));
+      }, (err) => handleFirestoreError(err, OperationType.GET, 'resp_secretaire_tasks'));
+      unsubs.push(unsubTasks);
     }
 
     // Phone Calls (Secrétaire Adjointe)
@@ -641,12 +656,121 @@ export default function ResponsibilityZones() {
   const [formITLoanDuration, setFormITLoanDuration] = useState('1 Cours (Mardi 10h)');
 
   const [formDocName, setFormDocName] = useState('');
-  const [formDocLevel, setFormDocLevel] = useState('Classe de 6ème');
+  const [formDocLevel, setFormDocLevel] = useState('Responsable Pédagogique');
   const [formDocOrigin, setFormDocOrigin] = useState('');
+  const [secFormType, setSecFormType] = useState<'dossier' | 'task'>('dossier');
+  const [formTaskTitle, setFormTaskTitle] = useState('');
+  const [formTaskDesc, setFormTaskDesc] = useState('');
+  const [formTaskDueDate, setFormTaskDueDate] = useState('');
+  const [formTaskPriority, setFormTaskPriority] = useState<'low' | 'medium' | 'high'>('medium');
+  const [formTaskScope, setFormTaskScope] = useState<'Secrétariat Général' | 'Bureau Direction'>('Bureau Direction');
 
   const [formCallCaller, setFormCallCaller] = useState('');
   const [formCallMsg, setFormCallMsg] = useState('');
   const [formCallStudent, setFormCallStudent] = useState('');
+
+  const renderAssignedTasksAndDossiers = (scopeName: string) => {
+    const assignedTasks = secTasks.filter(t => t.scope === scopeName);
+    const assignedDossiers = dossiers.filter(d => d.level === scopeName);
+
+    if (assignedTasks.length === 0 && assignedDossiers.length === 0) {
+      return null;
+    }
+
+    return (
+      <div className="mt-6 pt-6 border-t border-gray-155 dark:border-gray-700/60 space-y-4 text-left">
+        <div className="flex items-center gap-2">
+          <ShieldAlert size={16} className="text-purple-600 dark:text-purple-400" />
+          <h3 className="text-xs font-black uppercase tracking-wider text-gray-800 dark:text-gray-200">
+            Suivi Secrétariat Général (Temps Réel)
+          </h3>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Assigned Tasks */}
+          <div className="space-y-2">
+            <p className="text-[10px] font-bold uppercase text-gray-400">Tâches assignées par le SG ({assignedTasks.length})</p>
+            {assignedTasks.length === 0 ? (
+              <p className="text-[10px] text-gray-400 italic p-3 bg-gray-55/50 dark:bg-gray-900/10 rounded-xl border border-dashed dark:border-gray-800">
+                Aucune tâche en cours
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {assignedTasks.map(task => (
+                  <div key={task.id} className="p-3 bg-gray-50 dark:bg-gray-900/30 rounded-2xl border border-gray-100 dark:border-gray-750 flex items-center justify-between gap-2 text-left">
+                    <div className="flex items-start gap-2.5">
+                      <button
+                        onClick={async () => {
+                          try {
+                            await updateDoc(doc(db, 'resp_secretaire_tasks', task.id), {
+                              completed: !task.completed
+                            });
+                            notifySuccess("Statut de la tâche mis à jour !");
+                          } catch (error) {
+                            console.error("Error updating task status:", error);
+                          }
+                        }}
+                        className="mt-0.5 text-purple-650 hover:opacity-85 transition-opacity cursor-pointer flex-shrink-0"
+                      >
+                        <CheckSquare 
+                          size={16} 
+                          className={`transition-all ${task.completed ? 'text-emerald-500 fill-emerald-500/10' : 'text-gray-400'}`} 
+                        />
+                      </button>
+                      <div>
+                        <p className={`text-xs font-bold leading-normal ${task.completed ? 'line-through text-gray-400 font-normal' : 'text-gray-900 dark:text-white'}`}>
+                          {task.title}
+                        </p>
+                        {task.description && (
+                          <p className="text-[10px] text-gray-400 leading-relaxed mt-0.5">{task.description}</p>
+                        )}
+                        <p className="text-[8px] font-mono mt-0.5 text-gray-400">Échéance : {task.dueDate}</p>
+                      </div>
+                    </div>
+                    <span className={`px-1 py-0.5 rounded text-[8px] font-black uppercase flex-shrink-0 ${
+                      task.priority === 'high' ? 'bg-red-50 text-red-700 dark:bg-red-955/50 dark:text-red-400 border border-red-100/30'
+                      : task.priority === 'medium' ? 'bg-amber-50 text-amber-700 dark:bg-amber-955/50 dark:text-amber-400 border border-amber-100/30'
+                      : 'bg-blue-50 text-blue-700 dark:bg-blue-955/50 dark:text-blue-400 border border-blue-100/30'
+                    }`}>
+                      {task.priority === 'high' ? 'Urgent' : task.priority === 'medium' ? 'Moyen' : 'Normal'}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Assigned Candidates / Dossiers */}
+          <div className="space-y-2">
+            <p className="text-[10px] font-bold uppercase text-gray-400">Dossiers de candidature visés ({assignedDossiers.length})</p>
+            {assignedDossiers.length === 0 ? (
+              <p className="text-[10px] text-gray-400 italic p-3 bg-gray-55/50 dark:bg-gray-900/10 rounded-xl border border-dashed dark:border-gray-800">
+                Aucun dossier pour ce service
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {assignedDossiers.map(dos => (
+                  <div key={dos.id} className="p-3 bg-gray-50 dark:bg-gray-900/30 rounded-2xl border border-gray-100 dark:border-gray-750 flex items-center justify-between gap-2 text-left">
+                    <div>
+                      <p className="text-xs font-bold text-gray-900 dark:text-white leading-normal">{dos.name}</p>
+                      <p className="text-[9px] text-gray-500">Provenance : {dos.originSchool}</p>
+                    </div>
+                    <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase ${
+                      dos.status === 'accepted' ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-955/50 dark:text-emerald-405 border border-emerald-100/30'
+                      : dos.status === 'rejected' ? 'bg-red-50 text-red-700 dark:bg-red-955/50 dark:text-red-405 border border-red-100/30'
+                      : 'bg-amber-50 text-amber-700 dark:bg-amber-955/50 dark:text-amber-405 border border-amber-105/30'
+                    }`}>
+                      {dos.status === 'accepted' ? 'Inscrit' : dos.status === 'rejected' ? 'Refusé' : 'À l\'étude'}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   // Synchronise form dropdown values with Firestore database states smoothly
   useEffect(() => {
@@ -882,6 +1006,7 @@ export default function ResponsibilityZones() {
                     ))}
                   </div>
                 </div>
+                {renderAssignedTasksAndDossiers('Responsable Maternelle')}
               </div>
             )}
 
@@ -989,6 +1114,7 @@ export default function ResponsibilityZones() {
                     ))}
                   </div>
                 </div>
+                {renderAssignedTasksAndDossiers('Responsable Primaire')}
               </div>
             )}
 
@@ -1101,6 +1227,7 @@ export default function ResponsibilityZones() {
                     ))}
                   </div>
                 </div>
+                {renderAssignedTasksAndDossiers('Responsable Collège')}
               </div>
             )}
 
@@ -1282,6 +1409,7 @@ export default function ResponsibilityZones() {
                     ))}
                   </div>
                 </div>
+                {renderAssignedTasksAndDossiers('Responsable Pédagogique')}
               </div>
             )}
 
@@ -1546,73 +1674,237 @@ export default function ResponsibilityZones() {
             {activeRespId === 'secretaire_generale' && (
               <div className="bg-white dark:bg-gray-800 rounded-[2.5rem] p-6 border border-gray-150 dark:border-gray-750 shadow-sm space-y-6">
                 <div className="flex items-center gap-3 pb-4 border-b border-gray-105 dark:border-gray-700">
-                  <div className="p-3.5 bg-purple-100 text-purple-650 rounded-2xl">
+                  <div className="p-3.5 bg-purple-100 dark:bg-purple-950/40 text-purple-650 dark:text-purple-400 rounded-2xl">
                     <FileBadge size={24} />
                   </div>
                   <div>
                     <h2 className="text-lg font-black text-gray-900 dark:text-white">Secrétariat Général de l'Établissement</h2>
-                    <p className="text-xs text-gray-400">Demandes de scolarisation, immatriculation des nouveaux élèves du registre.</p>
+                    <p className="text-xs text-gray-400">Demandes de scolarisation, immatriculation et tableau de bord des tâches en temps réel.</p>
+                  </div>
+                </div>
+
+                {/* Grid stats */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="p-4 bg-purple-50/50 dark:bg-purple-950/10 rounded-2xl border border-purple-100/40 text-left">
+                    <p className="text-[10px] uppercase font-black tracking-wider text-purple-650 dark:text-purple-400">Dossiers Inscrits</p>
+                    <p className="text-xl font-black text-purple-700 dark:text-purple-400 mt-1">
+                      {dossiers.filter(d => d.status === 'accepted').length} / {dossiers.length}
+                    </p>
+                  </div>
+                  <div className="p-4 bg-indigo-50/50 dark:bg-indigo-950/10 rounded-2xl border border-indigo-100/40 text-left">
+                    <p className="text-[10px] uppercase font-black tracking-wider text-indigo-650 dark:text-indigo-400">Tâches Complétées</p>
+                    <p className="text-xl font-black text-indigo-700 dark:text-indigo-400 mt-1">
+                      {secTasks.filter(t => t.completed).length} / {secTasks.length}
+                    </p>
                   </div>
                 </div>
 
                 {/* Candidate dossiers registrations */}
                 <div className="space-y-3">
                   <h3 className="text-xs font-black uppercase tracking-wider text-gray-400">Suivi d'inscription des dossiers de candidature</h3>
-                  <div className="space-y-2">
-                    {dossiers.map(dos => (
-                      <div key={dos.id} className="p-4 bg-gray-50 dark:bg-gray-900/30 rounded-2.5xl border border-gray-100 dark:border-gray-750 flex items-center justify-between">
-                        <div>
-                          <p className="text-xs font-black text-gray-900 dark:text-white">{dos.name}</p>
-                          <p className="text-[10px] text-gray-455 dark:text-gray-400">Niveau visé : {dos.level} | Établissement précédent : {dos.originSchool}</p>
+                  {dossiers.length === 0 ? (
+                    <p className="text-center text-[11px] text-gray-400 py-3">Aucun dossier encodé pour le moment.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {dossiers.map(dos => (
+                        <div key={dos.id} className="p-4 bg-gray-50 dark:bg-gray-900/30 rounded-2.5xl border border-gray-100 dark:border-gray-750 flex items-center justify-between">
+                          <div>
+                            <p className="text-xs font-black text-gray-900 dark:text-white">{dos.name}</p>
+                            <p className="text-[10px] text-gray-455 dark:text-gray-400">Niveau visé : {dos.level} | Établissement précédent : {dos.originSchool}</p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase ${
+                              dos.status === 'accepted' ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/55 dark:text-emerald-400'
+                              : dos.status === 'rejected' ? 'bg-red-100 text-red-800 dark:bg-red-950/55 dark:text-red-400'
+                              : 'bg-amber-100 text-amber-800 dark:bg-amber-950/55 dark:text-amber-400'
+                            }`}>
+                              {dos.status === 'accepted' ? 'Inscrit' : dos.status === 'rejected' ? 'Refusé' : 'En Saisie'}
+                            </span>
+                            {dos.status === 'pending' && (
+                              <div className="flex gap-1">
+                                <button
+                                  onClick={async () => {
+                                    if (!enforcePermission('secretaire_generale')) return;
+                                    try {
+                                      await updateDoc(doc(db, 'resp_dossiers', dos.id), {
+                                        status: 'accepted'
+                                      });
+                                      notifySuccess("Dossier de candidature validé et inscrit !");
+                                    } catch (error) {
+                                      console.error("Error accepting dossier:", error);
+                                    }
+                                  }}
+                                  className="px-2 py-1 bg-white hover:bg-emerald-50 text-emerald-700 dark:bg-gray-800 dark:text-emerald-400 rounded-lg text-[9px] font-bold border dark:border-gray-700 cursor-pointer animate-none"
+                                >
+                                  Accepter
+                                </button>
+                                <button
+                                  onClick={async () => {
+                                    if (!enforcePermission('secretaire_generale')) return;
+                                    try {
+                                      await updateDoc(doc(db, 'resp_dossiers', dos.id), {
+                                        status: 'rejected'
+                                      });
+                                      notifySuccess("Candidature rejetée.");
+                                    } catch (error) {
+                                      console.error("Error rejecting dossier:", error);
+                                    }
+                                  }}
+                                  className="px-2 py-1 bg-white hover:bg-red-50 text-red-700 dark:bg-gray-800 dark:text-red-400 rounded-lg text-[9px] font-bold border dark:border-gray-700 cursor-pointer animate-none"
+                                >
+                                  Rejeter
+                                </button>
+                              </div>
+                            )}
+                          </div>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase ${
-                            dos.status === 'accepted' ? 'bg-emerald-100 text-emerald-800'
-                            : dos.status === 'rejected' ? 'bg-red-100 text-red-800'
-                            : 'bg-amber-100 text-amber-800'
-                          }`}>
-                            {dos.status === 'accepted' ? 'Inscrit' : dos.status === 'rejected' ? 'Refusé' : 'En Saisie'}
-                          </span>
-                          {dos.status === 'pending' && (
-                            <div className="flex gap-1">
-                              <button
-                                onClick={async () => {
-                                  if (!enforcePermission('secretaire_generale')) return;
-                                  try {
-                                    await updateDoc(doc(db, 'resp_dossiers', dos.id), {
-                                      status: 'accepted'
-                                    });
-                                    notifySuccess("Dossier de candidature validé et inscrit !");
-                                  } catch (error) {
-                                    console.error("Error accepting dossier:", error);
-                                  }
-                                }}
-                                className="px-2 py-1 bg-white hover:bg-emerald-50 text-emerald-700 rounded-lg text-[9px] font-bold border cursor-pointer"
-                              >
-                                Accepter
-                              </button>
-                              <button
-                                onClick={async () => {
-                                  if (!enforcePermission('secretaire_generale')) return;
-                                  try {
-                                    await updateDoc(doc(db, 'resp_dossiers', dos.id), {
-                                      status: 'rejected'
-                                    });
-                                    notifySuccess("Candidature rejetée.");
-                                  } catch (error) {
-                                    console.error("Error rejecting dossier:", error);
-                                  }
-                                }}
-                                className="px-2 py-1 bg-white hover:bg-red-50 text-red-700 rounded-lg text-[9px] font-bold border cursor-pointer"
-                              >
-                                Rejeter
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Real-time SG Tasks Section */}
+                <div className="space-y-4 pt-4 border-t border-gray-105 dark:border-gray-700">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div>
+                      <h3 className="text-xs font-black uppercase tracking-wider text-gray-400">Suivi des Tâches & Bureau Direction</h3>
+                      <p className="text-[10px] text-gray-500 mt-0.5">Pilotez les tâches destinées au Secrétariat ou au Bureau Direction en temps réel.</p>
+                    </div>
+
+                    {/* Filter Pills */}
+                    <div className="flex items-center gap-1.5 p-1 bg-gray-50 dark:bg-gray-905 border border-gray-100 dark:border-gray-700/60 rounded-xl w-fit">
+                      <button 
+                        onClick={() => setTaskFilter('all')}
+                        className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase cursor-pointer transition-all ${
+                          taskFilter === 'all' 
+                            ? 'bg-purple-600 text-white shadow-sm' 
+                            : 'text-gray-500 hover:text-gray-900 dark:hover:text-white'
+                        }`}
+                      >
+                        Toutes
+                      </button>
+                      <button 
+                        onClick={() => setTaskFilter('sec')}
+                        className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase cursor-pointer transition-all ${
+                          taskFilter === 'sec' 
+                            ? 'bg-purple-600 text-white shadow-sm' 
+                            : 'text-gray-500 hover:text-gray-900 dark:hover:text-white'
+                        }`}
+                      >
+                        Secrétariat
+                      </button>
+                      <button 
+                        onClick={() => setTaskFilter('dir')}
+                        className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase cursor-pointer transition-all ${
+                          taskFilter === 'dir' 
+                            ? 'bg-indigo-600 text-white shadow-sm' 
+                            : 'text-gray-500 hover:text-gray-900 dark:hover:text-white'
+                        }`}
+                      >
+                        Bureau Direction
+                      </button>
+                    </div>
                   </div>
+
+                  {/* Tasks list */}
+                  {(() => {
+                    const filteredTasks = secTasks.filter(t => {
+                      if (taskFilter === 'sec') return t.scope === 'Secrétariat Général';
+                      if (taskFilter === 'dir') return t.scope === 'Bureau Direction';
+                      return true;
+                    });
+
+                    if (filteredTasks.length === 0) {
+                      return (
+                        <div className="p-6 bg-gray-50/50 dark:bg-gray-900/20 text-center rounded-2.5xl border border-dashed border-gray-200 dark:border-gray-700/50">
+                          <p className="text-[11px] text-gray-400 font-medium">
+                            {taskFilter === 'all' 
+                              ? "Aucune tâche enregistrée." 
+                              : taskFilter === 'sec' 
+                                ? "Aucune tâche pour le Secrétariat Général." 
+                                : "Aucune tâche assignée au Bureau Direction."}
+                          </p>
+                        </div>
+                      );
+                    }
+
+                    return (
+                      <div className="space-y-2.5">
+                        {filteredTasks.map(task => {
+                          const isHigh = task.priority === 'high';
+                          const isMedium = task.priority === 'medium';
+                          return (
+                            <div key={task.id} className="p-4 bg-gray-50 dark:bg-gray-900/30 rounded-2.5xl border border-gray-100 dark:border-gray-750 flex items-center justify-between gap-3">
+                              <div className="flex items-start gap-3">
+                                <button 
+                                  onClick={async () => {
+                                    if (!enforcePermission('secretaire_generale')) return;
+                                    try {
+                                      await updateDoc(doc(db, 'resp_secretaire_tasks', task.id), {
+                                        completed: !task.completed
+                                      });
+                                      notifySuccess("Statut de la tâche mis à jour !");
+                                    } catch (error) {
+                                      console.error("Error toggling task completion:", error);
+                                    }
+                                  }}
+                                  className="mt-0.5 text-purple-650 hover:opacity-85 transition-opacity cursor-pointer flex-shrink-0"
+                                >
+                                  <CheckSquare 
+                                    size={18} 
+                                    className={`transition-all ${task.completed ? 'text-emerald-500 fill-emerald-500/10' : 'text-gray-400'}`} 
+                                  />
+                                </button>
+
+                                <div className="text-left">
+                                  <p className={`text-xs font-black ${task.completed ? 'line-through text-gray-450 dark:text-gray-500 font-normal' : 'text-gray-900 dark:text-white'}`}>
+                                    {task.title}
+                                  </p>
+                                  {task.description && (
+                                    <p className="text-[10px] text-gray-500 mt-0.5">{task.description}</p>
+                                  )}
+                                  <p className="text-[9px] text-gray-450 mt-1 font-mono">Échéance : {task.dueDate || 'Non planifiée'}</p>
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-2 flex-shrink-0">
+                                <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-wider ${
+                                  task.scope === 'Bureau Direction' 
+                                    ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950/50 dark:text-indigo-455 border border-indigo-100/50 dark:border-indigo-900/40' 
+                                    : 'bg-purple-50 text-purple-700 dark:bg-purple-950/50 dark:text-purple-455 border border-purple-100/50 dark:border-purple-900/40'
+                                }`}>
+                                  {task.scope}
+                                </span>
+
+                                <span className={`px-1.5 py-0.5 rounded text-[8px] font-black uppercase ${
+                                  isHigh ? 'bg-red-50 text-red-700 dark:bg-red-950/55 dark:text-red-400 border border-red-100/40'
+                                  : isMedium ? 'bg-amber-50 text-amber-700 dark:bg-amber-950/55 dark:text-amber-400 border border-amber-100/40'
+                                  : 'bg-blue-50 text-blue-700 dark:bg-blue-950/55 dark:text-blue-400 border border-blue-105/40'
+                                }`}>
+                                  {isHigh ? 'Urgent' : isMedium ? 'Moyen' : 'Normal'}
+                                </span>
+
+                                <button
+                                  onClick={async () => {
+                                    if (!enforcePermission('secretaire_generale')) return;
+                                    try {
+                                      await deleteDoc(doc(db, 'resp_secretaire_tasks', task.id));
+                                      notifySuccess("Tâche supprimée avec succès !");
+                                    } catch (error) {
+                                      console.error("Error deleting task:", error);
+                                    }
+                                  }}
+                                  className="p-1 text-gray-400 hover:text-red-500 dark:hover:text-red-400 cursor-pointer transition-colors"
+                                >
+                                  <Trash2 size={14} />
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })()}
                 </div>
               </div>
             )}
@@ -1784,6 +2076,7 @@ export default function ResponsibilityZones() {
                     ))}
                   </div>
                 </div>
+                {renderAssignedTasksAndDossiers('Responsable IT')}
               </div>
             )}
 
@@ -2451,57 +2744,200 @@ export default function ResponsibilityZones() {
 
               {/* Form 9: Secretaire Generale */}
               {activeRespId === 'secretaire_generale' && (
-                <form 
-                  onSubmit={async (e) => {
-                    e.preventDefault();
-                    if (!enforcePermission('secretaire_generale')) return;
-                    if (!formDocName.trim() || !formDocOrigin.trim()) return;
-
-                    try {
-                      await addDoc(collection(db, 'resp_dossiers'), {
-                        name: formDocName,
-                        level: formDocLevel,
-                        originSchool: formDocOrigin,
-                        status: 'pending'
-                      });
-                      setFormDocName('');
-                      setFormDocOrigin('');
-                      notifySuccess("Candidature encodée sur le registre !");
-                    } catch (error) {
-                      console.error("Error adding dossier:", error);
-                    }
-                  }}
-                  className="space-y-3 text-xs"
-                >
-                  <div className="space-y-1">
-                    <label className="text-[10px] uppercase font-bold text-gray-400">Candidat Nom complet</label>
-                    <input 
-                      type="text" 
-                      placeholder="Ex: Kouassi Jean"
-                      value={formDocName}
-                      onChange={(e) => setFormDocName(e.target.value)}
-                      className="w-full p-2.5 bg-gray-50 border rounded-xl"
-                    />
+                <div className="space-y-4 text-xs text-left">
+                  {/* Select custom type toggle */}
+                  <div className="grid grid-cols-2 gap-2 p-1 bg-gray-50 dark:bg-gray-900 border dark:border-gray-700 rounded-xl">
+                    <button
+                      type="button"
+                      onClick={() => setSecFormType('dossier')}
+                      className={`py-1.5 rounded-lg text-[9px] font-black uppercase transition-all cursor-pointer ${
+                        secFormType === 'dossier'
+                          ? 'bg-purple-600 text-white shadow-sm'
+                          : 'text-gray-400 hover:text-gray-600 dark:hover:text-white'
+                      }`}
+                    >
+                      Nouveau Dossier
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSecFormType('task')}
+                      className={`py-1.5 rounded-lg text-[9px] font-black uppercase transition-all cursor-pointer ${
+                        secFormType === 'task'
+                          ? 'bg-purple-600 text-white shadow-sm'
+                          : 'text-gray-400 hover:text-gray-600 dark:hover:text-white'
+                      }`}
+                    >
+                      Nouvelle Tâche
+                    </button>
                   </div>
 
-                  <div className="space-y-1">
-                    <label className="text-[10px] uppercase font-bold text-gray-400 font-bold">Établissement de provenance</label>
-                    <input 
-                      type="text" 
-                      placeholder="Lycée municipal..."
-                      value={formDocOrigin}
-                      onChange={(e) => setFormDocOrigin(e.target.value)}
-                      className="w-full p-2.5 bg-gray-50 border rounded-xl"
-                    />
-                  </div>
+                  {secFormType === 'dossier' ? (
+                    <form 
+                      onSubmit={async (e) => {
+                        e.preventDefault();
+                        if (!enforcePermission('secretaire_generale')) return;
+                        if (!formDocName.trim() || !formDocOrigin.trim()) return;
 
-                  <button 
-                    type="submit"
-                    className="w-full py-2.5 bg-purple-600 text-white rounded-xl font-black text-[10px] uppercase cursor-pointer"
-                  >
-                    Enregistrer Candidature
-                  </button>
-                </form>
+                        try {
+                          await addDoc(collection(db, 'resp_dossiers'), {
+                            name: formDocName,
+                            level: formDocLevel,
+                            originSchool: formDocOrigin,
+                            status: 'pending'
+                          });
+                          setFormDocName('');
+                          setFormDocOrigin('');
+                          notifySuccess("Candidature encodée sur le registre !");
+                        } catch (error) {
+                          console.error("Error adding dossier:", error);
+                        }
+                      }}
+                      className="space-y-3 text-xs"
+                    >
+                      <div className="space-y-1">
+                        <label className="text-[10px] uppercase font-bold text-gray-400 block text-left">Candidat Nom complet</label>
+                        <input 
+                          type="text" 
+                          placeholder="Ex: Kouassi Jean"
+                          value={formDocName}
+                          onChange={(e) => setFormDocName(e.target.value)}
+                          className="w-full p-2.5 bg-gray-50 dark:bg-gray-900 border dark:border-gray-750 rounded-xl outline-none"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-[10px] uppercase font-bold text-gray-400 block text-left">Niveau de Direction visé</label>
+                        <select
+                          value={formDocLevel}
+                          onChange={(e) => setFormDocLevel(e.target.value)}
+                          className="w-full p-2.5 bg-gray-50 border rounded-xl dark:bg-gray-900 dark:border-gray-750 outline-none text-xs"
+                        >
+                          <option value="Responsable Pédagogique">Responsable Pédagogique</option>
+                          <option value="Responsable Maternelle">Responsable Maternelle</option>
+                          <option value="Responsable Collège">Responsable Collège</option>
+                          <option value="Responsable Primaire">Responsable Primaire</option>
+                          <option value="Responsable IT">Responsable IT (Matériels informatiques)</option>
+                        </select>
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-[10px] uppercase font-bold text-gray-400 block text-left">Établissement de provenance</label>
+                        <input 
+                          type="text" 
+                          placeholder="Lycée municipal..."
+                          value={formDocOrigin}
+                          onChange={(e) => setFormDocOrigin(e.target.value)}
+                          className="w-full p-2.5 bg-gray-50 dark:bg-gray-900 border dark:border-gray-750 rounded-xl outline-none"
+                        />
+                      </div>
+
+                      <button 
+                        type="submit"
+                        className="w-full py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-black text-[10px] uppercase cursor-pointer"
+                      >
+                        Enregistrer Candidature
+                      </button>
+                    </form>
+                  ) : (
+                    <form 
+                      onSubmit={async (e) => {
+                        e.preventDefault();
+                        if (!enforcePermission('secretaire_generale')) return;
+                        if (!formTaskTitle.trim()) return;
+
+                        try {
+                          await addDoc(collection(db, 'resp_secretaire_tasks'), {
+                            title: formTaskTitle,
+                            description: formTaskDesc,
+                            dueDate: formTaskDueDate || 'Non planifiée',
+                            priority: formTaskPriority,
+                            scope: formTaskScope,
+                            completed: false
+                          });
+                          setFormTaskTitle('');
+                          setFormTaskDesc('');
+                          setFormTaskDueDate('');
+                          notifySuccess("Tâche ajoutée en temps réel !");
+                        } catch (error) {
+                          console.error("Error adding task:", error);
+                        }
+                      }}
+                      className="space-y-3 text-xs"
+                    >
+                      <div className="space-y-1">
+                        <label className="text-[10px] uppercase font-bold text-gray-400 block text-left font-bold">Titre de la tâche</label>
+                        <input 
+                          type="text" 
+                          placeholder="Ex: Préparation des dossiers d'admission"
+                          value={formTaskTitle}
+                          onChange={(e) => setFormTaskTitle(e.target.value)}
+                          className="w-full p-2.5 bg-gray-50 dark:bg-gray-900 border dark:border-gray-750 rounded-xl outline-none"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-[10px] uppercase font-bold text-gray-400 block text-left font-bold">Description détaillée</label>
+                        <input 
+                          type="text" 
+                          placeholder="Spécifiez les objectifs ou détails..."
+                          value={formTaskDesc}
+                          onChange={(e) => setFormTaskDesc(e.target.value)}
+                          className="w-full p-2.5 bg-gray-50 dark:bg-gray-900 border dark:border-gray-750 rounded-xl outline-none"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-[10px] uppercase font-bold text-gray-400 block text-left font-bold">Date d'échéance</label>
+                        <input 
+                          type="text" 
+                          placeholder="Ex: Ce vendredi, 15h"
+                          value={formTaskDueDate}
+                          onChange={(e) => setFormTaskDueDate(e.target.value)}
+                          className="w-full p-2.5 bg-gray-50 dark:bg-gray-900 border dark:border-gray-750 rounded-xl outline-none"
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="space-y-1 text-left">
+                          <label className="text-[10px] uppercase font-bold text-gray-400 block text-left font-bold">Priorité</label>
+                          <select
+                            value={formTaskPriority}
+                            onChange={(e: any) => setFormTaskPriority(e.target.value)}
+                            className="w-full p-2.5 bg-gray-50 dark:bg-gray-900 border dark:border-gray-750 rounded-xl outline-none text-xs"
+                          >
+                            <option value="low">Normale</option>
+                            <option value="medium">Moyenne</option>
+                            <option value="high">Urgente</option>
+                          </select>
+                        </div>
+
+                        <div className="space-y-1 text-left">
+                          <label className="text-[10px] uppercase font-bold text-gray-400 block text-left font-bold">Espace de Destination</label>
+                          <select
+                            value={formTaskScope}
+                            onChange={(e: any) => setFormTaskScope(e.target.value)}
+                            className="w-full p-2.5 bg-gray-50 dark:bg-gray-900 border dark:border-gray-750 rounded-xl outline-none text-xs"
+                          >
+                            <option value="Bureau Direction">Bureau Direction</option>
+                            <option value="Secrétariat Général">Secrétariat Général</option>
+                            <option value="Responsable Pédagogique">Responsable Pédagogique</option>
+                            <option value="Responsable Maternelle">Responsable Maternelle</option>
+                            <option value="Responsable Collège">Responsable Collège</option>
+                            <option value="Responsable Primaire">Responsable Primaire</option>
+                            <option value="Responsable IT">Responsable IT (Matériels informatiques)</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      <button 
+                        type="submit"
+                        className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-black text-[10px] uppercase cursor-pointer"
+                      >
+                        Créer une nouvelle tâche
+                      </button>
+                    </form>
+                  )}
+                </div>
               )}
 
               {/* Form 10: Secretaire Adjointe */}

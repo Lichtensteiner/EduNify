@@ -387,6 +387,20 @@
       },
       "required": ["name", "level", "originSchool", "status"]
     },
+    "resp_secretaire_tasks": {
+      "title": "Responsibility - Secretary General Tasks",
+      "description": "Task management items for Secretary General with Office of Directorate option",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "dueDate": { "type": "string" },
+        "priority": { "type": "string", "enum": ["low", "medium", "high"] },
+        "scope": { "type": "string", "enum": ["Secrétariat Général", "Bureau Direction", "Responsable Pédagogique", "Responsable Maternelle", "Responsable Collège", "Responsable Primaire", "Responsable IT (Matériels informatiques)"] },
+        "completed": { "type": "boolean" }
+      },
+      "required": ["title", "description", "dueDate", "priority", "scope", "completed"]
+    },
     "resp_phone_calls": {
       "title": "Responsibility - Phone Calls Log",
       "description": "Adjoint secretariat telephone message logs",
@@ -453,6 +467,7 @@
     "/resp_clean_zones/{zoneId}": { "schema": "resp_clean_zones", "description": "Salubrité checklist." },
     "/resp_cleaning_supplies/{supId}": { "schema": "resp_cleaning_supplies", "description": "Cleaning supply stock status." },
     "/resp_dossiers/{dosId}": { "schema": "resp_dossiers", "description": "Candidate files." },
+    "/resp_secretaire_tasks/{taskId}": { "schema": "resp_secretaire_tasks", "description": "Secretary General task list with Directorate options." },
     "/resp_phone_calls/{callId}": { "schema": "resp_phone_calls", "description": "Phone call receipts." },
     "/resp_it_loans/{loanId}": { "schema": "resp_it_loans", "description": "Tablet cart loans." },
     "/resp_it_tickets/{ticketId}": { "schema": "resp_it_tickets", "description": "IT defect tickets." }
