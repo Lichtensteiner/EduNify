@@ -218,6 +218,39 @@ const Finance: React.FC = () => {
     loading: boolean;
     error?: string;
   } | null>(null);
+
+  // Real-time editable fields for printable receipt and preview
+  const [receiptStudentName, setReceiptStudentName] = useState('');
+  const [receiptReference, setReceiptReference] = useState('');
+  const [receiptAmount, setReceiptAmount] = useState(0);
+  const [receiptNotes, setReceiptNotes] = useState('');
+  const [receiptAudit, setReceiptAudit] = useState('');
+
+  // Sync state values when selectedInvoice changes
+  useEffect(() => {
+    if (selectedInvoice) {
+      setReceiptStudentName(selectedInvoice.studentName || '');
+      setReceiptReference(selectedInvoice.reference || `FAC-${selectedInvoice.id.substring(0,6).toUpperCase()}`);
+      setReceiptAmount(selectedInvoice.amount || 0);
+      setReceiptNotes(aiInvoiceAnalysis?.notes || "Paiement enregistré avec succès. Merci pour votre versement.");
+      setReceiptAudit(aiInvoiceAnalysis?.audit || "Conformité validée en imputation double-partie.");
+    } else {
+      setReceiptStudentName('');
+      setReceiptReference('');
+      setReceiptAmount(0);
+      setReceiptNotes('');
+      setReceiptAudit('');
+    }
+  }, [selectedInvoice]);
+
+  // Sync state when aiInvoiceAnalysis finishes loading or resolves
+  useEffect(() => {
+    if (selectedInvoice && aiInvoiceAnalysis && !aiInvoiceAnalysis.loading) {
+      setReceiptNotes(aiInvoiceAnalysis.notes);
+      setReceiptAudit(aiInvoiceAnalysis.audit);
+    }
+  }, [aiInvoiceAnalysis]);
+
   const [studentSearchInput, setStudentSearchInput] = useState('');
   const [showStudentDropdown, setShowStudentDropdown] = useState(false);
 
@@ -786,22 +819,12 @@ En tant qu'intelligence artificielle financière d'Edu-Nify, veuillez générer 
           audit: parsed.audit || "Aucune anomalie détectée sur l'imputation analytique double-partie.",
           loading: false
         });
-        
-        // Auto launch printing once the AI content updates in the DOM
-        setTimeout(() => {
-          window.print();
-        }, 800);
       } catch {
         setAiInvoiceAnalysis({
           notes: data.text,
           audit: "Analyse terminée avec succès.",
           loading: false
         });
-        
-        // Auto launch printing once the AI content updates in the DOM
-        setTimeout(() => {
-          window.print();
-        }, 800);
       }
     } catch (err: any) {
       console.error(err);
@@ -811,11 +834,6 @@ En tant qu'intelligence artificielle financière d'Edu-Nify, veuillez générer 
         loading: false,
         error: err.message || "Erreur de connexion IA."
       });
-      
-      // Auto launch printing even on failure fallback
-      setTimeout(() => {
-        window.print();
-      }, 800);
     }
   };
 
@@ -826,8 +844,11 @@ En tant qu'intelligence artificielle financière d'Edu-Nify, veuillez générer 
         ? payment.date.toDate().toLocaleString('fr-FR') 
         : new Date(payment.date || Date.now()).toLocaleString('fr-FR');
         
-    const finalNotes = notesOverrider || (aiInvoiceAnalysis && !aiInvoiceAnalysis.loading ? aiInvoiceAnalysis.notes : "Versement enregistré avec succès. Merci pour votre paiement.");
-    const finalAudit = auditOverrider || (aiInvoiceAnalysis && !aiInvoiceAnalysis.loading ? aiInvoiceAnalysis.audit : "Conformité validée en double-partie.");
+    const finalNotes = notesOverrider || receiptNotes || "Versement enregistré avec succès. Merci pour votre paiement.";
+    const finalAudit = auditOverrider || receiptAudit || "Conformité validée en double-partie.";
+    const finalStudentName = receiptStudentName || payment.studentName;
+    const finalReference = receiptReference || payment.reference || `FAC-${payment.id.substring(0,6).toUpperCase()}`;
+    const finalAmount = receiptAmount || payment.amount;
 
     const content = `==========================================================
 ÉCOLE INTERNATIONALE DU CENTRE PÉDAGOGIQUE
@@ -835,17 +856,17 @@ Shop Universitaire, Libreville, Gabon
 N° 077022306 | ludo.consulting3@gmail.com | +241 07 70 22 306
 ==========================================================
 REÇU DE COMPLEMENT DE VERSEMENT - CERTIFIÉ CONFORME
-Référence : ${payment.reference || `FAC-${payment.id.substring(0,6).toUpperCase()}`}
+Référence : ${finalReference}
 Date de l'opération : ${dateString}
-Nom de l'élève / Bénéficiaire : ${payment.studentName}
+Nom de l'élève / Bénéficiaire : ${finalStudentName}
 ----------------------------------------------------------
 Rubrique Budgétaire : ${payment.type.toUpperCase()}
 Imputation SYSCOHADA : ${payment.type === 'tuition' ? 'Classe 7 - Compte 701000 (Scolarités)' : 'Prestations - Compte 706000'}
 Mode de Règlement : ${payment.method.toUpperCase()}
-Montant Versé : ${payment.amount} FCFA
+Montant Versé : ${finalAmount} FCFA
 Taux de TVA : Exonéré (0%)
 ----------------------------------------------------------
-TOTAL NET PAYÉ : ${payment.amount} FCFA
+TOTAL NET PAYÉ : ${finalAmount} FCFA
 ----------------------------------------------------------
 ANNOTATION PERSONNALISÉE PAR IA :
 ${finalNotes}
@@ -863,7 +884,7 @@ Sceau de sécurité : CS-GAB-${payment.id.substring(0,8).toUpperCase()}-2026
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `Recu_${payment.studentName.replace(/\s+/g, '_')}_${payment.reference || payment.id.substring(0, 6)}.txt`;
+    link.download = `Recu_${finalStudentName.replace(/\s+/g, '_')}_${finalReference}.txt`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -2589,7 +2610,15 @@ Sceau de sécurité : CS-GAB-${payment.id.substring(0,8).toUpperCase()}-2026
                     </div>
                     <div className="text-right">
                       <span className="inline-block px-2.5 py-1 bg-indigo-50 text-indigo-700 text-[10px] font-black uppercase tracking-widest rounded-lg mb-2">REÇU DE COMPLEMENT</span>
-                      <p className="text-xs font-black text-slate-800">Réf: {selectedInvoice.reference || `FAC-${selectedInvoice.id.substring(0,6).toUpperCase()}`}</p>
+                      <div className="flex items-center text-xs justify-end font-black text-slate-800 gap-1">
+                        <span>Réf:</span>
+                        <input
+                          type="text"
+                          value={receiptReference}
+                          onChange={(e) => setReceiptReference(e.target.value)}
+                          className="font-black text-slate-800 bg-transparent border-b border-dashed border-gray-300 hover:border-indigo-400 focus:border-indigo-500 focus:bg-indigo-50/50 outline-none text-right w-24 rounded px-1 py-0.5 transition-all"
+                        />
+                      </div>
                       <p className="text-[10px] text-gray-400 font-bold font-mono">Date: {
                         selectedInvoice.date?.seconds 
                           ? new Date(selectedInvoice.date.seconds * 1000).toLocaleDateString('fr-FR', { dateStyle: 'medium' })
@@ -2604,8 +2633,14 @@ Sceau de sécurité : CS-GAB-${payment.id.substring(0,8).toUpperCase()}-2026
                   <div className="my-6 grid grid-cols-2 gap-4 text-xs">
                     <div>
                       <p className="text-[10px] font-black uppercase text-gray-400 tracking-wide mb-1">RÉCIPIENDAIRE / ÉLÈVE</p>
-                      <p className="font-extrabold text-slate-900">{selectedInvoice.studentName}</p>
-                      <p className="text-[10px] text-gray-500 font-mono">Type : Exonéré de TVA (Reg. Scolaire)</p>
+                      <input
+                        type="text"
+                        value={receiptStudentName}
+                        onChange={(e) => setReceiptStudentName(e.target.value)}
+                        className="font-extrabold text-slate-900 bg-transparent border-b border-dashed border-gray-300 hover:border-indigo-400 focus:border-indigo-500 focus:bg-indigo-50/50 outline-none w-full rounded px-1 py-0.5 transition-all text-sm"
+                        placeholder="Nom de l'élève"
+                      />
+                      <p className="text-[10px] text-gray-500 font-mono mt-0.5">Type : Exonéré de TVA (Reg. Scolaire)</p>
                     </div>
                     <div>
                       <p className="text-[10px] font-black uppercase text-gray-400 tracking-wide mb-1">IMPUTATION SYSCOHADA</p>
@@ -2637,14 +2672,24 @@ Sceau de sécurité : CS-GAB-${payment.id.substring(0,8).toUpperCase()}-2026
                         <td className="py-3 uppercase text-[10px] font-bold">
                           {selectedInvoice.method === 'cash' ? '💵 Espèces' : selectedInvoice.method === 'transfer' ? '🏦 Virement' : selectedInvoice.method.toUpperCase()}
                         </td>
-                        <td className="py-3 text-right font-black text-slate-900 font-mono text-[12px]">{formatCurrency(selectedInvoice.amount)}</td>
+                        <td className="py-3 text-right">
+                          <div className="flex items-center justify-end font-black text-slate-900 font-mono text-[12px] gap-0.5">
+                            <input
+                              type="number"
+                              value={receiptAmount}
+                              onChange={(e) => setReceiptAmount(Number(e.target.value))}
+                              className="font-black text-slate-900 bg-transparent border-b border-dashed border-gray-300 hover:border-indigo-400 focus:border-indigo-500 focus:bg-indigo-50/50 outline-none text-right w-20 rounded px-1 py-0.5 transition-all"
+                            />
+                            <span>FCFA</span>
+                          </div>
+                        </td>
                       </tr>
                       
                       {/* Calculation Rows */}
                       <tr className="border-t border-slate-900/60">
                         <td colSpan={2} />
                         <td className="py-1.5 font-bold text-slate-500">Total Net H.T :</td>
-                        <td className="py-1.5 text-right font-bold text-slate-500 font-mono">{formatCurrency(selectedInvoice.amount)}</td>
+                        <td className="py-1.5 text-right font-bold text-slate-500 font-mono">{formatCurrency(receiptAmount)}</td>
                       </tr>
                       <tr>
                         <td colSpan={2} />
@@ -2654,7 +2699,7 @@ Sceau de sécurité : CS-GAB-${payment.id.substring(0,8).toUpperCase()}-2026
                       <tr className="border-t-2 border-slate-900 text-[13px] font-black text-slate-900">
                         <td colSpan={2} />
                         <td className="py-2.5">Total Versé :</td>
-                        <td className="py-2.5 text-right font-mono text-indigo-700">{formatCurrency(selectedInvoice.amount)}</td>
+                        <td className="py-2.5 text-right font-mono text-indigo-700">{formatCurrency(receiptAmount)}</td>
                       </tr>
                     </tbody>
                   </table>
@@ -2662,15 +2707,19 @@ Sceau de sécurité : CS-GAB-${payment.id.substring(0,8).toUpperCase()}-2026
                   {/* AI Generated Remarks on printed sheet */}
                   <div className="p-4 bg-indigo-50 border border-indigo-100 rounded-xl space-y-1 mb-6 text-slate-800 text-[10px]">
                     <p className="font-extrabold uppercase tracking-wide flex items-center gap-1.5 text-indigo-800">
-                      <Sparkles size={11} className="text-violet-500" />
-                      Remarques Spéciales d'Accompagnement (Projeté par IA) :
+                      <Sparkles size={11} className="text-violet-500 animate-pulse" />
+                      Remarques Spéciales d'Accompagnement (Modifiable en temps réel) :
                     </p>
                     {aiInvoiceAnalysis?.loading ? (
                       <p className="text-gray-400 font-mono animate-pulse">L'Assistant IA analyse la fiche financière et formule un message d'accompagnement...</p>
                     ) : (
-                      <p className="italic font-medium leading-relaxed">
-                        {aiInvoiceAnalysis?.notes || "Versement certifié conforme. Nous vous remercions pour votre versement en faveur de l'avancement académique d'excellence."}
-                      </p>
+                      <textarea
+                        value={receiptNotes}
+                        onChange={(e) => setReceiptNotes(e.target.value)}
+                        className="w-full bg-transparent text-[10px] font-sans italic border-b border-dashed border-transparent hover:border-indigo-200 focus:border-indigo-400 focus:bg-white rounded-lg p-1 resize-none leading-relaxed transition-all outline-none font-medium text-slate-800"
+                        rows={3}
+                        placeholder="Commentez ou saisissez des remarques d'accompagnement..."
+                      />
                     )}
                   </div>
 
@@ -2691,7 +2740,7 @@ Sceau de sécurité : CS-GAB-${payment.id.substring(0,8).toUpperCase()}-2026
                   {/* Security watermark hash confirmation */}
                   <div className="text-[8px] text-gray-400 flex items-center justify-between font-mono bg-slate-50 p-2.5 rounded-lg border border-gray-100 uppercase mt-4">
                     <span>Edu-Nify Anti-Falsification ID : {selectedInvoice.id}</span>
-                    <span className="text-emerald-600 font-bold">SHA-HASH: {generateTransactionHash(selectedInvoice.id, '521000', '701000', selectedInvoice.amount, '2026').substring(0, 24)}...</span>
+                    <span className="text-emerald-600 font-bold">SHA-HASH: {generateTransactionHash(selectedInvoice.id, '521000', '701000', receiptAmount, '2026').substring(0, 24)}...</span>
                   </div>
                 </div>
               </div>
@@ -2734,8 +2783,14 @@ Sceau de sécurité : CS-GAB-${payment.id.substring(0,8).toUpperCase()}-2026
                     ) : (
                       <div className="text-xs text-gray-700 dark:text-gray-300 leading-relaxed font-sans whitespace-pre-line space-y-2">
                         <div className="p-2.5 bg-green-50/50 dark:bg-green-950/20 border border-green-100 dark:border-green-900 rounded-xl">
-                          <p className="text-[9px] font-black uppercase tracking-wider text-green-700 dark:text-green-400 mb-1">RAPPORT DE CONFORMITÉ</p>
-                          <p className="font-medium text-slate-800 dark:text-slate-350">{aiInvoiceAnalysis?.audit || "L'imputation est jugée légitime et équilibrée."}</p>
+                          <p className="text-[9px] font-black uppercase tracking-wider text-green-700 dark:text-green-400 mb-1">RAPPORT DE CONFORMITÉ (MODIFIABLE)</p>
+                          <textarea
+                            value={receiptAudit}
+                            onChange={(e) => setReceiptAudit(e.target.value)}
+                            className="w-full bg-transparent text-xs font-semibold leading-relaxed border border-dashed border-transparent hover:border-gray-350 focus:border-indigo-400 focus:bg-white dark:focus:bg-gray-800 rounded-lg p-1.5 resize-none leading-normal transition-all outline-none text-slate-800 dark:text-slate-100"
+                            rows={4}
+                            placeholder="Saisissez ou modifiez le rapport de conformité d'audit..."
+                          />
                         </div>
                       </div>
                     )}
@@ -2785,7 +2840,7 @@ Sceau de sécurité : CS-GAB-${payment.id.substring(0,8).toUpperCase()}-2026
             </div>
             <div className="text-right">
               <span className="inline-block px-2 bg-slate-100 border border-slate-300 font-extrabold text-[9px] uppercase tracking-wider py-0.5 rounded mb-1">REÇU DE COMPLEMENT</span>
-              <p className="font-extrabold">Facture N°: {selectedInvoice.reference || `FAC-${selectedInvoice.id.substring(0,6).toUpperCase()}`}</p>
+              <p className="font-extrabold">Facture N°: {receiptReference}</p>
               <p className="text-[9px] font-mono">Date : {
                 selectedInvoice.date?.seconds 
                   ? new Date(selectedInvoice.date.seconds * 1000).toLocaleDateString('fr-FR', { dateStyle: 'long' })
@@ -2800,7 +2855,7 @@ Sceau de sécurité : CS-GAB-${payment.id.substring(0,8).toUpperCase()}-2026
           <div className="grid grid-cols-2 gap-4 mb-4 pb-2 border-b border-gray-300">
             <div>
               <p className="text-[9px] font-extrabold text-gray-400 uppercase tracking-widest mb-0.5">Pour le compte de l'élève</p>
-              <p className="font-black text-sm">{selectedInvoice.studentName}</p>
+              <p className="font-black text-sm">{receiptStudentName}</p>
               <p className="text-[9px] text-gray-500 font-mono">Status d'exonération : Exonéré (Régime Académique)</p>
             </div>
             <div>
@@ -2833,14 +2888,14 @@ Sceau de sécurité : CS-GAB-${payment.id.substring(0,8).toUpperCase()}-2026
                 <td className="py-3 uppercase text-[9px] font-bold">
                   {selectedInvoice.method === 'cash' ? '💵 Espèces' : selectedInvoice.method === 'transfer' ? '🏦 Virement' : selectedInvoice.method.toUpperCase()}
                 </td>
-                <td className="py-3 text-right font-black font-mono text-[11px]">{formatCurrency(selectedInvoice.amount)}</td>
+                <td className="py-3 text-right font-black font-mono text-[11px]">{formatCurrency(receiptAmount)}</td>
               </tr>
               
               {/* Calculations */}
               <tr className="border-t border-black">
                 <td colSpan={2} />
                 <td className="py-1 font-bold">Net Hors-Taxes :</td>
-                <td className="py-1 text-right font-mono font-bold">{formatCurrency(selectedInvoice.amount)}</td>
+                <td className="py-1 text-right font-mono font-bold">{formatCurrency(receiptAmount)}</td>
               </tr>
               <tr>
                 <td colSpan={2} />
@@ -2850,7 +2905,7 @@ Sceau de sécurité : CS-GAB-${payment.id.substring(0,8).toUpperCase()}-2026
               <tr className="border-t-2 border-black text-sm font-black">
                 <td colSpan={2} />
                 <td className="py-2">Scolarité Versée :</td>
-                <td className="py-2 text-right font-mono text-indigo-800">{formatCurrency(selectedInvoice.amount)}</td>
+                <td className="py-2 text-right font-mono text-indigo-800">{formatCurrency(receiptAmount)}</td>
               </tr>
             </tbody>
           </table>
@@ -2861,7 +2916,7 @@ Sceau de sécurité : CS-GAB-${payment.id.substring(0,8).toUpperCase()}-2026
               <Sparkles size={11} /> Annotation Personnalisée par IA :
             </p>
             <p className="italic leading-relaxed font-semibold">
-              {aiInvoiceAnalysis?.notes || "Paiement validé avec succès. Merci pour votre versement."}
+              {receiptNotes || "Paiement validé avec succès. Merci pour votre versement."}
             </p>
           </div>
 
@@ -2882,7 +2937,7 @@ Sceau de sécurité : CS-GAB-${payment.id.substring(0,8).toUpperCase()}-2026
           {/* Footer security tag */}
           <div className="text-[7px] text-gray-500 flex justify-between items-center font-mono mt-10 bg-slate-150 p-2 border border-gray-300 rounded uppercase">
             <span>Edu-Nify Anti-Falsification ID : {selectedInvoice.id}</span>
-            <span className="font-bold">SHA-HASH: {generateTransactionHash(selectedInvoice.id, '521000', '701000', selectedInvoice.amount, '2026')}</span>
+            <span className="font-bold">SHA-HASH: {generateTransactionHash(selectedInvoice.id, '521000', '701000', receiptAmount, '2026')}</span>
           </div>
         </div>
       )}
