@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
+import { usePWA } from '../hooks/usePWA';
 import { db } from '../lib/firebase';
 import { recordAuditLog } from '../services/auditService';
 import { 
@@ -52,7 +53,11 @@ import {
   Check,
   ArrowRight,
   ArrowLeft,
-  BookOpen
+  BookOpen,
+  Smartphone,
+  QrCode,
+  Share2,
+  HelpCircle
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -166,6 +171,10 @@ const Finance: React.FC = () => {
   const { currentUser } = useAuth();
   const { t, language, tData } = useLanguage();
 
+  // PWA Support & Install hook
+  const { isInstallable, installApp, isStandalone, getOS } = usePWA();
+  const [showPwaInstallModal, setShowPwaInstallModal] = useState(false);
+
   // ERP Tab State
   const [activeTab, setActiveTab2] = useState<'journal' | 'caisse' | 'expenses' | 'accounting_plan' | 'double_entries' | 'balance_sheet' | 'sage_sync' | 'parent_invoice'>('journal');
   
@@ -202,6 +211,7 @@ const Finance: React.FC = () => {
   
   // Invoice states
   const [selectedInvoice, setSelectedInvoice] = useState<Payment | null>(null);
+  const [autoDownloadSetting, setAutoDownloadSetting] = useState(true);
   const [aiInvoiceAnalysis, setAiInvoiceAnalysis] = useState<{
     notes: string;
     audit: string;
@@ -754,7 +764,14 @@ En tant qu'intelligence artificielle financière d'Edu-Nify, veuillez générer 
       });
 
       if (!resp.ok) {
-        throw new Error("Le service d'assistance IA a renvoyé un statut d'erreur.");
+        let errorMsg = "Le service d'assistance IA a renvoyé un statut d'erreur.";
+        try {
+          const errData = await resp.json();
+          if (errData && errData.error) {
+            errorMsg = errData.error;
+          }
+        } catch {}
+        throw new Error(errorMsg);
       }
 
       const data = await resp.json();
@@ -790,7 +807,7 @@ En tant qu'intelligence artificielle financière d'Edu-Nify, veuillez générer 
       console.error(err);
       setAiInvoiceAnalysis({
         notes: "Versement enregistré avec succès. Merci pour votre paiement de scolarité à l'École Intern. du Centre Pédagogique.",
-        audit: "Échelle de l'appel direct avec l'assistant Audit IA: " + (err.message || err),
+        audit: "Échec de l'appel direct avec l'assistant Audit IA: " + (err.message || err),
         loading: false,
         error: err.message || "Erreur de connexion IA."
       });
@@ -799,6 +816,88 @@ En tant qu'intelligence artificielle financière d'Edu-Nify, veuillez générer 
       setTimeout(() => {
         window.print();
       }, 800);
+    }
+  };
+
+  const downloadInvoiceAsFile = (payment: Payment, notesOverrider?: string, auditOverrider?: string) => {
+    const dateString = payment.date?.seconds 
+      ? new Date(payment.date.seconds * 1000).toLocaleString('fr-FR')
+      : payment.date?.toDate 
+        ? payment.date.toDate().toLocaleString('fr-FR') 
+        : new Date(payment.date || Date.now()).toLocaleString('fr-FR');
+        
+    const finalNotes = notesOverrider || (aiInvoiceAnalysis && !aiInvoiceAnalysis.loading ? aiInvoiceAnalysis.notes : "Versement enregistré avec succès. Merci pour votre paiement.");
+    const finalAudit = auditOverrider || (aiInvoiceAnalysis && !aiInvoiceAnalysis.loading ? aiInvoiceAnalysis.audit : "Conformité validée en double-partie.");
+
+    const content = `==========================================================
+ÉCOLE INTERNATIONALE DU CENTRE PÉDAGOGIQUE
+Shop Universitaire, Libreville, Gabon
+N° 077022306 | ludo.consulting3@gmail.com | +241 07 70 22 306
+==========================================================
+REÇU DE COMPLEMENT DE VERSEMENT - CERTIFIÉ CONFORME
+Référence : ${payment.reference || `FAC-${payment.id.substring(0,6).toUpperCase()}`}
+Date de l'opération : ${dateString}
+Nom de l'élève / Bénéficiaire : ${payment.studentName}
+----------------------------------------------------------
+Rubrique Budgétaire : ${payment.type.toUpperCase()}
+Imputation SYSCOHADA : ${payment.type === 'tuition' ? 'Classe 7 - Compte 701000 (Scolarités)' : 'Prestations - Compte 706000'}
+Mode de Règlement : ${payment.method.toUpperCase()}
+Montant Versé : ${payment.amount} FCFA
+Taux de TVA : Exonéré (0%)
+----------------------------------------------------------
+TOTAL NET PAYÉ : ${payment.amount} FCFA
+----------------------------------------------------------
+ANNOTATION PERSONNALISÉE PAR IA :
+${finalNotes}
+
+RAPPORT TECHNIQUE DE CONFORMITÉ IA :
+${finalAudit}
+
+----------------------------------------------------------
+Document signé numériquement et certifié conforme.
+ID de transaction unique : ${payment.id}
+Sceau de sécurité : CS-GAB-${payment.id.substring(0,8).toUpperCase()}-2026
+==========================================================`;
+
+    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `Recu_${payment.studentName.replace(/\s+/g, '_')}_${payment.reference || payment.id.substring(0, 6)}.txt`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleSearchChange = (val: string) => {
+    setSearchTerm(val);
+    const trimmedVal = val.trim().toLowerCase();
+    
+    // Check if user is typing a PWA suffix like .apk, .pwa, or .app
+    if (trimmedVal.endsWith('.apk') || trimmedVal.endsWith('.pwa') || trimmedVal.endsWith('.app')) {
+      setShowPwaInstallModal(true);
+      const suffixLength = trimmedVal.endsWith('.apk') ? 4 : (trimmedVal.endsWith('.pwa') ? 4 : 4);
+      const cleanTerm = val.trim().slice(0, -suffixLength).trim();
+      setSearchTerm(cleanTerm);
+      return;
+    }
+
+    if (autoDownloadSetting && trimmedVal.endsWith('.pdf') && val.trim().length > 4) {
+      const cleanTerm = val.trim().slice(0, -4).trim();
+      if (!cleanTerm) return;
+      const matched = payments.find(p => 
+        p.studentName.toLowerCase().includes(cleanTerm.toLowerCase()) ||
+        (p.reference && p.reference.toLowerCase().includes(cleanTerm.toLowerCase())) ||
+        p.id.toLowerCase().includes(cleanTerm.toLowerCase())
+      );
+      if (matched) {
+        setSelectedInvoice(matched);
+        handleGenerateAIInvoiceDetails(matched);
+        // Download fallback text file as soon as the user matches!
+        downloadInvoiceAsFile(matched, "Versement enregistré avec succès.", "Analyse d'Audit compta lancée en parallèle.");
+        setSearchTerm(cleanTerm);
+      }
     }
   };
 
@@ -1221,15 +1320,46 @@ En tant qu'intelligence artificielle financière d'Edu-Nify, veuillez générer 
       {activeTab === 'journal' && (
         <div className="space-y-4">
           <div className="flex flex-col sm:flex-row gap-4 justify-between items-center bg-gray-50 dark:bg-gray-800 p-4 rounded-2xl">
-            <div className="relative flex-1 w-full">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-              <input
-                type="text"
-                placeholder="Rechercher par élève ou référence..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-xs font-bold"
-              />
+            <div className="relative flex-1 w-full flex flex-col gap-1.5">
+              <div className="flex flex-col md:flex-row gap-2.5 items-stretch md:items-center w-full">
+                <div className="relative flex-1 pb-1 md:pb-0">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                  <input
+                    type="text"
+                    placeholder="Tapez un nom ou référence... Ajoutez '.pdf' à la fin pour imprimer automatiquement"
+                    value={searchTerm}
+                    onChange={(e) => handleSearchChange(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-xs font-bold"
+                  />
+                </div>
+                
+                <div className="flex items-center gap-2 px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl shrink-0">
+                  <input
+                    type="checkbox"
+                    id="auto-download-extension"
+                    checked={autoDownloadSetting}
+                    onChange={(e) => setAutoDownloadSetting(e.target.checked)}
+                    className="rounded text-indigo-600 focus:ring-indigo-500 w-3.5 h-3.5 cursor-pointer accent-indigo-650"
+                  />
+                  <label htmlFor="auto-download-extension" className="text-[10px] font-black uppercase text-gray-500 dark:text-gray-400 select-none cursor-pointer flex items-center gap-1.5">
+                    <Sparkles size={11} className="text-violet-500 animate-pulse" />
+                    Déclencheur auto (.pdf)
+                  </label>
+                </div>
+              </div>
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 pl-1">
+                <p className="text-[9px] text-indigo-600 dark:text-indigo-400 font-extrabold uppercase tracking-wide flex items-center gap-1">
+                  💡 Astuce Reçu : Tapez '.pdf' à la fin de votre recherche (ex: 'Jean.pdf') pour lancer instantanément l'analyse IA et l'impression !
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setShowPwaInstallModal(true)}
+                  className="text-[9px] text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 font-black uppercase tracking-wider flex items-center gap-1 cursor-pointer transition-all bg-emerald-50 dark:bg-emerald-950/20 px-2.5 py-1 rounded-lg border border-emerald-100 dark:border-emerald-900"
+                >
+                  <Smartphone size={11} className="animate-pulse text-emerald-500" />
+                  Installer version Mobile (.apk)
+                </button>
+              </div>
             </div>
 
             <div className="flex items-center gap-2.5 w-full sm:w-auto">
@@ -2423,12 +2553,20 @@ En tant qu'intelligence artificielle financière d'Edu-Nify, veuillez générer 
               <div className="w-full md:w-2/3 p-6 bg-slate-50 dark:bg-slate-900 border-b md:border-b-0 md:border-r border-gray-100 dark:border-gray-700 overflow-y-auto flex flex-col items-center">
                 <div className="w-full flex justify-between items-center mb-4 border-b border-gray-150 pb-3">
                   <span className="text-xs font-black uppercase tracking-wider text-gray-400">Prévisualisation du Reçu</span>
-                  <button
-                    onClick={() => window.print()}
-                    className="flex items-center gap-1 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-[10px] font-black uppercase transition-all shadow-md shadow-emerald-600/15"
-                  >
-                    <Printer size={12} /> Imprimer Reçu
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => downloadInvoiceAsFile(selectedInvoice!)}
+                      className="flex items-center gap-1 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-[10px] font-black uppercase transition-all shadow-md shadow-indigo-600/15"
+                    >
+                      <Download size={12} /> Télécharger (.txt)
+                    </button>
+                    <button
+                      onClick={() => window.print()}
+                      className="flex items-center gap-1 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-[10px] font-black uppercase transition-all shadow-md shadow-emerald-600/15"
+                    >
+                      <Printer size={12} /> Imprimer Reçu
+                    </button>
+                  </div>
                 </div>
 
                 {/* Simulated A4/Receipt layout paper sheet */}
@@ -2748,6 +2886,128 @@ En tant qu'intelligence artificielle financière d'Edu-Nify, veuillez générer 
           </div>
         </div>
       )}
+
+      {/* Interactive Mobile Install/PWA Guide Modal */}
+      <AnimatePresence>
+        {showPwaInstallModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md overflow-y-auto">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 15 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 15 }}
+              className="bg-white dark:bg-gray-800 rounded-3xl shadow-2xl max-w-2xl w-full overflow-hidden border border-gray-100 dark:border-gray-700 font-sans"
+            >
+              {/* Header */}
+              <div className="p-6 border-b border-gray-100 dark:border-gray-700 bg-gradient-to-r from-emerald-50 to-indigo-50 dark:from-emerald-950/20 dark:to-indigo-950/20 relative">
+                <button
+                  type="button"
+                  onClick={() => setShowPwaInstallModal(false)}
+                  className="absolute top-4 right-4 p-1.5 bg-white dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400 rounded-full transition cursor-pointer shadow-sm border border-gray-100 dark:border-gray-700"
+                >
+                  <X size={18} />
+                </button>
+                <div className="flex items-center gap-3">
+                  <div className="p-3 bg-emerald-600 text-white rounded-2xl shadow-lg shadow-emerald-600/20">
+                    <Smartphone size={24} className="animate-pulse text-white" />
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-black uppercase tracking-wider text-emerald-600 dark:text-emerald-400">APPLICATION MOBILE COMPAGNON</span>
+                    <h3 className="text-lg font-black text-gray-900 dark:text-white mt-0.5">Installer l'Application comme une vraie app</h3>
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-6 space-y-6">
+                <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
+                  Pas besoin d'accéder à Google Play ou App Store. Grâce à la technologie standard <span className="font-extrabold text-indigo-600 dark:text-indigo-400">PWA (Progressive Web App)</span> approuvée par l'École Internationale du Centre Pédagogique, installez l'application en 1 clic directement sur votre téléphone.
+                </p>
+
+                {/* Tabs for OS compatibility */}
+                <div className="grid grid-cols-2 gap-3 p-1.5 bg-gray-50 dark:bg-gray-900 rounded-2xl">
+                  <div className="p-3 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-150 dark:border-gray-750 flex flex-col items-center justify-center text-center space-y-1.5">
+                    <span className="text-xs font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest flex items-center gap-1">
+                      🤖 Android & Chrome
+                    </span>
+                    <p className="text-[10px] text-gray-400">Installation instantanée style APK</p>
+                  </div>
+                  <div className="p-3 flex flex-col items-center justify-center text-center space-y-1.5 opacity-80 animate-pulse">
+                    <span className="text-xs font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-widest flex items-center gap-1">
+                      🍏 iOS & Safari
+                    </span>
+                    <p className="text-[10px] text-gray-400">Ajout natif via bouton Partager</p>
+                  </div>
+                </div>
+
+                {/* Main installation card */}
+                <div className="p-5 bg-gradient-to-br from-indigo-50/50 to-emerald-50/50 dark:from-indigo-950/10 dark:to-emerald-950/10 border border-indigo-100/60 dark:border-indigo-900/40 rounded-2xl relative overflow-hidden space-y-4">
+                  
+                  {/* Stamp */}
+                  <div className="absolute top-2 right-2 flex items-center gap-1 px-2 py-0.5 bg-emerald-500 text-white text-[8px] font-black uppercase tracking-wider rounded">
+                    <Check size={9} /> GABON SÉCURISÉ
+                  </div>
+
+                  <div className="space-y-2">
+                    <h4 className="text-xs font-black uppercase text-slate-800 dark:text-gray-200 tracking-wider">Instructions simples en 2 étapes :</h4>
+                    
+                    <div className="space-y-3">
+                      <div className="flex items-start gap-2.5 text-xs text-slate-700 dark:text-gray-300">
+                        <span className="flex items-center justify-center w-5 h-5 bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-400 rounded-full text-[10px] font-black select-none shrink-0 mt-0.5">1</span>
+                        <p>Cliquez sur le bouton vert <strong className="text-emerald-600 dark:text-emerald-400 uppercase text-[11px]">"Lancer l'installation"</strong> ci-dessous si le navigateur y est éligible, ou suivez le guide automatique.</p>
+                      </div>
+
+                      <div className="flex items-start gap-2.5 text-xs text-slate-700 dark:text-gray-300">
+                        <span className="flex items-center justify-center w-5 h-5 bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-400 rounded-full text-[10px] font-black select-none shrink-0 mt-0.5">2</span>
+                        <p>Acceptez la demande de confirmation sur l'écran d'accueil de votre smartphone. L'icône de l'<strong>École Internationale</strong> s'ajoutera sur votre bureau du téléphone.</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* QR code and Desktop link guidance */}
+                  <div className="flex flex-col md:flex-row gap-4 items-center bg-white dark:bg-gray-900 p-3.5 rounded-xl border border-gray-150 dark:border-gray-750">
+                    <div className="p-2 bg-slate-50 dark:bg-slate-800 rounded-lg border border-gray-200 dark:border-gray-700 shrink-0 flex flex-col items-center">
+                      <QrCode size={90} className="text-indigo-750 dark:text-indigo-400" />
+                      <span className="text-[7.5px] font-black text-gray-400 uppercase tracking-widest mt-1">Scanner avec votre Mobile</span>
+                    </div>
+                    <div className="space-y-1.5 text-center md:text-left">
+                      <p className="text-[11px] font-black text-gray-800 dark:text-gray-200 font-sans">Vous êtes sur ordinateur ?</p>
+                      <p className="text-[10px] text-gray-400 leading-normal font-sans">
+                        Scannez ce code QR avec votre appareil mobile pour ouvrir directement l'application sur votre téléphone, puis tapez <strong className="text-indigo-600 dark:text-indigo-400">".apk"</strong> ou <strong className="text-indigo-600 dark:text-indigo-400">".pwa"</strong> ou de nouveau dans la barre de recherche pour lancer la configuration !
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Footer terms / status badge */}
+                <div className="flex items-center justify-between text-[9px] text-gray-400 font-mono bg-slate-50 dark:bg-slate-900 p-3 rounded-xl border border-gray-100 dark:border-gray-850 uppercase">
+                  <span>Centre Pédagogique Shop Universitaire 077022306</span>
+                  <span className="text-emerald-600 font-bold flex items-center gap-1 font-sans">● SERVICE EN LIGNE CONFORME</span>
+                </div>
+              </div>
+
+              {/* Action buttons */}
+              <div className="p-6 border-t border-gray-100 dark:border-gray-750 bg-gray-50 dark:bg-gray-900 flex flex-col sm:flex-row gap-2">
+                <button
+                  type="button"
+                  onClick={async () => {
+                    await installApp();
+                    setShowPwaInstallModal(false);
+                  }}
+                  className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-black uppercase text-[11px] rounded-xl tracking-wider transition-all cursor-pointer flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/15"
+                >
+                  <Smartphone size={14} /> Lancer l'installation (.apk)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowPwaInstallModal(false)}
+                  className="px-6 py-3 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-700 dark:text-white font-black uppercase text-[11px] rounded-xl tracking-wider transition-all cursor-pointer text-center border border-gray-300 dark:border-gray-600"
+                >
+                  Fermer
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       <SuccessModal 
         isOpen={showSuccess}

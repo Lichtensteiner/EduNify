@@ -229,7 +229,7 @@ async function startServer() {
           console.warn(`[aiService/Server] Model ${modelToTry} attempt failed:`, err.message || err);
           lastError = err;
           const errMsg = String(err.message || "");
-          if (errMsg.includes("API_KEY_INVALID") || errMsg.includes("400") || errMsg.includes("PERMISSION_DENIED") || errMsg.includes("403")) {
+          if (errMsg.includes("API_KEY_INVALID") || errMsg.includes("API key not valid") || errMsg.includes("PERMISSION_DENIED") || errMsg.includes("403")) {
             break;
           }
         }
