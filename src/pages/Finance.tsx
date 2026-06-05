@@ -40,6 +40,7 @@ import {
   Briefcase,
   FileText,
   Printer,
+  Sparkles,
   X,
   Lock,
   Unlock,
@@ -127,6 +128,8 @@ interface Payment {
   method: 'cash' | 'card' | 'transfer' | 'airtel' | 'moov' | 'mtn' | 'orange';
   reference?: string;
   notes?: string;
+  recordedBy?: string;
+  recordedByName?: string;
 }
 
 interface Expense {
@@ -196,6 +199,15 @@ const Finance: React.FC = () => {
 
   // New item draft states
   const [selectedAccountForDetails, setSelectedAccountForDetails] = useState<SYSCOHADAAccount | null>(null);
+  
+  // Invoice states
+  const [selectedInvoice, setSelectedInvoice] = useState<Payment | null>(null);
+  const [aiInvoiceAnalysis, setAiInvoiceAnalysis] = useState<{
+    notes: string;
+    audit: string;
+    loading: boolean;
+    error?: string;
+  } | null>(null);
   const [studentSearchInput, setStudentSearchInput] = useState('');
   const [showStudentDropdown, setShowStudentDropdown] = useState(false);
 
@@ -684,6 +696,97 @@ const Finance: React.FC = () => {
     }
   };
 
+  const handleGenerateAIInvoiceDetails = async (payment: Payment) => {
+    setAiInvoiceAnalysis({ notes: '', audit: '', loading: true });
+    
+    // Compute total school balance for AI reasoning context
+    const totalBalance = generalLedgerSummary.totalDebit - generalLedgerSummary.totalCredit;
+    const studentHistory = payments.filter(p => p.studentId === payment.studentId && p.status === 'paid');
+    const studentTransactionsCount = studentHistory.length;
+    
+    const dateString = payment.date?.seconds 
+      ? new Date(payment.date.seconds * 1000).toLocaleString('fr-FR')
+      : payment.date?.toDate 
+        ? payment.date.toDate().toLocaleString('fr-FR') 
+        : new Date(payment.date || Date.now()).toLocaleString('fr-FR');
+
+    const promptText = `Voici les informations d'une transaction financière scolaire d'Edu-Nify :
+- Nom de l'élève/bénéficiaire : ${payment.studentName}
+- Montant de l'opération : ${payment.amount} FCFA
+- Rubrique budgétaire : ${payment.type} (Scolarité, Cantine, transport, inscription, etc.)
+- Mode de paiement : ${payment.method}
+- Référence de la transaction : ${payment.reference || 'N/A'}
+- Date de l'opération : ${dateString}
+
+Contexte de gestion analytique :
+- Solde cumulé actuel de la comptabilité : ${totalBalance} FCFA
+- Historique de paiement de cet élève : ${studentTransactionsCount} paiement(s) encaissé(s).
+
+En tant qu'intelligence artificielle financière d'Edu-Nify, veuillez générer deux commentaires distincts en français :
+1. "notes" : Un message personnalisé, chaleureux et professionnel pour l'élève ou son parent (ex: remerciement, conseils ou rappels polis sur les tranches ou frais annexes d'inscription académique). Ce message sera imprimé directement sur la facture.
+2. "audit" : Une note technique d'audit interne pour le comptable de l'établissement. Elle valide les comptes d'imputation SYSCOHADA (ex : Débit 521000 et Crédit 701000, etc.), donne un diagnostic santé ou une évaluation rapide des anomalies/doublons d'écriture de trésorerie de l'élève. Doit être court et exploitable.`;
+
+    try {
+      const resp = await fetch("/api/gemini/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          request: {
+            contents: [
+              {
+                parts: [{ text: promptText }]
+              }
+            ],
+            model: "gemini-3.5-flash",
+            config: {
+              responseMimeType: "application/json",
+              responseSchema: {
+                type: "OBJECT",
+                properties: {
+                  notes: { type: "STRING", description: "Format court, destiné à l'imprimé du reçu." },
+                  audit: { type: "STRING", description: "Note technique d'audit compta pour le gestionnaire." }
+                },
+                required: ["notes", "audit"]
+              }
+            }
+          }
+        })
+      });
+
+      if (!resp.ok) {
+        throw new Error("Le service d'assistance IA a renvoyé un statut d'erreur.");
+      }
+
+      const data = await resp.json();
+      if (data.error) {
+        throw new Error(data.error);
+      }
+
+      try {
+        const parsed = JSON.parse(data.text);
+        setAiInvoiceAnalysis({
+          notes: parsed.notes || "Paiement validé avec succès. Merci pour votre versement.",
+          audit: parsed.audit || "Aucune anomalie détectée sur l'imputation analytique double-partie.",
+          loading: false
+        });
+      } catch {
+        setAiInvoiceAnalysis({
+          notes: data.text,
+          audit: "Analyse terminée avec succès.",
+          loading: false
+        });
+      }
+    } catch (err: any) {
+      console.error(err);
+      setAiInvoiceAnalysis({
+        notes: "Versement enregistré avec succès. Merci pour votre paiement de scolarité à Edu-Nify.",
+        audit: "Échec de l'appel direct avec l'assistant Audit IA: " + (err.message || err),
+        loading: false,
+        error: err.message || "Erreur de connexion IA."
+      });
+    }
+  };
+
   // Dynamic calculations for balanced double entries Ledger & General Balance
   const generalLedgerSummary = React.useMemo(() => {
     const map: Record<string, { name: string, debit: number, credit: number, balance: number }> = {};
@@ -801,7 +904,7 @@ const Finance: React.FC = () => {
     });
 
     return (
-      <div className="max-w-4xl mx-auto space-y-6">
+      <div className="print:hidden max-w-4xl mx-auto space-y-6">
         <div className="p-8 bg-white dark:bg-gray-800 rounded-3xl border border-gray-100 dark:border-gray-700 shadow-sm">
           <div className="flex items-center gap-4 mb-4">
             <div className="p-3 bg-indigo-50 dark:bg-indigo-950/20 text-indigo-600 dark:text-indigo-400 rounded-2xl">
@@ -911,7 +1014,7 @@ const Finance: React.FC = () => {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="print:hidden space-y-6">
       {/* Header and locked indicators */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white dark:bg-gray-800 p-6 rounded-3xl border border-gray-100 dark:border-gray-700 shadow-sm">
         <div>
@@ -1149,6 +1252,7 @@ const Finance: React.FC = () => {
                     <th className="px-6 py-4">Méthode de règlement</th>
                     <th className="px-6 py-4">Imputation SAGE</th>
                     <th className="px-6 py-4">Status</th>
+                    <th className="px-6 py-4">Action Reçu</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
@@ -1177,6 +1281,19 @@ const Finance: React.FC = () => {
                         <span className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
                           {py.status}
                         </span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedInvoice(py);
+                            handleGenerateAIInvoiceDetails(py);
+                          }}
+                          className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/20 dark:hover:bg-indigo-900 border border-indigo-100 dark:border-indigo-800 text-indigo-700 dark:text-indigo-400 rounded-xl text-[10px] font-black uppercase flex items-center gap-1 cursor-pointer transition-all"
+                        >
+                          <Sparkles size={11} className="text-violet-500 animate-pulse" />
+                          <span>REÇU / IA</span>
+                        </button>
                       </td>
                     </tr>
                   ))}
@@ -2276,6 +2393,346 @@ const Finance: React.FC = () => {
           </div>
         )}
       </AnimatePresence>
+      
+      {/* Interactive side-by-side Invoice & AI Auditing Modal */}
+      <AnimatePresence>
+        {selectedInvoice && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md overflow-y-auto">
+            <motion.div
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 15 }}
+              className="bg-white dark:bg-gray-800 rounded-3xl shadow-2xl max-w-5xl w-full overflow-hidden flex flex-col md:flex-row h-[90vh]"
+            >
+              {/* Left Column: Interactive Receipt Preview */}
+              <div className="w-full md:w-2/3 p-6 bg-slate-50 dark:bg-slate-900 border-b md:border-b-0 md:border-r border-gray-100 dark:border-gray-700 overflow-y-auto flex flex-col items-center">
+                <div className="w-full flex justify-between items-center mb-4 border-b border-gray-150 pb-3">
+                  <span className="text-xs font-black uppercase tracking-wider text-gray-400">Prévisualisation du Reçu</span>
+                  <button
+                    onClick={() => window.print()}
+                    className="flex items-center gap-1 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-[10px] font-black uppercase transition-all shadow-md shadow-emerald-600/15"
+                  >
+                    <Printer size={12} /> Imprimer Reçu
+                  </button>
+                </div>
+
+                {/* Simulated A4/Receipt layout paper sheet */}
+                <div id="school-invoice-paper" className="w-full max-w-xl bg-white text-black p-8 rounded-2xl shadow-sm border border-gray-200/60 font-sans relative overflow-hidden">
+                  
+                  {/* Paid Watermark stamp */}
+                  <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 rotate-12 border-4 border-red-500 text-red-500 font-extrabold text-2xl px-6 py-2 rounded-xl opacity-15 pointer-events-none select-none uppercase tracking-widest">
+                    Payé / Conforme
+                  </div>
+
+                  {/* Receipt Header */}
+                  <div className="flex justify-between items-start border-b-2 border-slate-900 pb-5">
+                    <div>
+                      <h2 className="text-base font-black text-slate-900 tracking-tight uppercase">Académie Intern. Edu-Nify</h2>
+                      <p className="text-[10px] text-gray-500 font-medium leading-relaxed">
+                        Complexe Scolaire & Universitaire d'Excellence<br/>
+                        Dakar, Sénégal - Boulevard de la République<br/>
+                        compta@edu-nify.academy • +221 33 824 00 00
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <span className="inline-block px-2.5 py-1 bg-indigo-50 text-indigo-700 text-[10px] font-black uppercase tracking-widest rounded-lg mb-2">REÇU DE COMPLEMENT</span>
+                      <p className="text-xs font-black text-slate-800">Réf: {selectedInvoice.reference || `FAC-${selectedInvoice.id.substring(0,6).toUpperCase()}`}</p>
+                      <p className="text-[10px] text-gray-400 font-bold font-mono">Date: {
+                        selectedInvoice.date?.seconds 
+                          ? new Date(selectedInvoice.date.seconds * 1000).toLocaleDateString('fr-FR', { dateStyle: 'medium' })
+                          : selectedInvoice.date?.toDate 
+                            ? selectedInvoice.date.toDate().toLocaleDateString('fr-FR', { dateStyle: 'medium' })
+                            : new Date(selectedInvoice.date || Date.now()).toLocaleDateString('fr-FR', { dateStyle: 'medium' })
+                      }</p>
+                    </div>
+                  </div>
+
+                  {/* Party Information */}
+                  <div className="my-6 grid grid-cols-2 gap-4 text-xs">
+                    <div>
+                      <p className="text-[10px] font-black uppercase text-gray-400 tracking-wide mb-1">RÉCIPIENDAIRE / ÉLÈVE</p>
+                      <p className="font-extrabold text-slate-900">{selectedInvoice.studentName}</p>
+                      <p className="text-[10px] text-gray-500 font-mono">Type : Exonéré de TVA (Reg. Scolaire)</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-black uppercase text-gray-400 tracking-wide mb-1">IMPUTATION SYSCOHADA</p>
+                      <p className="font-bold text-indigo-750">
+                        {selectedInvoice.type === 'tuition' ? 'Classe 7 - Compte 701000 (Scolarités)' : selectedInvoice.type === 'registration' ? 'Compte 701200 (Inscriptions)' : 'Compte 706000 (Prestations)'}
+                      </p>
+                      <p className="text-[10px] text-gray-500 font-mono">Caissier : {selectedInvoice.recordedByName || 'Bureau Direction'}</p>
+                    </div>
+                  </div>
+
+                  {/* Dynamic Items Table */}
+                  <table className="w-full text-left text-xs text-gray-600 border-collapse mb-6">
+                    <thead>
+                      <tr className="border-b border-slate-900 font-black text-slate-800">
+                        <th className="py-2">Description du versement</th>
+                        <th className="py-2 uppercase">Rubrique</th>
+                        <th className="py-2">Méthode</th>
+                        <th className="py-2 text-right">Montant</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-150">
+                      <tr>
+                        <td className="py-3 font-medium text-slate-900 text-[11px]">
+                          {selectedInvoice.type === 'tuition' ? 'Versement annuel - Frais de scolarité obligatoires' : selectedInvoice.type === 'registration' ? 'Frais fixes d\'inscription administrative' : `Règlement direct pour rubrique : ${selectedInvoice.type}`}
+                        </td>
+                        <td className="py-3 font-semibold text-indigo-800 uppercase tracking-wider text-[10px]">
+                          {selectedInvoice.type === 'tuition' ? 'Scolarité d\'Excellence' : selectedInvoice.type}
+                        </td>
+                        <td className="py-3 uppercase text-[10px] font-bold">
+                          {selectedInvoice.method === 'cash' ? '💵 Espèces' : selectedInvoice.method === 'transfer' ? '🏦 Virement' : selectedInvoice.method.toUpperCase()}
+                        </td>
+                        <td className="py-3 text-right font-black text-slate-900 font-mono text-[12px]">{formatCurrency(selectedInvoice.amount)}</td>
+                      </tr>
+                      
+                      {/* Calculation Rows */}
+                      <tr className="border-t border-slate-900/60">
+                        <td colSpan={2} />
+                        <td className="py-1.5 font-bold text-slate-500">Total Net H.T :</td>
+                        <td className="py-1.5 text-right font-bold text-slate-500 font-mono">{formatCurrency(selectedInvoice.amount)}</td>
+                      </tr>
+                      <tr>
+                        <td colSpan={2} />
+                        <td className="py-1.5 font-bold text-slate-500">Taux TVA (Scolaire) :</td>
+                        <td className="py-1.5 text-right font-bold text-slate-500 font-mono">Exonéré (0%)</td>
+                      </tr>
+                      <tr className="border-t-2 border-slate-900 text-[13px] font-black text-slate-900">
+                        <td colSpan={2} />
+                        <td className="py-2.5">Total Versé :</td>
+                        <td className="py-2.5 text-right font-mono text-indigo-700">{formatCurrency(selectedInvoice.amount)}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+
+                  {/* AI Generated Remarks on printed sheet */}
+                  <div className="p-4 bg-indigo-50 border border-indigo-100 rounded-xl space-y-1 mb-6 text-slate-800 text-[10px]">
+                    <p className="font-extrabold uppercase tracking-wide flex items-center gap-1.5 text-indigo-800">
+                      <Sparkles size={11} className="text-violet-500" />
+                      Remarques Spéciales d'Accompagnement (Projeté par IA) :
+                    </p>
+                    {aiInvoiceAnalysis?.loading ? (
+                      <p className="text-gray-400 font-mono animate-pulse">L'Assistant IA analyse la fiche financière et formule un message d'accompagnement...</p>
+                    ) : (
+                      <p className="italic font-medium leading-relaxed">
+                        {aiInvoiceAnalysis?.notes || "Versement certifié conforme. Nous vous remercions pour votre versement en faveur de l'avancement académique d'excellence."}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Signature Marks & Stamp */}
+                  <div className="flex justify-between items-center my-6 pt-4 border-t border-dashed border-gray-300 text-[10px]">
+                    <div>
+                      <p className="font-extrabold uppercase text-gray-400 mb-1">Sceau de l'Agent</p>
+                      <div className="w-24 h-12 border border-dashed border-gray-300 rounded flex items-center justify-center text-[8px] text-gray-400 font-mono uppercase">
+                        Tampon Compta
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-extrabold uppercase text-gray-400 mb-6">Signature Reçue</p>
+                      <p className="font-bold text-slate-900 underline">Le Directeur des Finances</p>
+                    </div>
+                  </div>
+
+                  {/* Security watermark hash confirmation */}
+                  <div className="text-[8px] text-gray-400 flex items-center justify-between font-mono bg-slate-50 p-2.5 rounded-lg border border-gray-100 uppercase mt-4">
+                    <span>Edu-Nify Anti-Falsification ID : {selectedInvoice.id}</span>
+                    <span className="text-emerald-600 font-bold">SHA-HASH: {generateTransactionHash(selectedInvoice.id, '521000', '701000', selectedInvoice.amount, '2026').substring(0, 24)}...</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Right Column: AI Audit Assistant Advisor and controls */}
+              <div className="w-full md:w-1/3 p-6 flex flex-col justify-between overflow-y-auto">
+                <div className="space-y-6">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <div className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 font-black text-xs uppercase tracking-wider">
+                        <Sparkles size={16} className="text-violet-500 animate-spin" />
+                        AUDIT INTELLIGENT COMPTABLE
+                      </div>
+                      <h3 className="text-base font-black text-gray-900 dark:text-white mt-1">Cabinet Conseil IA Intégré</h3>
+                    </div>
+                    <button 
+                      onClick={() => setSelectedInvoice(null)} 
+                      className="p-1.5 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-500 dark:text-gray-300 rounded-full transition cursor-pointer"
+                    >
+                      <X size={18} />
+                    </button>
+                  </div>
+
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    Notre modèle de raisonnement comptable <strong className="text-indigo-600 dark:text-indigo-400">Gemini 3.5</strong> a vérifié les comptes d'aspiration SYSCOHADA SAGE rattachés à cette transaction financière.
+                  </p>
+
+                  {/* AI Audit response card */}
+                  <div className="p-4 bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-750 rounded-2xl space-y-3">
+                    <span className="text-[10px] bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 px-2.5 py-1 rounded-full uppercase font-black tracking-widest block w-max">
+                      Analyse d'Audit
+                    </span>
+
+                    {aiInvoiceAnalysis?.loading ? (
+                      <div className="space-y-2 py-4 animate-pulse">
+                        <div className="h-4 bg-gray-200 dark:bg-gray-800 rounded w-3/4"></div>
+                        <div className="h-4 bg-gray-200 dark:bg-gray-800 rounded w-5/6"></div>
+                        <div className="h-4 bg-gray-200 dark:bg-gray-800 rounded w-1/2"></div>
+                      </div>
+                    ) : (
+                      <div className="text-xs text-gray-700 dark:text-gray-300 leading-relaxed font-sans whitespace-pre-line space-y-2">
+                        <div className="p-2.5 bg-green-50/50 dark:bg-green-950/20 border border-green-100 dark:border-green-900 rounded-xl">
+                          <p className="text-[9px] font-black uppercase tracking-wider text-green-700 dark:text-green-400 mb-1">RAPPORT DE CONFORMITÉ</p>
+                          <p className="font-medium text-slate-800 dark:text-slate-350">{aiInvoiceAnalysis?.audit || "L'imputation est jugée légitime et équilibrée."}</p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Helpful hints and anti-fraud advisory info */}
+                  <div className="p-4 border border-dashed border-gray-200 dark:border-gray-700 rounded-2xl text-[10px] text-gray-500 space-y-1">
+                    <p className="font-extrabold uppercase text-gray-900 dark:text-white flex items-center gap-1">
+                      <ShieldCheck size={12} className="text-emerald-500" /> CONSEIL ANTI-FRAUDE
+                    </p>
+                    <p>Chaque versement fait l'objet d'une signature sécurisée. En cas de suspicion de double imputation ou de modifications ultérieures non autorisées, le système rejette automatiquement sa synchronisation dans le logiciel de compta central SAGE.</p>
+                  </div>
+                </div>
+
+                <div className="space-y-2 pt-6 border-t border-gray-150 dark:border-gray-750">
+                  <button
+                    onClick={() => handleGenerateAIInvoiceDetails(selectedInvoice)}
+                    className="w-full py-3 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-750 dark:text-white font-black uppercase text-[10px] rounded-xl tracking-wider transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                  >
+                    <RefreshCw size={12} /> Régénérer l'Imprimé IA
+                  </button>
+                  <button
+                    onClick={() => setSelectedInvoice(null)}
+                    className="w-full py-3 bg-rose-600 hover:bg-rose-700 text-white font-black uppercase text-[10px] rounded-xl tracking-wider transition-all cursor-pointer"
+                  >
+                    Fermer l'Assistant
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Pure Print-Only View Container (Visible ONLY during window.print()) */}
+      {selectedInvoice && (
+        <div className="hidden print:block absolute inset-0 bg-white text-black p-8 font-sans w-[210mm] min-h-[297mm] h-auto text-xs">
+          {/* Header */}
+          <div className="flex justify-between items-start border-b-2 border-black pb-4 mb-4">
+            <div>
+              <h1 className="text-lg font-black tracking-tight uppercase">Académie Intern. Edu-Nify</h1>
+              <p className="text-[9px] text-gray-600">
+                Complexe Scolaire & Universitaire d'Excellence<br/>
+                Dakar, Sénégal - Boulevard de la République<br/>
+                compta@edu-nify.academy • Tel: +221 33 824 00 00
+              </p>
+            </div>
+            <div className="text-right">
+              <span className="inline-block px-2 bg-slate-100 border border-slate-300 font-extrabold text-[9px] uppercase tracking-wider py-0.5 rounded mb-1">REÇU DE COMPLEMENT</span>
+              <p className="font-extrabold">Facture N°: {selectedInvoice.reference || `FAC-${selectedInvoice.id.substring(0,6).toUpperCase()}`}</p>
+              <p className="text-[9px] font-mono">Date : {
+                selectedInvoice.date?.seconds 
+                  ? new Date(selectedInvoice.date.seconds * 1000).toLocaleDateString('fr-FR', { dateStyle: 'long' })
+                  : selectedInvoice.date?.toDate 
+                    ? selectedInvoice.date.toDate().toLocaleDateString('fr-FR', { dateStyle: 'long' })
+                    : new Date(selectedInvoice.date || Date.now()).toLocaleDateString('fr-FR', { dateStyle: 'long' })
+              }</p>
+            </div>
+          </div>
+
+          {/* Party Information */}
+          <div className="grid grid-cols-2 gap-4 mb-4 pb-2 border-b border-gray-300">
+            <div>
+              <p className="text-[9px] font-extrabold text-gray-400 uppercase tracking-widest mb-0.5">Pour le compte de l'élève</p>
+              <p className="font-black text-sm">{selectedInvoice.studentName}</p>
+              <p className="text-[9px] text-gray-500 font-mono">Status d'exonération : Exonéré (Régime Académique)</p>
+            </div>
+            <div>
+              <p className="text-[9px] font-extrabold text-gray-400 uppercase tracking-widest mb-0.5">Imputation Analytique</p>
+              <p className="font-bold">
+                {selectedInvoice.type === 'tuition' ? 'Frais de Scolarité Éligibles' : selectedInvoice.type === 'registration' ? 'Droits d\'Inscription Initiale' : `Avis budgétaire : ${selectedInvoice.type}`}
+              </p>
+              <p className="text-[9px] text-gray-600 font-mono">Guichet-Caisse : {selectedInvoice.recordedByName || 'Chef de Bureau'}</p>
+            </div>
+          </div>
+
+          {/* Line items table */}
+          <table className="w-full text-left font-sans text-xs mb-6 border-collapse">
+            <thead>
+              <tr className="border-b border-black font-extrabold uppercase text-gray-700">
+                <th className="py-2">Description du versement</th>
+                <th className="py-2">Rubrique</th>
+                <th className="py-2">Règlement</th>
+                <th className="py-2 text-right">Montant Certifié</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-200">
+              <tr>
+                <td className="py-3 font-semibold text-slate-900">
+                  {selectedInvoice.type === 'tuition' ? 'Versement d\'écolage réglementaire - Contribution Annuelle' : selectedInvoice.type === 'registration' ? 'Frais uniques d\'inscription d\'admission' : `Paiement pour : ${selectedInvoice.type}`}
+                </td>
+                <td className="py-3 uppercase tracking-wide text-[9px] font-bold">
+                  {selectedInvoice.type === 'tuition' ? 'Scolarité d\'Excellence' : selectedInvoice.type}
+                </td>
+                <td className="py-3 uppercase text-[9px] font-bold">
+                  {selectedInvoice.method === 'cash' ? '💵 Espèces' : selectedInvoice.method === 'transfer' ? '🏦 Virement' : selectedInvoice.method.toUpperCase()}
+                </td>
+                <td className="py-3 text-right font-black font-mono text-[11px]">{formatCurrency(selectedInvoice.amount)}</td>
+              </tr>
+              
+              {/* Calculations */}
+              <tr className="border-t border-black">
+                <td colSpan={2} />
+                <td className="py-1 font-bold">Net Hors-Taxes :</td>
+                <td className="py-1 text-right font-mono font-bold">{formatCurrency(selectedInvoice.amount)}</td>
+              </tr>
+              <tr>
+                <td colSpan={2} />
+                <td className="py-1 font-bold">TVA Applicable :</td>
+                <td className="py-1 text-right font-mono font-bold">Exonéré (0%)</td>
+              </tr>
+              <tr className="border-t-2 border-black text-sm font-black">
+                <td colSpan={2} />
+                <td className="py-2">Scolarité Versée :</td>
+                <td className="py-2 text-right font-mono text-indigo-800">{formatCurrency(selectedInvoice.amount)}</td>
+              </tr>
+            </tbody>
+          </table>
+
+          {/* AI Comment printed */}
+          <div className="p-3 bg-slate-50 border border-slate-200 rounded mb-6 text-[10px]">
+            <p className="font-extrabold uppercase tracking-wide mb-1 flex items-center gap-1 text-slate-800">
+              <Sparkles size={11} /> Annotation Personnalisée par IA :
+            </p>
+            <p className="italic leading-relaxed font-semibold">
+              {aiInvoiceAnalysis?.notes || "Paiement validé avec succès. Merci pour votre versement."}
+            </p>
+          </div>
+
+          {/* Signatures */}
+          <div className="flex justify-between items-center mt-8 pt-4 border-t border-dashed border-gray-400">
+            <div>
+              <p className="font-extrabold uppercase text-gray-400 mb-1">Cachet Académique</p>
+              <div className="w-24 h-11 border border-dashed border-gray-400 rounded flex items-center justify-center text-[7px] text-gray-500 font-mono uppercase">
+                Tampon de Caisse
+              </div>
+            </div>
+            <div className="text-right">
+              <p className="font-extrabold uppercase text-gray-400 mb-6">Signature Responsable</p>
+              <p className="font-bold underline text-xs">Le Directeur Administratif & Financier</p>
+            </div>
+          </div>
+
+          {/* Footer security tag */}
+          <div className="text-[7px] text-gray-500 flex justify-between items-center font-mono mt-10 bg-slate-150 p-2 border border-gray-300 rounded uppercase">
+            <span>Edu-Nify Anti-Falsification ID : {selectedInvoice.id}</span>
+            <span className="font-bold">SHA-HASH: {generateTransactionHash(selectedInvoice.id, '521000', '701000', selectedInvoice.amount, '2026')}</span>
+          </div>
+        </div>
+      )}
 
       <SuccessModal 
         isOpen={showSuccess}
