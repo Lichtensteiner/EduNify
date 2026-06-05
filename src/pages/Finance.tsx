@@ -769,21 +769,36 @@ En tant qu'intelligence artificielle financière d'Edu-Nify, veuillez générer 
           audit: parsed.audit || "Aucune anomalie détectée sur l'imputation analytique double-partie.",
           loading: false
         });
+        
+        // Auto launch printing once the AI content updates in the DOM
+        setTimeout(() => {
+          window.print();
+        }, 800);
       } catch {
         setAiInvoiceAnalysis({
           notes: data.text,
           audit: "Analyse terminée avec succès.",
           loading: false
         });
+        
+        // Auto launch printing once the AI content updates in the DOM
+        setTimeout(() => {
+          window.print();
+        }, 800);
       }
     } catch (err: any) {
       console.error(err);
       setAiInvoiceAnalysis({
-        notes: "Versement enregistré avec succès. Merci pour votre paiement de scolarité à Edu-Nify.",
-        audit: "Échec de l'appel direct avec l'assistant Audit IA: " + (err.message || err),
+        notes: "Versement enregistré avec succès. Merci pour votre paiement de scolarité à l'École Intern. du Centre Pédagogique.",
+        audit: "Échelle de l'appel direct avec l'assistant Audit IA: " + (err.message || err),
         loading: false,
         error: err.message || "Erreur de connexion IA."
       });
+      
+      // Auto launch printing even on failure fallback
+      setTimeout(() => {
+        window.print();
+      }, 800);
     }
   };
 
@@ -2427,11 +2442,11 @@ En tant qu'intelligence artificielle financière d'Edu-Nify, veuillez générer 
                   {/* Receipt Header */}
                   <div className="flex justify-between items-start border-b-2 border-slate-900 pb-5">
                     <div>
-                      <h2 className="text-base font-black text-slate-900 tracking-tight uppercase">Académie Intern. Edu-Nify</h2>
+                      <h2 className="text-base font-black text-slate-900 tracking-tight uppercase">École Intern. du Centre Pédagogique</h2>
                       <p className="text-[10px] text-gray-500 font-medium leading-relaxed">
-                        Complexe Scolaire & Universitaire d'Excellence<br/>
-                        Dakar, Sénégal - Boulevard de la République<br/>
-                        compta@edu-nify.academy • +221 33 824 00 00
+                        Shop Universitaire<br/>
+                        Libreville, Gabon • N° 077022306<br/>
+                        ludo.consulting3@gmail.com • +241 07 70 22 306
                       </p>
                     </div>
                     <div className="text-right">
@@ -2619,15 +2634,15 @@ En tant qu'intelligence artificielle financière d'Edu-Nify, veuillez générer 
 
       {/* Pure Print-Only View Container (Visible ONLY during window.print()) */}
       {selectedInvoice && (
-        <div className="hidden print:block absolute inset-0 bg-white text-black p-8 font-sans w-[210mm] min-h-[297mm] h-auto text-xs">
+        <div id="printable-receipt" className="hidden print:block absolute inset-0 bg-white text-black p-8 font-sans w-[210mm] min-h-[297mm] h-auto text-xs">
           {/* Header */}
           <div className="flex justify-between items-start border-b-2 border-black pb-4 mb-4">
             <div>
-              <h1 className="text-lg font-black tracking-tight uppercase">Académie Intern. Edu-Nify</h1>
+              <h1 className="text-lg font-black tracking-tight uppercase">École Intern. du Centre Pédagogique</h1>
               <p className="text-[9px] text-gray-600">
-                Complexe Scolaire & Universitaire d'Excellence<br/>
-                Dakar, Sénégal - Boulevard de la République<br/>
-                compta@edu-nify.academy • Tel: +221 33 824 00 00
+                Shop Universitaire<br/>
+                Libreville, Gabon • N° 077022306<br/>
+                ludo.consulting3@gmail.com • Tél: +241 07 70 22 306
               </p>
             </div>
             <div className="text-right">

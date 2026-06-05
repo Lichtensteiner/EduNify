@@ -40,11 +40,11 @@
     print-color-adjust: exact !important;
   }
   
-  #printable-report, #printable-report * {
+  #printable-report, #printable-report *, #printable-receipt, #printable-receipt * {
     visibility: visible;
   }
   
-  #printable-report {
+  #printable-report, #printable-receipt {
     position: absolute;
     left: 0;
     top: 0;
@@ -65,7 +65,7 @@
   }
 
   /* Force light mode colors for printing even if the app is in dark mode */
-  #printable-report {
+  #printable-report, #printable-receipt {
     --tw-text-opacity: 1;
     color: rgb(17 24 39) !important; /* gray-900 */
     background-color: white !important;
