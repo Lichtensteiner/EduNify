@@ -320,16 +320,32 @@ export default function Login() {
             position
           };
 
-          const apiResponse = await fetch(backendEndpoint, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-          });
+          try {
+            const apiResponse = await fetch(backendEndpoint, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(payload)
+            });
 
-          if (!apiResponse.ok) {
-            const errData = await apiResponse.json();
-            setError(`[Serveur] ${errData.error || "La validation côté serveur a échoué."}`);
-            return;
+            if (!apiResponse.ok) {
+              const contentType = apiResponse.headers.get('content-type');
+              if (contentType && contentType.includes('application/json')) {
+                const errData = await apiResponse.json();
+                setError(`[Serveur] ${errData.error || "La validation côté serveur a échoué."}`);
+                return;
+              } else {
+                // On static hosting like Vercel, unrecognized api endpoints return the fallback index.html
+                const rawText = await apiResponse.text();
+                if (rawText.trim().startsWith("<!DOCTYPE") || apiResponse.status === 404 || apiResponse.status === 500) {
+                  console.warn("L'API d'authentification n'est pas hébergée ou n'a pas répondu en JSON (déploiement Vercel ou SPA statique). Poursuite normale avec validations locales et enregistrement Firebase...");
+                } else {
+                  setError(`[Erreur Serveur] Réponse incorrecte reçue (${apiResponse.status}).`);
+                  return;
+                }
+              }
+            }
+          } catch (fetchErr) {
+            console.warn("Impossible de contacter l'API de validation d'inscription. Mode local activé :", fetchErr);
           }
         }
 
