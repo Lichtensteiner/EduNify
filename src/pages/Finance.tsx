@@ -1340,7 +1340,7 @@ Sceau de sécurité : CS-GAB-${payment.id.substring(0,8).toUpperCase()}-2026
       {/* 1. JOURNAL TAB (PAYMENTS ENCAISSEMENT LIST) */}
       {activeTab === 'journal' && (
         <div className="space-y-4">
-          <div className="flex flex-col sm:flex-row gap-4 justify-between items-center bg-gray-50 dark:bg-gray-800 p-4 rounded-2xl">
+          <div className="flex flex-col xl:flex-row gap-4 justify-between items-stretch xl:items-center bg-gray-50 dark:bg-gray-800 p-4 rounded-2xl">
             <div className="relative flex-1 w-full flex flex-col gap-1.5">
               <div className="flex flex-col md:flex-row gap-2.5 items-stretch md:items-center w-full">
                 <div className="relative flex-1 pb-1 md:pb-0">
@@ -1383,11 +1383,11 @@ Sceau de sécurité : CS-GAB-${payment.id.substring(0,8).toUpperCase()}-2026
               </div>
             </div>
 
-            <div className="flex items-center gap-2.5 w-full sm:w-auto">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 w-full xl:w-auto">
               <select
                 value={filterType}
                 onChange={(e) => setFilterType(e.target.value)}
-                className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2 outline-none focus:ring-2 focus:ring-indigo-500 text-xs font-bold transition-all"
+                className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2 outline-none focus:ring-2 focus:ring-indigo-500 text-xs font-bold transition-all flex-1 sm:flex-initial"
               >
                 <option value="all">Tous les Frais</option>
                 <option value="tuition">Scolarité</option>
@@ -1399,9 +1399,10 @@ Sceau de sécurité : CS-GAB-${payment.id.substring(0,8).toUpperCase()}-2026
 
               <button
                 onClick={() => setShowAddModal(true)}
-                className="px-4 py-2.5 bg-indigo-600 text-white rounded-xl text-xs font-black uppercase hover:bg-indigo-705 transition-all flex items-center gap-1.5 shadow-lg shadow-indigo-500/10 shrink-0"
+                className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 shadow-lg shadow-indigo-500/10 active:scale-95 duration-100 cursor-pointer flex-1 sm:flex-initial"
               >
-                <Plus size={16} /> Enregistrer un paiement
+                <Plus size={16} className="stroke-[3] shrink-0" />
+                <span>+ Paiement</span>
               </button>
             </div>
           </div>
