@@ -34,6 +34,8 @@ export default function AIAssistant({ onNavigate }: AIAssistantProps) {
   const [prepGrade, setPrepGrade] = useState('');
   const [prepSubject, setPrepSubject] = useState('');
   const [subjects, setSubjects] = useState<{id: string, name: string}[]>([]);
+  const [classesList, setClassesList] = useState<{ id: string, name: string }[]>([]);
+  const [classesLoading, setClassesLoading] = useState<boolean>(true);
   const [prepType, setPrepType] = useState('lesson_plan');
   const [isGeneratingPrep, setIsGeneratingPrep] = useState(false);
   const [generatedPrep, setGeneratedPrep] = useState<string | null>(null);
@@ -95,6 +97,20 @@ export default function AIAssistant({ onNavigate }: AIAssistantProps) {
         const subjectsData = snap.docs.map(doc => ({ id: doc.id, name: doc.data().name as string }));
         setSubjects(subjectsData.sort((a, b) => a.name.localeCompare(b.name)));
       }
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // Fetch Classes
+  useEffect(() => {
+    setClassesLoading(true);
+    const unsubscribe = onSnapshot(collection(db, 'classes'), (snap) => {
+      const classesData = snap.docs.map(doc => ({ id: doc.id, name: (doc.data().nom || '') as string }));
+      setClassesList(classesData.sort((a, b) => a.name.localeCompare(b.name)));
+      setClassesLoading(false);
+    }, (err) => {
+      console.error("Error loading classes for AI Assistant:", err);
+      setClassesLoading(false);
     });
     return () => unsubscribe();
   }, []);
@@ -488,16 +504,23 @@ export default function AIAssistant({ onNavigate }: AIAssistantProps) {
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">{t('grade_level')}</label>
-                  <select
-                    value={prepGrade}
-                    onChange={(e) => setPrepGrade(e.target.value)}
-                    className="w-full p-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none appearance-none cursor-pointer"
-                  >
-                    <option value="">{t('choose_class')}</option>
-                    {SCHOOL_CLASSES.map(cls => (
-                      <option key={cls} value={cls}>{cls}</option>
-                    ))}
-                  </select>
+                  {classesLoading ? (
+                    <div className="flex items-center gap-2 p-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-xs text-gray-400 animate-pulse">
+                      <Loader2 size={14} className="animate-spin text-indigo-500" />
+                      <span>{language === 'fr' ? 'Chargement des classes...' : 'Loading classes...'}</span>
+                    </div>
+                  ) : (
+                    <select
+                      value={prepGrade}
+                      onChange={(e) => setPrepGrade(e.target.value)}
+                      className="w-full p-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none appearance-none cursor-pointer text-slate-800 dark:text-gray-100 font-medium"
+                    >
+                      <option value="">{t('choose_class')}</option>
+                      {(classesList.length > 0 ? classesList.map(c => c.name) : SCHOOL_CLASSES).map(cls => (
+                        <option key={cls} value={cls}>{cls}</option>
+                      ))}
+                    </select>
+                  )}
                 </div>
 
                 <div>

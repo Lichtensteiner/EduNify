@@ -46,6 +46,7 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import Markdown from 'react-markdown';
 import SuccessModal from '../components/SuccessModal';
+import { SCHOOL_SUBJECTS } from '../constants';
 
 interface Grade {
   subject: string;
@@ -99,6 +100,8 @@ const LudoAIPlus: React.FC = () => {
   const [classesList, setClassesList] = useState<ClassroomItem[]>([]);
   const [classesLoading, setClassesLoading] = useState<boolean>(true);
   const [selectedClass, setSelectedClass] = useState<string>('');
+  const [subjectsList, setSubjectsList] = useState<{ id: string, name: string }[]>([]);
+  const [subjectsLoading, setSubjectsLoading] = useState<boolean>(true);
   const [subject, setSubject] = useState<string>('');
   const [theme, setTheme] = useState<string>('');
   const [contentType, setContentType] = useState<string>('Leçon / Note de cours');
@@ -129,6 +132,17 @@ const LudoAIPlus: React.FC = () => {
       fetchGrades();
     } else {
       fetchClassesForTeacher();
+      
+      setSubjectsLoading(true);
+      const unsubscribe = onSnapshot(collection(db, 'subjects'), (snap) => {
+        const subjectsData = snap.docs.map(doc => ({ id: doc.id, name: doc.data().name as string }));
+        setSubjectsList(subjectsData.sort((a, b) => a.name.localeCompare(b.name)));
+        setSubjectsLoading(false);
+      }, (err) => {
+        console.error("Error fetching subjects for dropdown:", err);
+        setSubjectsLoading(false);
+      });
+      return () => unsubscribe();
     }
   }, [currentUser]);
 
@@ -729,14 +743,28 @@ const LudoAIPlus: React.FC = () => {
               <label htmlFor="ai-subject" className="text-xs font-black text-gray-500 uppercase tracking-widest block">
                 Matière scolaire
               </label>
-              <input
-                id="ai-subject"
-                type="text"
-                value={subject}
-                onChange={(e) => setSubject(e.target.value)}
-                placeholder="Ex : Mathématiques, Histoire, Physique, SVT"
-                className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-sm font-semibold text-slate-800 dark:text-gray-100"
-              />
+              {subjectsLoading ? (
+                <div className="flex items-center gap-2 p-3 bg-gray-50 dark:bg-gray-900 rounded-xl text-xs text-gray-400 animate-pulse">
+                  <Loader2 size={14} className="animate-spin text-indigo-500" />
+                  <span>Chargement des matières...</span>
+                </div>
+              ) : (
+                <div className="relative">
+                  <select
+                    id="ai-subject"
+                    value={subject}
+                    onChange={(e) => setSubject(e.target.value)}
+                    className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all font-bold text-sm text-slate-800 dark:text-gray-100 hover:border-gray-300 dark:hover:border-gray-650 cursor-pointer"
+                  >
+                    <option value="">-- Choisir une matière --</option>
+                    {(subjectsList.length > 0 ? subjectsList.map(s => s.name) : SCHOOL_SUBJECTS).map((subj) => (
+                      <option key={subj} value={subj}>
+                        📚 {subj}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
             </div>
 
             {/* Field 3: Title / Theme of Lesson */}
