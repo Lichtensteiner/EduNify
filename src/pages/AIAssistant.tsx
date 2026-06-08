@@ -482,11 +482,11 @@ export default function AIAssistant({ onNavigate }: AIAssistantProps) {
                   <select
                     value={prepSubject}
                     onChange={(e) => setPrepSubject(e.target.value)}
-                    className="w-full p-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none appearance-none cursor-pointer"
+                    className="w-full p-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none hover:border-gray-300 dark:hover:border-gray-650 cursor-pointer text-slate-800 dark:text-gray-100 font-bold transition-all shadow-sm"
                   >
-                    <option value="">{t('subject_placeholder')}</option>
+                    <option value="">📚 {t('subject_placeholder')}</option>
                     {(subjects.length > 0 ? subjects.map(s => s.name) : SCHOOL_SUBJECTS).map(subj => (
-                      <option key={subj} value={subj}>{subj}</option>
+                      <option key={subj} value={subj}>📚 {subj}</option>
                     ))}
                   </select>
                 </div>

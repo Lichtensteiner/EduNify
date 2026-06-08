@@ -786,51 +786,60 @@ const TeacherPlanning: React.FC = () => {
           )}
 
           {/* Action Filter Bar */}
-          <div className="flex flex-col xl:flex-row gap-4 justify-between items-start xl:items-center bg-gray-50 dark:bg-gray-900/50 p-4 rounded-2xl border border-gray-100 dark:border-gray-800">
-            <div className="flex flex-wrap gap-3 items-center w-full xl:w-auto">
+          <div className="flex flex-col lg:flex-row gap-4 justify-between items-stretch lg:items-center bg-gray-50 dark:bg-gray-900/50 p-4 rounded-3xl border border-gray-100 dark:border-gray-800 shadow-sm transition-all">
+            <div className="flex flex-col sm:flex-row flex-wrap gap-3 items-stretch sm:items-center w-full lg:w-auto">
+              
               {/* Select class filter */}
-              <div className="flex items-center gap-2 bg-white dark:bg-gray-800 px-3 py-1.5 rounded-xl border border-gray-200 dark:border-gray-700">
-                <span className="text-xs font-bold text-gray-400 uppercase">Classe :</span>
-                <select
-                  value={selectedClassId}
-                  onChange={(e) => {
-                    setSelectedClassId(e.target.value);
-                    setSelectedSubject('all');
-                  }}
-                  className="bg-transparent border-none text-sm font-black text-gray-800 dark:text-white focus:ring-0 outline-none cursor-pointer"
-                >
-                  {classes.map(cl => (
-                    <option key={cl.id} value={cl.id} className="text-gray-900 dark:text-white bg-white dark:bg-gray-800">
-                      {cl.name}
-                    </option>
-                  ))}
-                </select>
+              <div className="flex items-center gap-2.5 bg-white dark:bg-gray-800 px-3.5 py-2 sm:py-1.5 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm hover:border-gray-300 dark:hover:border-gray-600 transition-all flex-1 sm:flex-initial">
+                <Users size={16} className="text-indigo-500" />
+                <div className="flex flex-col sm:flex-row sm:items-center gap-1 w-full">
+                  <span className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-wider block min-w-[50px]">Classe :</span>
+                  <select
+                    value={selectedClassId}
+                    onChange={(e) => {
+                      setSelectedClassId(e.target.value);
+                      setSelectedSubject('all');
+                    }}
+                    className="bg-transparent border-none text-xs sm:text-sm font-black text-gray-800 dark:text-white focus:ring-0 outline-none cursor-pointer w-full"
+                  >
+                    {classes.map(cl => (
+                      <option key={cl.id} value={cl.id} className="text-gray-900 dark:text-white bg-white dark:bg-gray-800 font-bold">
+                        🏫 {cl.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
 
               {/* Select subject filter */}
-              <div className="flex items-center gap-2 bg-white dark:bg-gray-800 px-3 py-1.5 rounded-xl border border-gray-200 dark:border-gray-700">
-                <span className="text-xs font-bold text-gray-400 uppercase">Matière :</span>
-                <select
-                  value={selectedSubject}
-                  onChange={(e) => {
-                    setSelectedSubject(e.target.value);
-                  }}
-                  className="bg-transparent border-none text-sm font-black text-gray-800 dark:text-white focus:ring-0 outline-none cursor-pointer"
-                >
-                  <option value="all" className="bg-white dark:bg-gray-800">Toutes les matières</option>
-                  {realSubjects.map(sub => (
-                    <option key={sub.id} value={sub.name} className="bg-white dark:bg-gray-800">{sub.name}</option>
-                  ))}
-                </select>
+              <div className="flex items-center gap-2.5 bg-white dark:bg-gray-800 px-3.5 py-2 sm:py-1.5 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm hover:border-gray-300 dark:hover:border-gray-600 transition-all flex-1 sm:flex-initial">
+                <BookOpen size={16} className="text-emerald-500" />
+                <div className="flex flex-col sm:flex-row sm:items-center gap-1 w-full">
+                  <span className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-wider block min-w-[55px]">Matière :</span>
+                  <select
+                    value={selectedSubject}
+                    onChange={(e) => {
+                      setSelectedSubject(e.target.value);
+                    }}
+                    className="bg-transparent border-none text-xs sm:text-sm font-black text-gray-800 dark:text-white focus:ring-0 outline-none cursor-pointer w-full"
+                  >
+                    <option value="all" className="bg-white dark:bg-gray-800 font-bold">🔬 Toutes les matières</option>
+                    {(realSubjects.length > 0 ? realSubjects.map(s => s.name) : STATIC_SUBJECTS).map((subName, sIdx) => (
+                      <option key={sIdx} value={subName} className="bg-white dark:bg-gray-800 font-bold">
+                        📚 {subName}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
 
               {/* Print timetable */}
               <button
                 onClick={printTimetable}
-                className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700 rounded-xl text-sm font-bold transition-all shadow-sm"
+                className="flex items-center justify-center gap-2 px-4 py-2 bg-white dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700 rounded-2xl text-xs sm:text-sm font-black transition-all shadow-sm flex-1 sm:flex-initial"
               >
-                <Printer size={16} />
-                <span className="hidden sm:inline">Imprimer l'EDT</span>
+                <Printer size={15} />
+                <span>Imprimer l'EDT</span>
               </button>
             </div>
 
