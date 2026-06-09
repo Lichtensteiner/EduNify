@@ -401,5 +401,11 @@ service cloud.firestore {
     match /resp_it_tickets/{ticketId} {
       allow read, write: if hasResponsibility('responsable_it');
     }
+
+    // Access Requests (Public Sign-up and Administrator verification)
+    match /access_requests/{reqId} {
+      allow create: if true;
+      allow read, update, delete: if isAdmin();
+    }
   }
 }

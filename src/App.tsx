@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
+import MandatoryPasswordChange from './components/MandatoryPasswordChange';
 import Dashboard from './pages/Dashboard';
 import Users from './pages/Users';
 import Attendance from './pages/Attendance';
@@ -134,6 +135,11 @@ function AppContent() {
 
   if (!currentUser) {
     return <Login />;
+  }
+
+  // Si la modification du mot de passe est obligatoire (première connexion)
+  if (currentUser.mustChangePassword) {
+    return <MandatoryPasswordChange />;
   }
 
   // Si l'utilisateur n'a pas complété son inscription biométrique

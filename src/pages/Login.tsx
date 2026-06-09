@@ -16,11 +16,12 @@ import {
   Lock,
   Phone,
   Mail,
+  Send,
   UserCheck,
   ShieldAlert,
   Hash
 } from 'lucide-react';
-import { collection, onSnapshot, query, where, getDocs } from 'firebase/firestore';
+import { collection, onSnapshot, query, where, getDocs, addDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -28,6 +29,7 @@ export default function Login() {
   const [isRegisteringState, setIsRegisteringState] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [submitting, setSubmitting] = useState(false);
   const { login, register, loading } = useAuth();
   const { t } = useLanguage();
 
@@ -47,20 +49,8 @@ export default function Login() {
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
 
-  const isRegistering = isRegisteringState;
-  const setIsRegistering = (value: boolean) => {
-    setIsRegisteringState(value);
-    if (value) {
-      window.history.pushState({ isRegistering: true }, '');
-    } else {
-      window.history.pushState({ isRegistering: false }, '');
-    }
-    // Reset steps and states when toggling
-    setStep(1);
-    setSelectedProfile('');
-    setError('');
-    setSuccess('');
-  };
+  const isRegistering = false;
+  const setIsRegistering = (value: boolean) => {};
 
   // Stepper State
   const [step, setStep] = useState(1);
@@ -85,6 +75,9 @@ export default function Login() {
   const [houseId, setHouseId] = useState('');
   const [telephone, setTelephone] = useState('');
   const [position, setPosition] = useState('');
+  const [etablissement, setEtablissement] = useState('');
+  const [matiere, setMatiere] = useState('');
+  const [requestedRole, setRequestedRole] = useState('Élève');
 
   // Administrative secure registration squeeze states
   const [enrollmentToken, setEnrollmentToken] = useState('');
@@ -163,207 +156,53 @@ export default function Login() {
     try {
       if (isRegistering) {
         // Enforce validations in active mode
-        if (step === 1) {
-          handleNextToStep2();
+        if (!nom || !prenom || !telephone || !requestedRole || !dateNaissance || !lieuNaissance) {
+          setError("Veuillez renseigner tous les champs requis obligatoires (Nom, Prénom, Téléphone, Rôle, Date de naissance, Lieu de naissance).");
           return;
         }
 
-        // Basic fields checking
-        if (!nom || !prenom || !email || !password || !confirmPassword || !dateNaissance || !lieuNaissance) {
-          setError("Veuillez renseigner tous les champs requis obligatoires.");
+        // Phone validation
+        if (telephone.trim().length < 4) {
+          setError("Veuillez saisir un numéro de téléphone de contact valide.");
           return;
         }
 
-        // Passwords match
-        if (password !== confirmPassword) {
-          setError("La confirmation du mot de passe ne correspond pas au mot de passe saisi.");
+        setSubmitting(true);
+
+        const phoneCheckQuery = query(
+          collection(db, 'access_requests'),
+          where('telephone', '==', telephone.trim()),
+          where('role', '==', requestedRole),
+          where('status', '==', 'pending')
+        );
+        const phoneSnap = await getDocs(phoneCheckQuery);
+        if (!phoneSnap.empty) {
+          setError("⚠️ Une demande d'accès identique est déjà en attente avec ce numéro de téléphone pour ce rôle.");
+          setSubmitting(false);
           return;
         }
 
-        if (password.length < 6) {
-          setError("Le mot de passe doit posséder au moins 6 caractères pour des raisons de sécurité.");
-          return;
-        }
-
-        // Lieu naissance formatting
-        if (lieuNaissance.trim().length === 0) {
-          setError("Veuillez renseigner un lieu de naissance valide.");
-          return;
-        }
-
-        // Age validations client side
-        const birthDateObj = new Date(dateNaissance);
-        const todayObj = new Date();
-        const age = todayObj.getFullYear() - birthDateObj.getFullYear();
-
-        if (selectedProfile === 'élève') {
-          if (age < 3 || age > 25) {
-            setError("L'âge de l'élève à l'inscription doit obligatoirement être compris entre 3 ans et 25 ans.");
-            return;
-          }
-          if (!matricule) {
-            setError("Le matricule est obligatoire pour compléter l'inscription de l'élève.");
-            return;
-          }
-          if (!classe) {
-            setError("Veuillez sélectionner la classe d'affectation de l'élève.");
-            return;
-          }
-        } else if (selectedProfile === 'parent') {
-          if (age < 18) {
-            setError("Le profil Parent d'élève nécessite d'avoir au moins 18 ans.");
-            return;
-          }
-          if (!telephone) {
-            setError("Le numéro de téléphone du tuteur est requis pour les notifications urgentes et assiduités.");
-            return;
-          }
-        } else if (selectedProfile === 'enseignant') {
-          if (age < 18) {
-            setError("Le profil Enseignant nécessite d'avoir au moins 18 ans.");
-            return;
-          }
-          if (!matricule) {
-            setError("Le matricule enseignant est requis afin de valider vos cours.");
-            return;
-          }
-        } else if (selectedProfile === 'personnel administratif') {
-          if (age < 18) {
-            setError("Le personnel administratif doit être âgé de minimum 18 ans.");
-            return;
-          }
-          if (!matricule) {
-            setError("Le matricule personnel administratif est requis.");
-            return;
-          }
-          if (!position) {
-            setError("Veuillez sélectionner votre responsabilité ou fonction administrative.");
-            return;
-          }
-        }
-
-        // Special Admin validation
-        if (selectedProfile === 'admin' && email.toLowerCase() !== 'martinienmvezogo@gmail.com') {
-          setError("Seule l'adresse administrative enregistrée (martinienmvezogo@gmail.com) peut s'authentifier en tant qu'administrateur principal.");
-          return;
-        }
-
-        // Secure Squeeze token restriction for employees & administrators
-        const isEmployeeOrAdmin = ['admin', 'enseignant', 'personnel administratif'].includes(selectedProfile);
-        if (isEmployeeOrAdmin) {
-          if (!enrollmentToken) {
-            setError(`🔒 Jeton d'enrôlement requis : La création de comptes de type "${selectedProfile}" exige la saisie d'un jeton d'autorisation valide.`);
-            return;
-          }
-          const cleanToken = enrollmentToken.trim().toUpperCase();
-          const validAdminTokens = ['ADMIN-SUPER-SECURE-2026', 'MARTINIEN-ADMIN-2026', 'ADMIN-LUDO-2026'];
-          const validTeacherTokens = ['PROF-SECURE-2026', 'ENSEIGNANT-LUDO-2026', 'PROF-GABON-2026'];
-          const validStaffTokens = ['STAFF-SECURE-2026', 'PERS-LUDO-2026', 'GABON-STAFF-2026'];
-
-          let isValid = false;
-          if (selectedProfile === 'admin' && validAdminTokens.includes(cleanToken)) {
-            isValid = true;
-          } else if (selectedProfile === 'enseignant' && validTeacherTokens.includes(cleanToken)) {
-            isValid = true;
-          } else if (selectedProfile === 'personnel administratif' && validStaffTokens.includes(cleanToken)) {
-            isValid = true;
-          }
-
-          if (!isValid) {
-            setError(`⚠️ Alerte Sécurité : Le jeton d'affiliation "${enrollmentToken}" saisi est invalide pour le rôle de "${selectedProfile}". Accès refusé.`);
-            return;
-          }
-        }
-
-        // DATABASE UNIQUE CHECKS (Email & Matricule check in Firestore)
-        const emailCheckQuery = query(collection(db, 'users'), where('email', '==', email.toLowerCase().trim()));
-        const emailSnap = await getDocs(emailCheckQuery);
-        if (!emailSnap.empty) {
-          setError("⚠️ Cette adresse e-mail est déjà utilisée par un autre utilisateur.");
-          return;
-        }
-
-        if (matricule) {
-          const matriculeCheckQuery = query(collection(db, 'users'), where('matricule', '==', matricule.trim()));
-          const matriculeSnap = await getDocs(matriculeCheckQuery);
-          if (!matriculeSnap.empty) {
-            setError("⚠️ Ce matricule est déjà attribué à un autre compte membre. Veuillez vérifier votre matricule officiel.");
-            return;
-          }
-        }
-
-        // backend endpoints validation proxy to ensure Server API validations
-        let backendEndpoint = '';
-        if (selectedProfile === 'élève') {
-          backendEndpoint = '/api/auth/register/student';
-        } else if (selectedProfile === 'parent') {
-          backendEndpoint = '/api/auth/register/parent';
-        } else if (selectedProfile === 'enseignant') {
-          backendEndpoint = '/api/auth/register/teacher';
-        } else if (selectedProfile === 'personnel administratif') {
-          backendEndpoint = '/api/auth/register/staff';
-        }
-
-        if (backendEndpoint) {
-          const payload = {
-            nom,
-            prenom,
-            email,
-            password,
-            confirmPassword,
-            dateNaissance,
-            lieuNaissance,
-            matricule,
-            classe,
-            house_id: houseId,
-            telephone,
-            position
-          };
-
-          try {
-            const apiResponse = await fetch(backendEndpoint, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(payload)
-            });
-
-            if (!apiResponse.ok) {
-              const contentType = apiResponse.headers.get('content-type');
-              if (contentType && contentType.includes('application/json')) {
-                const errData = await apiResponse.json();
-                setError(`[Serveur] ${errData.error || "La validation côté serveur a échoué."}`);
-                return;
-              } else {
-                // On static hosting like Vercel, unrecognized api endpoints return the fallback index.html
-                const rawText = await apiResponse.text();
-                if (rawText.trim().startsWith("<!DOCTYPE") || apiResponse.status === 404 || apiResponse.status === 500) {
-                  console.warn("L'API d'authentification n'est pas hébergée ou n'a pas répondu en JSON (déploiement Vercel ou SPA statique). Poursuite normale avec validations locales et enregistrement Firebase...");
-                } else {
-                  setError(`[Erreur Serveur] Réponse incorrecte reçue (${apiResponse.status}).`);
-                  return;
-                }
-              }
-            }
-          } catch (fetchErr) {
-            console.warn("Impossible de contacter l'API de validation d'inscription. Mode local activé :", fetchErr);
-          }
-        }
-
-        // API checks succeeded -> proceed with safe authentic client register hooks!
-        await register({
+        // Pushing to Firestore
+        await addDoc(collection(db, 'access_requests'), {
           nom: nom.trim(),
           prenom: prenom.trim(),
-          email: email.toLowerCase().trim(),
-          role: selectedProfile as User['role'],
-          matricule: matricule.trim() || undefined,
-          age,
-          gender: 'not_specified',
-          ...(selectedProfile === 'élève' ? { classe, house_id: houseId || undefined } : {}),
-          ...(selectedProfile === 'parent' ? { contact: telephone } : {}),
-          ...(selectedProfile === 'personnel administratif' ? { position, department: 'Administration' } : {})
-        }, password);
+          telephone: telephone.trim(),
+          role: requestedRole,
+          date_naissance: dateNaissance,
+          lieu_naissance: lieuNaissance.trim(),
+          status: 'pending',
+          date_demande: new Date().toISOString()
+        });
 
-        setSuccess("🎉 Votre inscription en tant que " + selectedProfile + " a été validée et enregistrée avec succès ! Redirection en cours...");
+        setSuccess("🎉 Votre demande d'accès a été transmise avec succès à l'administrateur principal d'Edu-Nify. Après audit et validation de vos renseignements, un mot de passe temporaire à usage unique vous sera fourni par SMS/téléphone ou email pour vous connecter.");
+        setSubmitting(false);
+        
+        // Clear fields
+        setNom('');
+        setPrenom('');
+        setTelephone('');
+        setDateNaissance('');
+        setLieuNaissance('');
       } else {
         // Log in flow
         if (!loginEmail || !loginPassword) {
@@ -373,6 +212,7 @@ export default function Login() {
         await login(loginEmail, loginPassword);
       }
     } catch (err: any) {
+      setSubmitting(false);
       console.error("Authentication error details:", err);
       const errCode = err?.code || '';
       const errMsg = err?.message || '';
@@ -477,38 +317,18 @@ export default function Login() {
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.3 }}
-              className="mb-8 space-y-4"
+              className="mb-8 space-y-3 text-center"
             >
-              <div className="flex justify-between items-center text-sm font-extrabold text-indigo-600 dark:text-indigo-400">
-                <span className="bg-indigo-50 dark:bg-indigo-950/70 px-3 py-1 rounded-full text-xs">
-                  {step === 1 ? "Étape 1 : Choix du Profil" : "Étape 2 : Formulaire d'information"}
-                </span>
-                <span className="font-mono text-xs">{step === 1 ? "50%" : "100%"}</span>
+              <div className="inline-flex items-center gap-1.5 bg-amber-50 dark:bg-amber-950/70 text-amber-700 dark:text-amber-400 px-3.5 py-1.5 rounded-full text-[11px] font-extrabold uppercase tracking-wide border border-amber-200/50">
+                🔒 Sécurité Renforcée d'Administration
               </div>
               
-              <div className="w-full bg-gray-100 dark:bg-slate-800 h-2.5 rounded-full overflow-hidden">
-                <motion.div 
-                  className="bg-indigo-600 h-full rounded-full"
-                  initial={{ width: "0%" }}
-                  animate={{ width: step === 1 ? '50%' : '100%' }}
-                  transition={{ duration: 0.5, ease: "easeOut" }}
-                />
-              </div>
-
-              <div className="text-center">
-                <h3 className="text-2xl font-black text-slate-900 dark:text-white">
-                  {step === 1 
-                    ? "Sélectionnez votre type de profil" 
-                    : `Formulaire d'inscription : ${selectedProfile.toUpperCase()}`
-                  }
-                </h3>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 leading-normal">
-                  {step === 1 
-                    ? "Aucun rôle n'est sélectionnable via menu classique. Choisissez la carte correspondant à votre fonction." 
-                    : "Renseignez vos coordonnées authentiques. Les matricules et identités seront contrôlés."
-                  }
-                </p>
-              </div>
+              <h3 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">
+                Demande d'Accès Edu-Nify
+              </h3>
+              <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed max-w-md mx-auto">
+                Pour assurer la sécurité pédagogique, vous ne pouvez pas créer de compte vous-même. Soumettez vos informations pour faire valider et attribuer votre rôle par l'administration.
+              </p>
             </motion.div>
           ) : (
             <motion.div 
@@ -545,10 +365,10 @@ export default function Login() {
           )}
 
           {isRegistering ? (
-            <form onSubmit={handleSubmit} className="space-y-6">
+            <form onSubmit={handleSubmit} className="space-y-5">
               
-              {/* STEP 1: CARD SELECTION */}
-              {step === 1 && (
+              {/* STEP 1 Disabled for secure Access Request */}
+              {false && (
                 <motion.div 
                   variants={containerVariants}
                   initial="hidden"
@@ -698,326 +518,130 @@ export default function Login() {
               )}
 
               {/* STEP 2: DYNAMIC FORM TAILORED FIELDS */}
-              {step === 2 && (
+              {isRegistering && (
                 <div className="space-y-6">
                   
-                  {/* Status header indicating current profile path strictly */}
-                  <div className="bg-slate-100 dark:bg-slate-900/80 p-3 rounded-2xl border border-slate-200/50 dark:border-slate-800 text-xs flex justify-between items-center text-slate-700 dark:text-slate-350">
-                    <span className="font-bold flex items-center gap-1.5 capitalize">
-                      ⭐ Profil : <span className="text-indigo-650 font-black">{selectedProfile}</span>
-                    </span>
-                    <button 
-                      type="button" 
-                      onClick={handleBackToStep1} 
-                      className="text-indigo-600 dark:text-indigo-400 hover:underline font-extrabold"
-                    >
-                      Modifier le profil
-                    </button>
-                  </div>
-
-                  {/* Core Base Fields Group 1: Identity */}
+                  {/* Row 1: Nom & Prénom */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Nom</label>
+                      <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
+                        Nom <span className="text-rose-500">*</span>
+                      </label>
                       <input
                         type="text"
                         required
                         value={nom}
                         onChange={(e) => setNom(e.target.value)}
                         placeholder="Ex: Mvezogo"
-                        className="mt-1 appearance-none block w-full px-4 py-3 border border-gray-300 dark:border-gray-700 rounded-xl shadow-sm placeholder-gray-400 dark:bg-gray-800 dark:text-slate-150 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm font-medium"
+                        className="mt-1 appearance-none block w-full px-4 py-3 border border-gray-300 dark:border-gray-700 rounded-xl shadow-sm placeholder-gray-400 dark:bg-gray-800 dark:text-slate-150 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm font-medium transition-colors"
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Prénom</label>
+                      <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
+                        Prénom <span className="text-rose-500">*</span>
+                      </label>
                       <input
                         type="text"
                         required
                         value={prenom}
                         onChange={(e) => setPrenom(e.target.value)}
                         placeholder="Ex: Martinien"
-                        className="mt-1 appearance-none block w-full px-4 py-3 border border-gray-300 dark:border-gray-700 rounded-xl shadow-sm placeholder-gray-400 dark:bg-gray-800 dark:text-slate-150 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm font-medium"
+                        className="mt-1 appearance-none block w-full px-4 py-3 border border-gray-300 dark:border-gray-700 rounded-xl shadow-sm placeholder-gray-400 dark:bg-gray-800 dark:text-slate-150 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm font-medium transition-colors"
                       />
                     </div>
                   </div>
 
-                  {/* Core Base Fields Group 2: Birth */}
+                  {/* Row 2: Téléphone & Rôle demandé */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider flex items-center gap-1.5"><Calendar size={14}/> Date de naissance</label>
+                      <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider flex items-center gap-1.5">
+                        <Phone size={14} /> Téléphone <span className="text-rose-500">*</span>
+                      </label>
+                      <input
+                        type="tel"
+                        required
+                        value={telephone}
+                        onChange={(e) => setTelephone(e.target.value)}
+                        placeholder="Ex: +241 062-641-120"
+                        className="mt-1 appearance-none block w-full px-4 py-3 border border-gray-300 dark:border-gray-700 rounded-xl shadow-sm placeholder-gray-400 dark:bg-gray-800 dark:text-slate-150 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm font-medium transition-colors"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
+                        Rôle demandé <span className="text-rose-500">*</span>
+                      </label>
+                      <select
+                        required
+                        value={requestedRole}
+                        onChange={(e) => setRequestedRole(e.target.value)}
+                        className="mt-1 block w-full px-4 py-3 border border-gray-300 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-800 dark:text-slate-150 text-sm font-medium focus:ring-2 focus:ring-indigo-500 transition-colors"
+                      >
+                        <option value="Élève">Élève / Étudiant</option>
+                        <option value="Parent">Parent / Tuteur</option>
+                        <option value="Enseignant">Enseignant / Professeur</option>
+                        <option value="Super Administrateur">Super Administrateur</option>
+                        <option value="Administrateur d'établissement">Administrateur d'établissement</option>
+                        <option value="Comptable">Comptable</option>
+                        <option value="Surveillant">Surveillant</option>
+                        <option value="Bibliothécaire">Bibliothécaire</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Row 3: Date de naissance & Lieu de naissance */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider flex items-center gap-1.5">
+                        <Calendar size={14} /> Date de naissance <span className="text-rose-500">*</span>
+                      </label>
                       <input
                         type="date"
                         required
                         value={dateNaissance}
                         onChange={(e) => setDateNaissance(e.target.value)}
-                        className="mt-1 block w-full px-4 py-3 border border-gray-300 dark:border-gray-700 rounded-xl shadow-sm dark:bg-gray-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm font-medium"
+                        className="mt-1 block w-full px-4 py-3 border border-gray-300 dark:border-gray-700 rounded-xl shadow-sm dark:bg-gray-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm font-medium"
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider flex items-center gap-1.5"><MapPin size={14}/> Lieu de naissance</label>
+                      <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider flex items-center gap-1.5">
+                        <MapPin size={14} /> Lieu de naissance <span className="text-rose-500">*</span>
+                      </label>
                       <input
                         type="text"
                         required
                         value={lieuNaissance}
                         onChange={(e) => setLieuNaissance(e.target.value)}
                         placeholder="Ex: Libreville, Gabon"
-                        className="mt-1 appearance-none block w-full px-4 py-3 border border-gray-300 dark:border-gray-700 rounded-xl shadow-sm placeholder-gray-400 dark:bg-gray-800 dark:text-slate-150 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm font-medium"
+                        className="mt-1 appearance-none block w-full px-4 py-3 border border-gray-300 dark:border-gray-700 rounded-xl shadow-sm placeholder-gray-400 dark:bg-gray-800 dark:text-slate-150 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm font-medium"
                       />
                     </div>
                   </div>
 
-                  {/* Profile-Tailored Dynamic Fields */}
-
-                  {/* 1. STUDENT SPECIFIC */}
-                  {selectedProfile === 'élève' && (
-                    <div className="p-4 bg-slate-50 dark:bg-slate-900/50 rounded-2xl border border-gray-150 dark:border-slate-800 space-y-4">
-                      <p className="text-xs font-extrabold text-indigo-700 dark:text-indigo-400 flex items-center gap-1.5 uppercase tracking-wider">
-                        <GraduationCap size={16} /> Renseignements Scolaires de l'Élève
-                      </p>
-                      
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div>
-                          <label className="block text-xs font-bold text-gray-700 dark:text-gray-400 uppercase tracking-wider flex items-center gap-1"><Hash size={13}/> Matricule de l'Élève <span className="text-rose-500">*</span></label>
-                          <input
-                            type="text"
-                            required
-                            value={matricule}
-                            onChange={(e) => setMatricule(e.target.value)}
-                            placeholder="Ex: ELEVE-2026-A10"
-                            className="mt-1 appearance-none block w-full px-4 py-3 border border-gray-300 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm font-mono tracking-wide uppercase"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-xs font-bold text-gray-700 dark:text-gray-400 uppercase tracking-wider">Classe d'étude <span className="text-rose-500">*</span></label>
-                          <select
-                            required
-                            value={classe}
-                            onChange={(e) => setClasse(e.target.value)}
-                            className="mt-1 block w-full px-4 py-3 border border-gray-300 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-800 text-sm font-medium focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                          >
-                            <option value="">-- Choisir une classe --</option>
-                            {classes.map(cls => (
-                              <option key={cls.id} value={cls.nom}>{cls.nom}</option>
-                            ))}
-                          </select>
-                        </div>
-                      </div>
-
-                      <div>
-                        <label className="block text-xs font-bold text-gray-700 dark:text-gray-400 uppercase tracking-wider">Maison d'affectation (Optionnel)</label>
-                        <select
-                          value={houseId}
-                          onChange={(e) => setHouseId(e.target.value)}
-                          className="mt-1 block w-full px-4 py-3 border border-gray-300 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-800 text-sm font-medium focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                        >
-                          <option value="">-- Sans Maison d'école --</option>
-                          {houses.map(house => (
-                            <option key={house.id} value={house.id}>{house.nom_maison}</option>
-                          ))}
-                        </select>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* 2. PARENT SPECIFIC */}
-                  {selectedProfile === 'parent' && (
-                    <div className="p-4 bg-slate-50 dark:bg-slate-900/50 rounded-2xl border border-gray-150 dark:border-slate-800 space-y-4">
-                      <p className="text-xs font-extrabold text-indigo-700 dark:text-indigo-400 flex items-center gap-1.5 uppercase tracking-wider">
-                        <Users size={16} /> Informations de contact du Parent d'Élève
-                      </p>
-                      <div>
-                        <label className="block text-xs font-bold text-gray-700 dark:text-gray-400 uppercase tracking-wider flex items-center gap-1.5"><Phone size={14}/> Téléphone mobile du Tuteur <span className="text-rose-500">*</span></label>
-                        <input
-                          type="tel"
-                          required
-                          value={telephone}
-                          onChange={(e) => setTelephone(e.target.value)}
-                          placeholder="Ex: +241 062-641-120"
-                          className="mt-1 appearance-none block w-full px-4 py-3 border border-gray-300 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm font-medium"
-                        />
-                        <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-1">Sert de passerelle d'alertes par SMS ou WhatsApp scolaires.</p>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* 3. TEACHER SPECIFIC */}
-                  {selectedProfile === 'enseignant' && (
-                    <div className="p-4 bg-slate-50 dark:bg-slate-900/50 rounded-2xl border border-gray-150 dark:border-slate-800 space-y-4">
-                      <p className="text-xs font-extrabold text-indigo-700 dark:text-indigo-400 flex items-center gap-1.5 uppercase tracking-wider">
-                        <BookOpen size={16} /> Certifications & Identité Pédagogique
-                      </p>
-                      <div>
-                        <label className="block text-xs font-bold text-gray-700 dark:text-gray-400 uppercase tracking-wider flex items-center gap-1"><Hash size={13}/> Matricule Officiel Enseignant <span className="text-rose-500">*</span></label>
-                        <input
-                          type="text"
-                          required
-                          value={matricule}
-                          onChange={(e) => setMatricule(e.target.value)}
-                          placeholder="Ex: PROF-2026-X77"
-                          className="mt-1 appearance-none block w-full px-4 py-3 border border-gray-300 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm font-mono tracking-wide uppercase"
-                        />
-                      </div>
-                    </div>
-                  )}
-
-                  {/* 4. ADMINISTRATIVE STAFF SPECIFIC */}
-                  {selectedProfile === 'personnel administratif' && (
-                    <div className="p-4 bg-slate-50 dark:bg-slate-900/50 rounded-2xl border border-gray-150 dark:border-slate-800 space-y-4">
-                      <p className="text-xs font-extrabold text-indigo-700 dark:text-indigo-400 flex items-center gap-1.5 uppercase tracking-wider">
-                        <Briefcase size={16} /> Renseignements de la Fonction Administrative
-                      </p>
-                      
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div>
-                          <label className="block text-xs font-bold text-gray-700 dark:text-gray-400 uppercase tracking-wider flex items-center gap-1"><Hash size={13}/> Matricule Personnel <span className="text-rose-500">*</span></label>
-                          <input
-                            type="text"
-                            required
-                            value={matricule}
-                            onChange={(e) => setMatricule(e.target.value)}
-                            placeholder="Ex: STAFF-2026-N2"
-                            className="mt-1 appearance-none block w-full px-4 py-3 border border-gray-300 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm font-mono tracking-wide uppercase"
-                          />
-                        </div>
-                        
-                        <div>
-                          <label className="block text-xs font-bold text-gray-700 dark:text-gray-400 uppercase tracking-wider">Poste / Responsabilité désignée <span className="text-rose-500">*</span></label>
-                          <select
-                            required
-                            value={position}
-                            onChange={(e) => setPosition(e.target.value)}
-                            className="mt-1 block w-full px-4 py-3 border border-gray-300 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-800 text-sm font-medium focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                          >
-                            <option value="">-- Choisir poste --</option>
-                            <option value="responsable collège">Responsable collège</option>
-                            <option value="responsable primaire">Responsable primaire</option>
-                            <option value="responsable maternelle">Responsable maternelle</option>
-                            <option value="secrétaire générale">Secrétaire générale</option>
-                            <option value="secrétaire adjoint">Secrétaire adjoint</option>
-                            <option value="surveillant">Surveillant</option>
-                            <option value="comptable">Comptable</option>
-                            <option value="chargé pédagogique">Chargé pédagogique</option>
-                          </select>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* 5. ADMIN SPECIFIC BACKDOOR */}
-                  {selectedProfile === 'admin' && (
-                    <div className="p-4 bg-orange-50 dark:bg-orange-950/20 rounded-2xl border border-orange-250 dark:border-orange-900/60 space-y-4 text-orange-900 dark:text-orange-350">
-                      <p className="text-xs font-extrabold flex items-center gap-1.5 uppercase">
-                        <Lock size={15} /> Administration Principal / Gardien du temple
-                      </p>
-                      <p className="text-[10px] leading-relaxed">
-                        ⚠️ Avis de restriction : L'inscription Administrateur est contrôlée via la boîte exclusive <code className="font-bold text-xs bg-orange-100 dark:bg-orange-900/40 px-1 rounded">martinienmvezogo@gmail.com</code> et requiert une clé d'enrôlement valide approuvée par le serveur.
-                      </p>
-                    </div>
-                  )}
-
-                  {/* Token Integration Secure Checks for Teachers, Staffs, Administrators */}
-                  {['admin', 'enseignant', 'personnel administratif'].includes(selectedProfile) && (
-                    <div className="bg-indigo-50/50 dark:bg-slate-900 status-token p-4 rounded-2xl border border-indigo-100 dark:border-slate-800 space-y-2 mt-4">
-                      <div className="flex items-center justify-between">
-                        <label className="text-xs font-black text-indigo-900 dark:text-indigo-400 tracking-wider flex items-center gap-1.5 uppercase">
-                          <ShieldCheck className="text-indigo-650 shrink-0" size={16} />
-                          Jeton de sécurité d'Enrôlement requis <span className="text-rose-500 font-black animate-pulse">*</span>
-                        </label>
-                        <button
-                          type="button"
-                          onClick={() => setShowTokenHelp(!showTokenHelp)}
-                          className="text-[10px] text-indigo-650 dark:text-indigo-400 hover:underline font-bold focus:outline-none"
-                        >
-                          {showTokenHelp ? "Masquer l'aide" : "Où trouver le jeton ?"}
-                        </button>
-                      </div>
-                      <input
-                        type="text"
-                        required
-                        value={enrollmentToken}
-                        onChange={(e) => setEnrollmentToken(e.target.value)}
-                        placeholder="Saisir la clé d'affiliation de votre rôle officiel"
-                        className="appearance-none block w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm font-mono bg-white dark:bg-gray-800 dark:text-gray-100"
-                      />
-                      {showTokenHelp && (
-                        <div className="text-[11px] text-gray-600 dark:text-gray-400 leading-relaxed bg-white/80 dark:bg-gray-800 p-3 rounded-xl border border-indigo-100 dark:border-gray-700 space-y-2">
-                          <p className="font-extrabold text-indigo-950 dark:text-white">🛡️ Passerelles de sécurité (Squeezes) :</p>
-                          <p>Pour des raisons de haute confidentialité de l'école Edu-Nify, l'enrôlement d'agents nécessite un code vérifié.</p>
-                          
-                          <div className="pt-1.5 border-t border-gray-100 dark:border-gray-700/60 space-y-1">
-                            <span className="font-bold text-gray-700 dark:text-gray-300">🔑 Clés d'intégrations admises :</span>
-                            <div className="grid grid-cols-1 gap-1 text-[10px] bg-slate-100 dark:bg-gray-900 p-2 rounded-lg font-mono text-slate-705 dark:text-gray-350">
-                              <p>• Administrateur: <span className="font-extrabold text-emerald-600">ADMIN-LUDO-2026</span></p>
-                              <p>• Enseignant: <span className="font-extrabold text-blue-600">PROF-SECURE-2026</span></p>
-                              <p>• Personnel Admin: <span className="font-extrabold text-indigo-600">STAFF-SECURE-2026</span></p>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Core Base Fields Group 3: Email & Password */}
-                  <div className="space-y-4 pt-2 border-t border-gray-100 dark:border-gray-800">
-                    <div>
-                      <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider flex items-center gap-1.5"><Mail size={14}/> Adresse E-mail <span className="text-rose-500">*</span></label>
-                      <input
-                        type="email"
-                        required
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        placeholder="nom@edu-nify.com"
-                        className="mt-1 appearance-none block w-full px-4 py-3 border border-gray-300 dark:border-gray-700 rounded-xl shadow-sm placeholder-gray-400 dark:bg-gray-800 dark:text-slate-150 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm font-medium"
-                      />
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider flex items-center gap-1.5"><Lock size={14}/> Mot de passe <span className="text-rose-500">*</span></label>
-                        <input
-                          type="password"
-                          required
-                          value={password}
-                          onChange={(e) => setPassword(e.target.value)}
-                          placeholder="••••••••"
-                          className="mt-1 appearance-none block w-full px-4 py-3 border border-gray-300 dark:border-gray-700 rounded-xl shadow-sm placeholder-gray-400 dark:bg-gray-800 dark:text-slate-150 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm font-medium"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider flex items-center gap-1.5"><Lock size={14}/> Confirmation mot de passe <span className="text-rose-500">*</span></label>
-                        <input
-                          type="password"
-                          required
-                          value={confirmPassword}
-                          onChange={(e) => setConfirmPassword(e.target.value)}
-                          placeholder="••••••••"
-                          className="mt-1 appearance-none block w-full px-4 py-3 border border-gray-300 dark:border-gray-700 rounded-xl shadow-sm placeholder-gray-400 dark:bg-gray-800 dark:text-slate-150 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm font-medium"
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Navigation Buttons for Step Form Step 2 */}
-                  <div className="flex justify-between items-center pt-4 border-t border-gray-100 dark:border-gray-800">
+                  {/* Submit and Navigation Section */}
+                  <div className="flex justify-between items-center pt-4 border-t border-gray-150 dark:border-gray-800">
                     <button
                       type="button"
-                      onClick={handleBackToStep1}
+                      onClick={() => {
+                        setIsRegistering(false);
+                        setError('');
+                        setSuccess('');
+                      }}
                       className="inline-flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400 hover:text-indigo-600 transition-colors font-bold uppercase tracking-wider focus:outline-none"
                     >
-                      <ChevronLeft size={16} /> Revenir à l'étape 1
+                      <ChevronLeft size={16} /> Revenir à la connexion
                     </button>
 
                     <button
                       type="submit"
-                      disabled={loading}
-                      className="inline-flex items-center gap-2 py-3 px-6 rounded-xl text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 shadow-md transition-all font-bold"
+                      disabled={submitting}
+                      className="inline-flex items-center gap-2 py-3 px-6 rounded-xl text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 shadow-md transition-all font-bold"
                     >
-                      {loading ? (
+                      {submitting ? (
                         <RefreshCw className="animate-spin" size={18} />
                       ) : (
-                        <UserPlus size={18} />
+                        <Send size={18} />
                       )}
-                      {loading ? "Vérification..." : "Valider l'inscription"}
+                      {submitting ? "Envoi de la demande..." : "Envoyer ma demande d'accès"}
                     </button>
                   </div>
 
@@ -1087,29 +711,9 @@ export default function Login() {
             </motion.form>
           )}
           
-          {/* Footer toggle Login vs SignUp */}
-          <div className="mt-8 pt-6 border-t border-gray-100 dark:border-gray-800 text-center">
-            <button
-              type="button"
-              onClick={() => {
-                setIsRegistering(!isRegistering);
-                setError('');
-                setSuccess('');
-              }}
-              className="text-sm font-bold text-indigo-600 dark:text-indigo-450 hover:text-indigo-500 transition-colors flex items-center justify-center gap-1.5 mx-auto"
-            >
-              {isRegistering ? (
-                <>
-                  <ChevronLeft size={16} />
-                  Déjà un compte ? Connectez-vous ici
-                </>
-              ) : (
-                <>
-                  Nouveau sur Edu-Nify ? Créer un compte en 2 étapes
-                  <ChevronRight size={16} />
-                </>
-              )}
-            </button>
+          {/* Footer Copyright and Identity */}
+          <div className="mt-8 pt-6 border-t border-gray-100 dark:border-gray-800 text-center text-xs text-gray-400 dark:text-gray-500 font-medium">
+            <span>&copy; {new Date().getFullYear()} Edu-Nify. Tous droits réservés.</span>
           </div>
 
         </div>

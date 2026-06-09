@@ -8,7 +8,7 @@
         "nom": { "type": "string" },
         "prenom": { "type": "string" },
         "email": { "type": "string" },
-        "role": { "type": "string", "enum": ["admin", "enseignant", "élève", "parent"] },
+        "role": { "type": "string", "enum": ["Super Administrateur", "Administrateur d'établissement", "Enseignant", "Élève", "Parent", "Comptable", "Surveillant", "Bibliothécaire", "admin", "enseignant", "élève", "parent", "personnel administratif", "cuisinier"] },
         "classe": { "type": "string" },
         "matricule": { "type": "string" },
         "photo": { "type": "string" },
@@ -23,7 +23,10 @@
         "face_id": { "type": "string" },
         "fingerprint_id": { "type": "string" },
         "credential_id": { "type": "string" },
-        "maison": { "type": "string" }
+        "maison": { "type": "string" },
+        "mustChangePassword": { "type": "boolean" },
+        "temporaryPassword": { "type": "string" },
+        "etablissement": { "type": "string" }
       }
     },
     "attendance": {
@@ -436,6 +439,24 @@
         "status": { "type": "string", "enum": ["open", "investigating", "resolved"] }
       },
       "required": ["item", "description", "severity", "status"]
+    },
+    "access_requests": {
+      "title": "Access Requests",
+      "description": "Public sign-up validation and on-boarding requests",
+      "type": "object",
+      "properties": {
+        "nom": { "type": "string" },
+        "prenom": { "type": "string" },
+        "telephone": { "type": "string" },
+        "role": { "type": "string" },
+        "lieu_naissance": { "type": "string" },
+        "date_naissance": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "approved", "rejected"] },
+        "date_demande": { "type": "string" },
+        "date_decision": { "type": "string" },
+        "decision_by": { "type": "string" }
+      },
+      "required": ["nom", "prenom", "telephone", "role", "status", "date_demande"]
     }
   },
   "firestore": {
@@ -470,6 +491,7 @@
     "/resp_secretaire_tasks/{taskId}": { "schema": "resp_secretaire_tasks", "description": "Secretary General task list with Directorate options." },
     "/resp_phone_calls/{callId}": { "schema": "resp_phone_calls", "description": "Phone call receipts." },
     "/resp_it_loans/{loanId}": { "schema": "resp_it_loans", "description": "Tablet cart loans." },
-    "/resp_it_tickets/{ticketId}": { "schema": "resp_it_tickets", "description": "IT defect tickets." }
+    "/resp_it_tickets/{ticketId}": { "schema": "resp_it_tickets", "description": "IT defect tickets." },
+    "/access_requests/{reqId}": { "schema": "access_requests", "description": "Access requests and public registrations pending admin validation." }
   }
 }

@@ -15,6 +15,10 @@ export interface User {
   prenom: string;
   email: string;
   role: 'admin' | 'enseignant' | 'élève' | 'personnel administratif' | 'parent' | 'cuisinier';
+  preciseRole?: string;
+  mustChangePassword?: boolean;
+  temporaryPassword?: string;
+  etablissement?: string;
   responsibilities?: string[];
   children_ids?: string[];
   classe?: string;
@@ -103,7 +107,16 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         unsubscribeDoc = onSnapshot(docRef, (docSnap) => {
           console.log("User profile snapshot received. Exists:", docSnap.exists());
           if (docSnap.exists()) {
-            const userData = docSnap.data();
+            const rawData = docSnap.data() || {};
+            const rawRole = rawData.role || 'élève';
+            const normRole = getNormalizedRole(rawRole);
+            const preciseRole = rawData.preciseRole || rawRole;
+            
+            const userData = {
+              ...rawData,
+              role: normRole,
+              preciseRole: preciseRole
+            } as any;
             
             // Auto-fill admin/teacher email check
             const isAdminEmail = firebaseUser.email === 'martinienmvezogo@gmail.com';
@@ -246,8 +259,29 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const login = async (email: string, mdp: string) => {
     if (!isFirebaseConfigured) throw new Error("Firebase non configuré");
     setLoading(true);
+    
+    const isDefaultAdmin = email.toLowerCase().trim() === 'martinienmvezogo@gmail.com' && mdp === 'password';
+    
     try {
-      const userCredential = await signInWithEmailAndPassword(auth, email, mdp);
+      let userCredential;
+      try {
+        userCredential = await signInWithEmailAndPassword(auth, email.trim(), mdp);
+      } catch (signInErr: any) {
+        if (isDefaultAdmin && (
+          signInErr.code === 'auth/user-not-found' || 
+          signInErr.code === 'auth/invalid-credential' || 
+          signInErr.code === 'auth/wrong-password' || 
+          (signInErr.message && (
+            signInErr.message.includes('invalid-credential') || 
+            signInErr.message.includes('user-not-found')
+          ))
+        )) {
+          console.log("Auto-creating default admin in Auth system...");
+          userCredential = await createUserWithEmailAndPassword(auth, email.trim(), mdp);
+        } else {
+          throw signInErr;
+        }
+      }
       // Log connection
       try {
         const userDoc = await getDoc(doc(db, 'users', userCredential.user.uid));
@@ -386,4 +420,29 @@ export function mapPositionToResponsibility(pos?: string): string[] {
   if (normalized.includes('pedagogique') || normalized.includes('charge pedagogique')) return ['responsable_pedagogique'];
   if (normalized.includes('menage')) return ['dame_menage'];
   return [];
+}
+
+export function getNormalizedRole(role: string): 'admin' | 'enseignant' | 'élève' | 'personnel administratif' | 'parent' | 'cuisinier' {
+  if (!role) return 'élève';
+  const r = role.toLowerCase().trim()
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, ""); // strip accents
+  if (r === 'super administrateur' || r === "administrateur d'etablissement" || r === "administrateur d’etablissement" || r === 'admin') {
+    return 'admin';
+  }
+  if (r === 'enseignant') {
+    return 'enseignant';
+  }
+  if (r === 'eleve') {
+    return 'élève';
+  }
+  if (r === 'parent') {
+    return 'parent';
+  }
+  if (r === 'comptable' || r === 'surveillant' || r === 'bibliothecaire' || r === 'personnel administratif') {
+    return 'personnel administratif';
+  }
+  if (r === 'cuisinier') {
+    return 'cuisinier';
+  }
+  return 'élève';
 }

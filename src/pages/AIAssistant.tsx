@@ -40,6 +40,11 @@ export default function AIAssistant({ onNavigate }: AIAssistantProps) {
   const [isGeneratingPrep, setIsGeneratingPrep] = useState(false);
   const [generatedPrep, setGeneratedPrep] = useState<string | null>(null);
   const [isSavingPrep, setIsSavingPrep] = useState(false);
+  const [prepTargetClass, setPrepTargetClass] = useState('');
+  const [prepChatInput, setPrepChatInput] = useState('');
+  const [prepChatMessages, setPrepChatMessages] = useState<{ role: 'user' | 'assistant', text: string }[]>([]);
+  const [isApplyingAdjustment, setIsApplyingAdjustment] = useState(false);
+  const [isPublishingPrep, setIsPublishingPrep] = useState(false);
 
   // Saved Preparations State
   const [savedPreps, setSavedPreps] = useState<any[]>([]);
@@ -222,6 +227,10 @@ export default function AIAssistant({ onNavigate }: AIAssistantProps) {
 
       if (!response.text) throw new Error(t('ai_empty_response'));
       setGeneratedPrep(response.text);
+      setPrepChatMessages([{
+        role: 'assistant',
+        text: `Bonjour ! J'ai généré votre document pédagogique de type **${prepType === "lesson_plan" ? "Plan de cours" : prepType === "exercises_list" ? "Liste d'exercices" : prepType === "quiz_mcq" ? "Quiz / QCM" : "Fiche de synthèse"}** sur le thème **"${prepTopic}"**. Vous pouvez converser avec moi ci-dessous pour modifier ce contenu ou y apporter des corrections avant publication !`
+      }]);
     } catch (error: any) {
       console.error("AI Generation error:", error);
       notifyError(`${t('ai_generation_error')} : ${error.message}`);
@@ -254,6 +263,109 @@ export default function AIAssistant({ onNavigate }: AIAssistantProps) {
       notifyError(t('save_error'));
     } finally {
       setIsSavingPrep(false);
+    }
+  };
+
+  const handleSendPrepChatMessage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!prepChatInput.trim() || !generatedPrep) return;
+
+    const userMessage = prepChatInput.trim();
+    setPrepChatInput('');
+    setPrepChatMessages(prev => [...prev, { role: 'user', text: userMessage }]);
+    setIsApplyingAdjustment(true);
+
+    try {
+      const systemPrompt = `
+        Tu es un assistant de formation pédagogique expert.
+        Voici la version de brouillon actuelle du cours/support générée :
+        ---
+        ${generatedPrep}
+        ---
+        
+        L'enseignant souhaite converser avec toi pour modifier ce document. Son instruction est :
+        "${userMessage}"
+        
+        Ta tâche :
+        Ré-écris l'ensemble du document en appliquant rigoureusement les modifications demandées (par exemple, ajuster le niveau de difficulté, rajouter une section d'exercices, simplifier le vocabulaire, corriger des éléments, ou traduire une partie).
+        Sortie obligatoire : Renvoie UNIQUEMENT le code brut final entièrement mis à jour. Aucun texte de bavardage ou salutation en dehors du contenu à restituer.
+      `;
+
+      const response = await generateAIContent({
+        model: "gemini-3-flash-preview",
+        contents: { parts: [{ text: systemPrompt }] }
+      });
+
+      if (response && response.text) {
+        setGeneratedPrep(response.text);
+        setPrepChatMessages(prev => [...prev, {
+          role: 'assistant',
+          text: `Modification prise en compte ! J'ai ajusté le contenu scolaire en appliquant votre consigne : "${userMessage}". Le support révisé est disponible ci-dessus.`
+        }]);
+      } else {
+        throw new Error("Aucun texte reçu de l'Assistant.");
+      }
+    } catch (err: any) {
+      console.error("Conversation update error in AIAssistant:", err);
+      setPrepChatMessages(prev => [...prev, {
+        role: 'assistant',
+        text: `Désolé, je n'ai pas pu appliquer vos ajustements : ${err.message || "Erreur de communication"}.`
+      }]);
+    } finally {
+      setIsApplyingAdjustment(false);
+    }
+  };
+
+  const publishPrepToClass = async () => {
+    if (!generatedPrep || !currentUser) return;
+    if (!prepTargetClass) {
+      notifyError("Veuillez sélectionner la classe destinataire pour publier ce contenu.");
+      return;
+    }
+    setIsPublishingPrep(true);
+    try {
+      // 1. Add preparation as dynamic content
+      await addDoc(collection(db, 'preparations'), {
+        authorId: currentUser.id,
+        authorName: `${currentUser.prenom || ''} ${currentUser.nom || ''}`.trim(),
+        topic: prepTopic,
+        grade: prepTargetClass, // target class
+        subject: prepSubject,
+        type: prepType,
+        content: generatedPrep,
+        published: true,
+        publishedAt: serverTimestamp(),
+        createdAt: serverTimestamp()
+      });
+
+      // 2. Fetch students of that class to push direct notifications
+      const q = query(collection(db, 'users'), where('role', '==', 'élève'), where('classe', '==', prepTargetClass));
+      const studentsSnap = await getDocs(q);
+      
+      const promises = studentsSnap.docs.map(studentDoc => {
+        return createNotification({
+          user_id: studentDoc.id,
+          title: `Nouveau cours disponible : ${prepTopic}`,
+          message: `Votre enseignant ${currentUser.prenom || ''} ${currentUser.nom || ''} a publié une nouvelle ressource (${prepType === "lesson_plan" ? "Plan de cours" : prepType === "exercises_list" ? "Liste d'exercices" : prepType === "quiz_mcq" ? "Quiz / QCM" : "Fiche de synthèse"}) en ${prepSubject}.`,
+          content: generatedPrep,
+          type: 'info',
+          targetTab: 'student_dashboard'
+        });
+      });
+      await Promise.all(promises);
+
+      notifySuccess(`🎉 Support publié avec succès aux élèves de la classe : ${prepTargetClass} !`);
+      setGeneratedPrep(null);
+      setPrepTopic('');
+      setPrepGrade('');
+      setPrepSubject('');
+      setPrepTargetClass('');
+      setPrepChatMessages([]);
+    } catch (error: any) {
+      console.error("Error publishing preparation:", error);
+      notifyError("Impossible de publier le support dans la classe.");
+    } finally {
+      setIsPublishingPrep(false);
     }
   };
 
@@ -572,24 +684,114 @@ export default function AIAssistant({ onNavigate }: AIAssistantProps) {
           {/* Preview Section */}
           <div className="lg:col-span-2 space-y-6">
             {generatedPrep ? (
-              <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm border border-gray-200 dark:border-gray-700 animate-fade-in flex flex-col h-full">
-                <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-lg font-semibold flex items-center gap-2">
-                    <CheckCircle size={20} className="text-green-500" />
-                    {t('prep_preview')}
-                  </h2>
-                  <button
-                    onClick={savePreparation}
-                    disabled={isSavingPrep}
-                    className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-xl text-sm font-bold hover:bg-green-700 disabled:opacity-50 transition-all"
-                  >
-                    {isSavingPrep ? <Loader2 className="animate-spin" size={16} /> : <Send size={16} />}
-                    {t('save_preparation')}
-                  </button>
+              <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm border border-gray-200 dark:border-gray-700 animate-fade-in flex flex-col space-y-6">
+                {/* Actions & Class Selection Header */}
+                <div className="p-4 bg-indigo-50/50 dark:bg-indigo-900/10 border border-indigo-100 dark:border-indigo-900/50 rounded-2xl space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <h3 className="text-sm font-black text-indigo-900 dark:text-indigo-400 uppercase tracking-wider flex items-center gap-2">
+                      <Sparkles size={16} />
+                      Options de publication
+                    </h3>
+                    <button
+                      onClick={savePreparation}
+                      disabled={isSavingPrep}
+                      className="px-4 py-2 bg-indigo-650 hover:bg-indigo-750 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 shadow-sm min-w-[150px] cursor-pointer"
+                    >
+                      {isSavingPrep ? <Loader2 className="animate-spin" size={14} /> : <BookOpen size={14} />}
+                      Sauvegarder en brouillon
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-12 gap-3 pt-3 border-t border-indigo-100/50 dark:border-indigo-900/30 items-end">
+                    <div className="md:col-span-7">
+                      <label className="block text-[10px] font-black text-indigo-750 dark:text-indigo-400 uppercase mb-1">
+                        Sélectionner la classe destinataire <span className="text-rose-500">*</span>
+                      </label>
+                      <select
+                        value={prepTargetClass}
+                        onChange={(e) => setPrepTargetClass(e.target.value)}
+                        className="w-full p-2.5 bg-white dark:bg-gray-900 border border-slate-200 dark:border-gray-750 rounded-xl text-xs focus:ring-2 focus:ring-indigo-500 font-semibold cursor-pointer text-slate-800 dark:text-gray-100"
+                      >
+                        <option value="">🏫 Choisir une classe...</option>
+                        {classesList.map(cls => (
+                          <option key={cls.id} value={cls.name}>🏫 {cls.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="md:col-span-5">
+                      <button
+                        onClick={publishPrepToClass}
+                        disabled={isPublishingPrep || !prepTargetClass}
+                        className="w-full py-2.5 bg-green-600 hover:bg-green-700 disabled:bg-gray-200 dark:disabled:bg-gray-700 text-white disabled:text-gray-400 dark:disabled:text-gray-500 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 shadow-md shadow-green-600/10 active:scale-95 duration-100 cursor-pointer"
+                      >
+                        {isPublishingPrep ? <Loader2 className="animate-spin" size={14} /> : <Send size={14} />}
+                        Publier pour la classe
+                      </button>
+                    </div>
+                  </div>
                 </div>
-                
-                <div className="flex-1 prose dark:prose-invert max-w-none text-sm text-gray-600 dark:text-gray-300 whitespace-pre-wrap bg-gray-50 dark:bg-gray-900/50 p-6 rounded-xl border border-gray-100 dark:border-gray-700 overflow-y-auto custom-scrollbar">
-                  {generatedPrep}
+
+                {/* Content Preview Container */}
+                <div className="space-y-2">
+                  <span className="text-xs font-bold text-gray-400 uppercase tracking-widest block">Aperçu du contenu</span>
+                  <div className="prose dark:prose-invert max-w-none text-sm text-gray-600 dark:text-gray-300 whitespace-pre-wrap bg-gray-50 dark:bg-gray-900/50 p-6 rounded-2xl border border-gray-100 dark:border-gray-700 max-h-[500px] overflow-y-auto custom-scrollbar font-sans leading-relaxed">
+                    {generatedPrep}
+                  </div>
+                </div>
+
+                {/* Revision Chat Thread */}
+                <div className="pt-6 border-t border-gray-150 dark:border-gray-700 space-y-4">
+                  <div className="flex items-center gap-2">
+                    <div className="p-1.5 bg-indigo-100 dark:bg-indigo-900/50 rounded-lg">
+                      <Sparkles className="text-indigo-600 dark:text-indigo-400 animate-pulse" size={16} />
+                    </div>
+                    <h4 className="text-xs font-black text-gray-900 dark:text-white uppercase tracking-wider">IA de révision : Ajuster & Re-traiter le support</h4>
+                  </div>
+
+                  {/* Chat Messages Log */}
+                  <div className="space-y-3 max-h-64 overflow-y-auto p-3 bg-gray-50 dark:bg-gray-900/30 rounded-xl border border-gray-100 dark:border-gray-700/80">
+                    {prepChatMessages.map((msg, idx) => (
+                      <div
+                        key={idx}
+                        className={`flex gap-2.5 max-w-[85%] ${msg.role === 'user' ? 'ml-auto flex-row-reverse' : ''}`}
+                      >
+                        <div className={`p-3 rounded-2xl text-xs leading-relaxed ${
+                          msg.role === 'user'
+                            ? 'bg-indigo-600 text-white rounded-tr-none font-medium'
+                            : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-100 dark:border-gray-750 shadow-sm rounded-tl-none font-medium'
+                        }`}>
+                          {msg.text}
+                        </div>
+                      </div>
+                    ))}
+                    {isApplyingAdjustment && (
+                      <div className="flex gap-2.5 max-w-[85%] animate-pulse">
+                        <div className="p-3 rounded-2xl rounded-tl-none bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400 border border-gray-100 dark:border-gray-750 shadow-sm flex items-center gap-2 text-xs">
+                          <Loader2 size={14} className="animate-spin text-indigo-500" />
+                          <span>L'IA analyse vos remarques pour ré-écrire le document...</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Chat Input Field */}
+                  <form onSubmit={handleSendPrepChatMessage} className="flex gap-2">
+                    <input
+                      type="text"
+                      value={prepChatInput}
+                      onChange={(e) => setPrepChatInput(e.target.value)}
+                      placeholder="Ex: Rends les exercices plus simples / Traduis le plan en espagnol / Rajoute une conclusion..."
+                      disabled={isApplyingAdjustment}
+                      className="flex-1 px-4 py-2.5 bg-gray-50 dark:bg-gray-900 border border-slate-200 dark:border-gray-700 rounded-xl text-xs focus:ring-2 focus:ring-indigo-500 outline-none font-semibold transition-all text-slate-800 dark:text-gray-100"
+                    />
+                    <button
+                      type="submit"
+                      disabled={!prepChatInput.trim() || isApplyingAdjustment}
+                      className="px-4 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-200 dark:disabled:bg-gray-750 text-white disabled:text-gray-400 dark:disabled:text-gray-500 rounded-xl text-xs font-bold transition-colors flex items-center justify-center cursor-pointer"
+                    >
+                      <Send size={14} />
+                    </button>
+                  </form>
                 </div>
               </div>
             ) : (
