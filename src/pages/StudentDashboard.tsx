@@ -258,49 +258,87 @@ export default function StudentDashboard({ onNavigate }: { onNavigate?: (tab: st
   return (
     <div className="min-h-screen bg-gray-50 p-4 sm:p-6 lg:p-8">
       <div className="max-w-4xl mx-auto space-y-6">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row items-center sm:items-start justify-between gap-4">
           <NewUserAnnouncement />
-          <LiveClock className="items-end" showDate={true} />
+          <LiveClock className="items-center sm:items-end" showDate={true} />
         </div>
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 flex justify-between items-center">
-          <div className="flex items-center gap-4">
+        
+        {/* Responsive Student Information Card */}
+        <div className="bg-white rounded-3xl shadow-sm border border-gray-150 p-5 sm:p-6 flex flex-col sm:flex-row justify-between items-center gap-6">
+          <div className="flex flex-col sm:flex-row items-center gap-4 w-full sm:w-auto text-center sm:text-left">
             {currentUser?.photo ? (
-              <img src={currentUser.photo} alt="Profile" className="w-16 h-16 rounded-full object-cover border-2 border-indigo-100" referrerPolicy="no-referrer" />
+              <img 
+                src={currentUser.photo} 
+                alt="Profile" 
+                className="w-16 h-16 sm:w-20 sm:h-20 rounded-full object-cover border-4 border-indigo-50 shrink-0" 
+                referrerPolicy="no-referrer" 
+              />
             ) : (
-              <div className="w-16 h-16 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center text-xl font-bold uppercase">
+              <div className="w-16 h-16 sm:w-20 sm:h-20 bg-indigo-100 text-indigo-700 rounded-full flex items-center justify-center text-xl sm:text-2xl font-black uppercase shrink-0">
                 {currentUser?.prenom?.[0] || currentUser?.email?.[0] || 'U'}
               </div>
             )}
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900">
+            <div className="min-w-0 flex-1">
+              <h1 className="text-xl sm:text-2xl font-extrabold text-gray-900 tracking-tight break-all line-clamp-2">
                 {t('student_greeting')} {currentUser?.prenom || currentUser?.nom ? `${currentUser?.prenom || ''} ${currentUser?.nom || ''}`.trim() : currentUser?.email?.split('@')[0] || 'Utilisateur'}
               </h1>
-              <p className="text-gray-500 capitalize">{currentUser?.role} {currentUser?.classe && `- Classe: ${currentUser.classe}`}</p>
+              <p className="text-sm text-gray-500 mt-1 capitalize font-semibold tracking-wide flex flex-wrap items-center justify-center sm:justify-start gap-2">
+                <span>{currentUser?.role}</span>
+                {currentUser?.classe && (
+                  <span className="bg-indigo-50 text-indigo-700 px-2.5 py-0.5 rounded-full text-xs font-bold">
+                    {currentUser.classe}
+                  </span>
+                )}
+              </p>
               {house && (
-                <div className="mt-2 inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm font-medium border" style={{ backgroundColor: `${house.color}15`, color: house.color, borderColor: `${house.color}30` }}>
+                <div className="mt-2.5 inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border" style={{ backgroundColor: `${house.color}15`, color: house.color, borderColor: `${house.color}30` }}>
                   {house.logo.startsWith('http') ? (
-                    <img src={house.logo} alt={house.nom_maison} className="w-4 h-4 object-cover rounded-full" referrerPolicy="no-referrer" />
+                    <img src={house.logo} alt={house.nom_maison} className="w-3.5 h-3.5 object-cover rounded-full shrink-0" referrerPolicy="no-referrer" />
                   ) : (
-                    <span>{house.logo}</span>
+                    <span className="shrink-0">{house.logo}</span>
                   )}
-                  {house.nom_maison} ({house.total_points} pts)
+                  <span className="truncate">{house.nom_maison} ({house.total_points} pts)</span>
                 </div>
               )}
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            {onNavigate && (
-              <button 
-                onClick={() => onNavigate('settings')}
-                className="p-3 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-xl transition-colors"
-                title="Paramètres"
-              >
-                <Settings size={24} />
-              </button>
-            )}
-            <button onClick={logout} className="p-3 text-gray-500 hover:bg-red-50 hover:text-red-600 rounded-xl transition-colors" title="Déconnexion">
-              <LogOut size={24} />
-            </button>
+          
+          {/* Real-time statistics block replacing the old logout/settings buttons */}
+          <div className="flex flex-wrap items-center gap-2.5 sm:gap-4 shrink-0 w-full sm:w-auto justify-center sm:justify-end border-t border-gray-100 sm:border-0 pt-4 sm:pt-0">
+            {/* Real-time Metric 1: Pending Homework */}
+            <div className="flex items-center gap-2 sm:gap-2.5 bg-indigo-50/60 px-3.5 py-2 rounded-2xl border border-indigo-100/50 flex-1 sm:flex-initial min-w-[90px] justify-center sm:justify-start">
+              <BookOpen size={16} className="text-indigo-600 shrink-0" />
+              <div className="text-center sm:text-left min-w-0">
+                <p className="text-[9px] font-extrabold uppercase tracking-wider text-indigo-500 leading-none">Devoirs</p>
+                <p className="text-xs sm:text-sm font-black text-indigo-900 mt-1 truncate">
+                  {homework.filter(h => !h.completedBy?.includes(currentUser?.id)).length} rests
+                </p>
+              </div>
+            </div>
+
+            {/* Real-time Metric 2: Live Average Grade */}
+            <div className="flex items-center gap-2 sm:gap-2.5 bg-emerald-50/60 px-3.5 py-2 rounded-2xl border border-emerald-100/50 flex-1 sm:flex-initial min-w-[90px] justify-center sm:justify-start">
+              <Award size={16} className="text-emerald-600 shrink-0" />
+              <div className="text-center sm:text-left min-w-0">
+                <p className="text-[9px] font-extrabold uppercase tracking-wider text-emerald-500 leading-none">Moyenne</p>
+                <p className="text-xs sm:text-sm font-black text-emerald-950 mt-1 truncate">
+                  {calculateAverage(grades).toFixed(1)}/20
+                </p>
+              </div>
+            </div>
+
+            {/* Real-time Metric 3: Live Attendance Rate */}
+            <div className="flex items-center gap-2 sm:gap-2.5 bg-amber-50/60 px-3.5 py-2 rounded-2xl border border-amber-100/50 flex-1 sm:flex-initial min-w-[90px] justify-center sm:justify-start">
+              <Clock size={16} className="text-amber-600 shrink-0" />
+              <div className="text-center sm:text-left min-w-0">
+                <p className="text-[9px] font-extrabold uppercase tracking-wider text-amber-500 leading-none">Présence</p>
+                <p className="text-xs sm:text-sm font-black text-amber-900 mt-1 truncate">
+                  {attendanceStats.total > 0 && attendanceStats.presents !== undefined
+                    ? `${((attendanceStats.presents / attendanceStats.total) * 100).toFixed(0)}%`
+                    : "100%"}
+                </p>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -310,23 +348,23 @@ export default function StudentDashboard({ onNavigate }: { onNavigate?: (tab: st
           <motion.div 
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="lg:col-span-2 bg-white p-6 rounded-3xl shadow-sm border border-gray-100"
+            className="lg:col-span-2 bg-white p-5 sm:p-6 rounded-3xl shadow-sm border border-gray-100"
           >
-            <div className="flex items-center justify-between mb-8">
-              <div>
-                <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-                  <Activity size={20} className="text-indigo-600" />
-                  Progression de mes notes
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+              <div className="space-y-1">
+                <h2 className="text-lg sm:text-xl font-extrabold text-gray-900 flex items-center gap-2">
+                  <Activity size={20} className="text-indigo-600 shrink-0" />
+                  <span>Progression de mes notes</span>
                 </h2>
-                <p className="text-xs text-gray-500">Moyenne sur 20 évolutive</p>
+                <p className="text-xs text-gray-500 font-medium">Moyenne sur 20 évolutive</p>
               </div>
-              <div className="text-right">
-                <span className="text-2xl font-black text-indigo-600">{calculateAverage(grades).toFixed(2)}</span>
-                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-tight">Moyenne Générale</p>
+              <div className="bg-indigo-50/50 px-4 py-2 rounded-2xl border border-indigo-100/40 text-left sm:text-right shrink-0 w-full sm:w-auto flex sm:block justify-between items-center">
+                <p className="text-[10px] text-indigo-700 font-bold uppercase tracking-wider">Moyenne Générale</p>
+                <span className="text-xl sm:text-2xl font-black text-indigo-600">{calculateAverage(grades).toFixed(2)}</span>
               </div>
             </div>
 
-            <div className="h-[300px] w-full">
+            <div className="h-[260px] sm:h-[300px] w-full">
               {evolutionData.length > 0 ? (
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={evolutionData}>
@@ -380,10 +418,10 @@ export default function StudentDashboard({ onNavigate }: { onNavigate?: (tab: st
             <motion.div 
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
-              className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100"
+              className="bg-white p-5 sm:p-6 rounded-3xl shadow-sm border border-gray-100"
             >
               <h2 className="text-sm font-black text-gray-900 uppercase tracking-widest mb-6 flex items-center gap-2">
-                <CheckCircle2 size={16} className="text-emerald-500" />
+                <CheckCircle2 size={16} className="text-emerald-500 shrink-0" />
                 Sérieux aux devoirs
               </h2>
               <div className="h-[100px] w-full">
@@ -413,18 +451,18 @@ export default function StudentDashboard({ onNavigate }: { onNavigate?: (tab: st
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: 0.1 }}
-              className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100"
+              className="bg-white p-5 sm:p-6 rounded-3xl shadow-sm border border-gray-100"
             >
               <h2 className="text-sm font-black text-gray-900 uppercase tracking-widest mb-6 flex items-center gap-2">
-                <Award size={16} className="text-amber-500" />
+                <Award size={16} className="text-amber-500 shrink-0" />
                 Moyennes par Matière
               </h2>
               <div className="space-y-4 max-h-[150px] overflow-y-auto pr-2 custom-scrollbar border-b border-gray-50 pb-6">
                 {subjectAverages.length > 0 ? subjectAverages.map((sub, i) => (
                   <div key={i} className="space-y-1">
                     <div className="flex justify-between text-xs">
-                      <span className="font-bold text-gray-700">{sub.subject}</span>
-                      <span className={`font-black ${sub.average >= 12 ? 'text-green-600' : 'text-amber-600'}`}>{sub.average.toFixed(2)}/20</span>
+                      <span className="font-bold text-gray-700 truncate max-w-[70%]">{sub.subject}</span>
+                      <span className={`font-black shrink-0 ${sub.average >= 12 ? 'text-green-600' : 'text-amber-600'}`}>{sub.average.toFixed(2)}/20</span>
                     </div>
                     <div className="h-1.5 w-full bg-gray-50 rounded-full overflow-hidden border border-gray-100">
                       <motion.div 
@@ -472,38 +510,38 @@ export default function StudentDashboard({ onNavigate }: { onNavigate?: (tab: st
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
-          className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100"
+          className="bg-white p-5 sm:p-6 rounded-3xl shadow-sm border border-gray-100"
         >
-          <div className="flex items-center justify-between mb-8">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
             <div>
-              <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-                <BookOpen size={20} className="text-indigo-600" />
+              <h2 className="text-lg sm:text-xl font-extrabold text-gray-900 flex items-center gap-2">
+                <BookOpen size={20} className="text-indigo-600 shrink-0" />
                 Volume d'évaluations par matière
               </h2>
               <p className="text-xs text-gray-500">Nombre d'interrogations et d'évaluations rattachées</p>
             </div>
-            <div className="flex gap-4">
-              <div className="flex items-center gap-1.5">
-                <div className="w-2.5 h-2.5 rounded-full bg-indigo-500"></div>
-                <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Interrogations</span>
+            <div className="flex flex-wrap gap-2.5 mt-1 sm:mt-0">
+              <div className="flex items-center gap-1.5 bg-indigo-50/75 px-3 py-1 rounded-xl">
+                <div className="w-2 h-2 rounded-full bg-indigo-500 shrink-0" />
+                <span className="text-[10px] font-bold text-indigo-700 uppercase tracking-wider">Interrogations</span>
               </div>
-              <div className="flex items-center gap-1.5">
-                <div className="w-2.5 h-2.5 rounded-full bg-emerald-500"></div>
-                <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Evaluations</span>
+              <div className="flex items-center gap-1.5 bg-teal-50/75 px-3 py-1 rounded-xl">
+                <div className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
+                <span className="text-[10px] font-bold text-teal-700 uppercase tracking-wider">Évaluations</span>
               </div>
             </div>
           </div>
 
-          <div className="h-[300px] w-full">
+          <div className="h-[260px] sm:h-[300px] w-full">
             {subjectAverages.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={subjectAverages} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+                <BarChart data={subjectAverages} margin={{ top: 20, right: 10, left: -10, bottom: 5 }}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
                   <XAxis 
                     dataKey="subject" 
                     axisLine={false} 
                     tickLine={false} 
-                    tick={{ fontSize: 10, fill: '#9ca3af', fontWeight: 'bold' }}
+                    tick={{ fontSize: 9, fill: '#9ca3af', fontWeight: 'bold' }}
                     interval={0}
                   />
                   <YAxis 
@@ -516,8 +554,8 @@ export default function StudentDashboard({ onNavigate }: { onNavigate?: (tab: st
                     cursor={{ fill: '#f9fafb' }}
                     contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
                   />
-                  <Bar dataKey="interrogations" name="Interrogations" fill="#6366f1" stackId="a" radius={[0, 0, 0, 0]} barSize={40} />
-                  <Bar dataKey="evaluations" name="Evaluations" fill="#14b8a6" stackId="a" radius={[10, 10, 0, 0]} barSize={40} />
+                  <Bar dataKey="interrogations" name="Interrogations" fill="#6366f1" stackId="a" radius={[0, 0, 0, 0]} barSize={28} />
+                  <Bar dataKey="evaluations" name="Evaluations" fill="#14b8a6" stackId="a" radius={[10, 10, 0, 0]} barSize={28} />
                 </BarChart>
               </ResponsiveContainer>
             ) : (
@@ -529,11 +567,12 @@ export default function StudentDashboard({ onNavigate }: { onNavigate?: (tab: st
           </div>
         </motion.div>
 
+        {/* Attendance & Notifications */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <div className="lg:col-span-2 space-y-4">
-            <h2 className="text-xl font-bold text-gray-900">Mon historique de présence</h2>
+            <h2 className="text-xl font-bold text-gray-900 tracking-tight">Mon historique de présence</h2>
             
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+            <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
               {loading ? (
                 <div className="p-12 flex justify-center">
                   <RefreshCw className="animate-spin text-indigo-600" size={32} />
@@ -546,28 +585,30 @@ export default function StudentDashboard({ onNavigate }: { onNavigate?: (tab: st
               ) : (
                 <div className="divide-y divide-gray-100">
                   {attendance.map(record => (
-                    <div key={record.id} className="p-4 flex items-center justify-between hover:bg-gray-50 transition-colors">
-                      <div className="flex items-center gap-4">
-                        <div className={`w-12 h-12 rounded-full flex items-center justify-center ${
+                    <div key={record.id} className="p-4 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 hover:bg-gray-50 transition-colors">
+                      <div className="flex items-center gap-3 sm:gap-4 flex-1">
+                        <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center shrink-0 ${
                           record.statut === 'Présent' ? 'bg-emerald-100 text-emerald-600' : 'bg-amber-100 text-amber-600'
                         }`}>
-                          <CheckCircle2 size={24} />
+                          <CheckCircle2 size={20} className="sm:size-6" />
                         </div>
-                        <div>
-                          <p className="font-bold text-gray-900 capitalize">
+                        <div className="min-w-0">
+                          <p className="font-extrabold text-gray-900 text-sm sm:text-base capitalize break-words pr-2">
                             {new Date(record.date).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
                           </p>
-                          <div className="flex items-center gap-2 text-sm text-gray-500 mt-1">
-                            <Clock size={14} />
-                            <span>Arrivée : <span className="font-mono font-medium text-gray-700">{record.heure_arrivee}</span></span>
+                          <div className="flex items-center gap-2 text-[11px] sm:text-xs text-gray-500 mt-1 uppercase font-semibold">
+                            <Clock size={12} className="shrink-0 text-indigo-500" />
+                            <span>Arrivée : <span className="font-mono font-bold text-gray-700">{record.heure_arrivee}</span></span>
                           </div>
                         </div>
                       </div>
-                      <span className={`px-4 py-1.5 rounded-full text-sm font-bold border ${
-                        record.statut === 'Présent' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-amber-50 text-amber-700 border-amber-200'
-                      }`}>
-                        {record.statut}
-                      </span>
+                      <div className="flex sm:justify-end shrink-0">
+                        <span className={`px-3 py-1 sm:px-4 sm:py-1.5 rounded-full text-[11px] sm:text-xs font-black border uppercase tracking-wider text-center w-full sm:w-auto ${
+                          record.statut === 'Présent' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-amber-50 text-amber-700 border-amber-200'
+                        }`}>
+                          {record.statut}
+                        </span>
+                      </div>
                     </div>
                   ))}
                 </div>
