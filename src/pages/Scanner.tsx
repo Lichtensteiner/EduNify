@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Camera, Fingerprint, ScanFace, CheckCircle2, AlertCircle, RefreshCw } from 'lucide-react';
-import { collection, getDocs, addDoc, query, where, updateDoc, doc, limit, orderBy, onSnapshot } from 'firebase/firestore';
+import { Camera, Fingerprint, ScanFace, CheckCircle2, AlertCircle, RefreshCw, User, Mail, Phone, MapPin, Calendar, Award, Sparkles, ShieldAlert, BookOpen } from 'lucide-react';
+import { collection, getDocs, addDoc, query, where, updateDoc, doc, getDoc, limit, orderBy, onSnapshot } from 'firebase/firestore';
 import { db, isFirebaseConfigured } from '../lib/firebase';
 
 export default function Scanner() {
@@ -236,11 +236,56 @@ export default function Scanner() {
 
       setActionType(currentAction === 'entrée' ? 'arrivée' : 'départ');
 
+      // 4. Fetch house dynamically if any
+      let studentHouse: any = null;
+      if (user.house_id) {
+        try {
+          const houseDoc = await getDoc(doc(db, 'houses', user.house_id));
+          if (houseDoc.exists()) {
+            studentHouse = { id: houseDoc.id, ...houseDoc.data() };
+          }
+        } catch (e) {
+          console.error("Error fetching student house:", e);
+        }
+      }
+
+      // 5. Fetch grades to calculate GPA
+      let studentGrades: any[] = [];
+      let calculatedGpa = 0;
+      try {
+        const gradesSnap = await getDocs(query(collection(db, 'grades'), where('studentId', '==', user.id)));
+        studentGrades = gradesSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+        if (studentGrades.length > 0) {
+          const validGrades = studentGrades.filter((g: any) => g.maxScore > 0);
+          if (validGrades.length > 0) {
+            const totalWeightedScore = validGrades.reduce((acc: number, g: any) => acc + (g.score / g.maxScore * 20) * (g.coefficient || 1), 0);
+            const totalCoefficients = validGrades.reduce((acc: number, g: any) => acc + (g.coefficient || 1), 0);
+            if (totalCoefficients > 0) {
+              const avg = totalWeightedScore / totalCoefficients;
+              calculatedGpa = isNaN(avg) ? 0 : avg;
+            }
+          }
+        }
+      } catch (e) {
+        console.error("Error fetching student grades:", e);
+      }
+
       setScannedUserData({
+        id: user.id,
         nom: user.nom,
         prenom: user.prenom,
         role: user.role,
         classe: user.classe,
+        photo: user.photo,
+        telephone: user.telephone,
+        email: user.email,
+        date_naissance: user.date_naissance,
+        lieu_naissance: user.lieu_naissance,
+        parent_email: user.parent_email || user.email_parent || "",
+        parent_phone: user.parent_phone || user.telephone_parent || "",
+        maison: studentHouse,
+        gpa: calculatedGpa,
+        gradesCount: studentGrades.length,
         heure: timeString,
         statut: isFirstScan ? (isLate ? 'Retard' : 'Présent') : (currentAction === 'entrée' ? 'Ré-entrée' : 'Sortie')
       });
@@ -250,7 +295,7 @@ export default function Scanner() {
         setScanStatus('idle');
         setScannedUserData(null);
         setActionType(null);
-      }, 5000);
+      }, 12000);
     } catch (err) {
       console.error(err);
       setError("Erreur lors de l'enregistrement de la présence.");
@@ -453,43 +498,173 @@ export default function Scanner() {
 
             {/* Message de succès global */}
             {scanStatus === 'success' && scannedUserData && (
-              <div className="absolute inset-0 bg-white/95 backdrop-blur-md z-20 flex flex-col items-center justify-center animate-in fade-in duration-300 p-6">
-                <div className="w-20 h-20 bg-emerald-100 text-emerald-500 rounded-full flex items-center justify-center mb-6 shadow-xl shadow-emerald-100">
-                  <CheckCircle2 size={40} />
+              <div className="absolute inset-0 bg-white/98 dark:bg-gray-900/98 backdrop-blur-md z-20 flex flex-col items-center justify-center animate-in fade-in duration-300 p-4 sm:p-6 overflow-y-auto">
+                <div className="text-center mb-4 sm:mb-6">
+                  <div className="w-14 h-14 bg-emerald-100 dark:bg-emerald-950/50 text-emerald-500 rounded-full flex items-center justify-center mx-auto mb-3 shadow-lg shadow-emerald-100/50 dark:shadow-none animate-bounce">
+                    <CheckCircle2 size={32} />
+                  </div>
+                  <h2 className="text-xl sm:text-2xl font-black text-gray-900 dark:text-white uppercase tracking-wider">Identité Confirmée</h2>
+                  <p className="text-sm sm:text-base text-emerald-600 dark:text-emerald-400 font-extrabold capitalize">{actionType} enregistrée avec succès</p>
                 </div>
-                <h2 className="text-2xl font-bold text-emerald-600 mb-2 uppercase tracking-wider">Utilisateur reconnu</h2>
-                <p className="text-xl text-emerald-700 font-medium capitalize mb-6">{actionType} enregistrée</p>
-                
-                <div className="bg-gray-50 dark:bg-gray-800 w-full max-w-sm rounded-2xl p-6 border border-gray-100 dark:border-gray-700 shadow-sm text-left space-y-3">
-                  <div className="flex justify-between border-b border-gray-200 dark:border-gray-700 pb-2">
-                    <span className="text-gray-500">Nom :</span>
-                    <span className="font-bold text-gray-900 dark:text-white">{scannedUserData.prenom} {scannedUserData.nom}</span>
-                  </div>
-                  <div className="flex justify-between border-b border-gray-200 dark:border-gray-700 pb-2">
-                    <span className="text-gray-500">Rôle :</span>
-                    <span className="font-bold text-gray-900 dark:text-white capitalize">{scannedUserData.role}</span>
-                  </div>
-                  {scannedUserData.classe && (
-                    <div className="flex justify-between border-b border-gray-200 dark:border-gray-700 pb-2">
-                      <span className="text-gray-500">Classe :</span>
-                      <span className="font-bold text-gray-900 dark:text-white">{scannedUserData.classe}</span>
+
+                <div className="bg-white dark:bg-gray-800 w-full max-w-2xl rounded-3xl border border-gray-150 dark:border-gray-700 shadow-2xl overflow-hidden text-left flex flex-col md:flex-row divide-y md:divide-y-0 md:divide-x divide-gray-150 dark:divide-gray-700">
+                  {/* Left Column: Avatar & Clan/House */}
+                  <div className="p-6 flex flex-col items-center justify-center shrink-0 w-full md:w-56 text-center bg-gray-50/50 dark:bg-gray-800/50">
+                    <div className="relative mb-4">
+                      {scannedUserData.photo ? (
+                        <img 
+                          src={scannedUserData.photo} 
+                          alt="Photos d'élève" 
+                          className="w-24 h-24 sm:w-28 sm:h-28 rounded-full object-cover border-4 border-emerald-500 shadow-xl" 
+                          referrerPolicy="no-referrer"
+                        />
+                      ) : (
+                        <div className="w-24 h-24 sm:w-28 sm:h-28 bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-400 rounded-full flex items-center justify-center text-3xl font-black uppercase border-4 border-indigo-50 shadow-xl">
+                          {scannedUserData.prenom?.[0] || scannedUserData.nom?.[0] || 'U'}
+                        </div>
+                      )}
+                      <span className="absolute -bottom-1 -right-1 bg-emerald-500 text-white p-1.5 rounded-full shadow-lg">
+                        <Sparkles size={16} />
+                      </span>
                     </div>
-                  )}
-                  <div className="flex justify-between border-b border-gray-200 dark:border-gray-700 pb-2">
-                    <span className="text-gray-500">Action :</span>
-                    <span className="font-bold text-gray-900 dark:text-white capitalize">{actionType || 'Arrivée'}</span>
-                  </div>
-                  <div className="flex justify-between border-b border-gray-200 dark:border-gray-700 pb-2">
-                    <span className="text-gray-500">Heure :</span>
-                    <span className="font-bold text-gray-900 dark:text-white">{scannedUserData.heure}</span>
-                  </div>
-                  <div className="flex justify-between pt-1">
-                    <span className="text-gray-500">Statut :</span>
-                    <span className={`font-bold ${scannedUserData.statut === 'Présent' ? 'text-emerald-600' : 'text-amber-600'}`}>
-                      {scannedUserData.statut}
+
+                    <h3 className="text-base sm:text-lg font-black text-gray-900 dark:text-white line-clamp-2">
+                      {scannedUserData.prenom} {scannedUserData.nom}
+                    </h3>
+                    
+                    <span className="mt-1 px-3 py-1 rounded-full text-xs font-extrabold tracking-wider bg-indigo-100 text-indigo-800 dark:bg-indigo-900/50 dark:text-indigo-300 uppercase shrink-0">
+                      {scannedUserData.role || 'Élève'}
                     </span>
+
+                    {scannedUserData.classe && (
+                      <div className="mt-3 inline-flex items-center gap-1.5 bg-gray-900 text-white text-xs font-bold px-3 py-1 rounded-xl">
+                        Classe: <span className="font-mono">{scannedUserData.classe}</span>
+                      </div>
+                    )}
+
+                    {/* House Details */}
+                    {scannedUserData.maison && (
+                      <div className="mt-4 w-full p-2.5 rounded-2xl border text-xs font-bold flex flex-col items-center gap-1" style={{ backgroundColor: `${scannedUserData.maison.color}10`, color: scannedUserData.maison.color, borderColor: `${scannedUserData.maison.color}30` }}>
+                        <span className="text-[10px] uppercase font-bold tracking-widest block opacity-75">Maison</span>
+                        <div className="flex items-center gap-1.5">
+                          {scannedUserData.maison.logo?.startsWith('http') ? (
+                            <img src={scannedUserData.maison.logo} alt="Maison Logo" className="w-4 h-4 rounded-full object-cover shrink-0" referrerPolicy="no-referrer" />
+                          ) : (
+                            <span className="text-base">{scannedUserData.maison.logo || '🏆'}</span>
+                          )}
+                          <span className="truncate">{scannedUserData.maison.nom_maison}</span>
+                        </div>
+                        <p className="text-[10px] font-black opacity-90">{scannedUserData.maison.total_points || 0} Points</p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Right Column: General Information & Grades */}
+                  <div className="p-6 flex-1 space-y-4 text-xs sm:text-sm">
+                    {/* Personnel */}
+                    <div className="space-y-2">
+                      <h4 className="text-[10px] font-black uppercase tracking-widest text-indigo-500 flex items-center gap-1.5">
+                        <User size={12} /> Informations Générales
+                      </h4>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-gray-50 dark:bg-gray-800/30 p-3 rounded-2xl border border-gray-100 dark:border-gray-700/60">
+                        <div>
+                          <p className="text-gray-400 font-semibold text-[10px] uppercase">Né(e) le</p>
+                          <p className="font-bold text-gray-800 dark:text-gray-200">{scannedUserData.date_naissance ? new Date(scannedUserData.date_naissance).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }) : 'Non renseigné'}</p>
+                        </div>
+                        <div>
+                          <p className="text-gray-400 font-semibold text-[10px] uppercase">À (Lieu)</p>
+                          <p className="font-bold text-gray-800 dark:text-gray-200 capitalize truncate">{scannedUserData.lieu_naissance || 'Non renseigné'}</p>
+                        </div>
+                        <div className="sm:col-span-2">
+                          <p className="text-gray-400 font-semibold text-[10px] uppercase flex items-center gap-1">
+                            <Phone size={10} /> Téléphone Élève
+                          </p>
+                          <p className="font-mono font-bold text-gray-800 dark:text-gray-200">{scannedUserData.telephone || 'Non renseigné'}</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Parents Details */}
+                    <div className="space-y-2">
+                      <h4 className="text-[10px] font-black uppercase tracking-widest text-amber-500 flex items-center gap-1.5">
+                        <Mail size={12} /> Contact Responsable / Parent
+                      </h4>
+                      <div className="bg-gray-50 dark:bg-gray-800/30 p-3 rounded-2xl border border-gray-100 dark:border-gray-700/60 space-y-2">
+                        <div className="flex justify-between items-center">
+                          <span className="text-gray-400 font-semibold text-[10px] uppercase">Téléphone Parent:</span>
+                          <span className="font-mono font-black text-gray-800 dark:text-gray-200 bg-amber-50 dark:bg-amber-950/20 px-2 py-0.5 rounded-md">{scannedUserData.parent_phone || 'Non disponible'}</span>
+                        </div>
+                        <div className="flex justify-between items-center gap-2">
+                          <span className="text-gray-400 font-semibold text-[10px] uppercase shrink-0">Email Parent:</span>
+                          <span className="font-mono font-medium text-gray-700 dark:text-gray-300 truncate max-w-[180px]">{scannedUserData.parent_email || 'Non disponible'}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Academic GPA / Track */}
+                    {scannedUserData.role === 'élève' && (
+                      <div className="space-y-2">
+                        <h4 className="text-[10px] font-black uppercase tracking-widest text-emerald-500 flex items-center gap-1.5">
+                          <Award size={12} /> Bilan Scolaire en Temps Réel
+                        </h4>
+                        <div className="flex items-center justify-between bg-emerald-50/30 dark:bg-emerald-950/10 p-3 rounded-2xl border border-emerald-100/30">
+                          <div>
+                            <p className="text-[10px] text-emerald-600 dark:text-emerald-400 font-black uppercase tracking-wider">Moyenne Générale</p>
+                            <p className="text-lg font-black text-emerald-700 dark:text-emerald-300">
+                              {scannedUserData.gpa ? `${scannedUserData.gpa.toFixed(2)}/20` : 'En attente de notation'}
+                            </p>
+                          </div>
+                          <div>
+                            {scannedUserData.gpa ? (
+                              <span className={`px-2.5 py-1 rounded-xl font-black text-xs uppercase ${
+                                scannedUserData.gpa >= 16 ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' :
+                                scannedUserData.gpa >= 12 ? 'bg-blue-100 text-blue-800 border border-blue-200' :
+                                scannedUserData.gpa >= 10 ? 'bg-amber-100 text-amber-800 border border-amber-200' :
+                                'bg-red-100 text-red-800 border border-red-200'
+                              }`}>
+                                {scannedUserData.gpa >= 16 ? 'Excellent (A+)' :
+                                 scannedUserData.gpa >= 12 ? 'Très Bien (B)' :
+                                 scannedUserData.gpa >= 10 ? 'Passable (C)' :
+                                 'Insuffisant (E)'}
+                              </span>
+                            ) : (
+                              <span className="text-gray-400 text-xs italic">Pas d'évaluation</span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Passage details */}
+                    <div className="flex items-center justify-between p-3 bg-indigo-50/40 dark:bg-indigo-950/20 border border-indigo-100/50 rounded-2xl text-xs sm:text-sm">
+                      <div className="flex items-center gap-2">
+                        <span className="relative flex h-2.5 w-2.5 shrink-0">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
+                          <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-indigo-500"></span>
+                        </span>
+                        <span>Passage à <strong className="font-mono text-gray-900 dark:text-white">{scannedUserData.heure}</strong></span>
+                      </div>
+                      <span className={`font-black uppercase tracking-wider px-3 py-1 rounded-xl text-xs ${
+                        scannedUserData.statut === 'Présent' ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300' : 
+                        scannedUserData.statut === 'Retard' ? 'bg-red-100 text-red-800 dark:bg-red-950/40 dark:text-red-300' :
+                        'bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300'
+                      }`}>
+                        {scannedUserData.statut}
+                      </span>
+                    </div>
                   </div>
                 </div>
+
+                <button 
+                  onClick={() => {
+                    setScanStatus('idle');
+                    setScannedUserData(null);
+                    setActionType(null);
+                  }}
+                  className="mt-6 px-10 py-3.5 bg-gray-900 hover:bg-black dark:bg-gray-800 dark:hover:bg-gray-700 text-white font-extrabold text-sm rounded-2xl tracking-widest uppercase transition-all shadow-xl shadow-gray-200 dark:shadow-none"
+                >
+                  Fermer & Retour
+                </button>
               </div>
             )}
           </div>

@@ -184,7 +184,7 @@ function AppContent() {
       case 'classroom': 
         return ['admin', 'enseignant', 'élève'].includes(role) ? <Classroom initialClassName={tabParams?.className} /> : <Dashboard onNavigate={handleNavigate} />;
       case 'courses_subjects':
-        return ['admin', 'enseignant', 'élève'].includes(role) ? <CoursesSubjects initialPrepId={tabParams?.prepId} /> : <Dashboard onNavigate={handleNavigate} />;
+        return role !== 'parent' ? <CoursesSubjects initialPrepId={tabParams?.prepId} /> : <Dashboard onNavigate={handleNavigate} />;
       case 'planning':
         return ['admin', 'enseignant', 'élève'].includes(role) ? <TeacherPlanning /> : <Dashboard onNavigate={handleNavigate} />;
       case 'calendar': 

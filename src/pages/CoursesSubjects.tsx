@@ -130,17 +130,22 @@ export default function CoursesSubjects({ initialPrepId }: CoursesSubjectsProps)
     let prepsQuery;
     if (isAdmin) {
       prepsQuery = query(collection(db, 'preparations'));
+    } else if (currentUser?.role === 'personnel administratif') {
+      prepsQuery = query(collection(db, 'preparations'));
     } else if (isStudent) {
       // Students see published resources for their class
       prepsQuery = query(
         collection(db, 'resources'),
-        where('class_name', '==', currentUser.classe)
+        where('class_name', '==', currentUser.classe || '')
       );
-    } else {
+    } else if (currentUser?.role === 'enseignant') {
       prepsQuery = query(
         collection(db, 'preparations'),
         where('authorId', '==', currentUser.id)
       );
+    } else {
+      // Other roles (like cuisinier) see all published courses (resources)
+      prepsQuery = query(collection(db, 'resources'));
     }
 
     const unsubscribePreps = onSnapshot(prepsQuery, (snap) => {

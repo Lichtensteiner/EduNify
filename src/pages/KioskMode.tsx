@@ -158,7 +158,6 @@ export default function KioskMode({ onExit }: KioskModeProps) {
   };
 
   const recordAttendance = async (user: any) => {
-    setRecognizedUser(user);
     const now = new Date();
     const timeString = now.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
     const isLate = now.getHours() >= 8;
@@ -208,6 +207,54 @@ export default function KioskMode({ onExit }: KioskModeProps) {
       });
     }
 
+    // 4. Fetch house dynamically if any
+    let studentHouse: any = null;
+    if (user.house_id) {
+      try {
+        const houseDoc = await getDoc(doc(db, 'houses', user.house_id));
+        if (houseDoc.exists()) {
+          studentHouse = { id: houseDoc.id, ...houseDoc.data() };
+        }
+      } catch (e) {
+        console.error("Error fetching student house:", e);
+      }
+    }
+
+    // 5. Fetch grades to calculate GPA
+    let studentGrades: any[] = [];
+    let calculatedGpa = 0;
+    try {
+      const gradesSnap = await getDocs(query(collection(db, 'grades'), where('studentId', '==', user.id)));
+      studentGrades = gradesSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+      if (studentGrades.length > 0) {
+        const validGrades = studentGrades.filter((g: any) => g.maxScore > 0);
+        if (validGrades.length > 0) {
+          const totalWeightedScore = validGrades.reduce((acc: number, g: any) => acc + (g.score / g.maxScore * 20) * (g.coefficient || 1), 0);
+          const totalCoefficients = validGrades.reduce((acc: number, g: any) => acc + (g.coefficient || 1), 0);
+          if (totalCoefficients > 0) {
+            const avg = totalWeightedScore / totalCoefficients;
+            calculatedGpa = isNaN(avg) ? 0 : avg;
+          }
+        }
+      }
+    } catch (e) {
+      console.error("Error fetching student grades:", e);
+    }
+
+    setRecognizedUser({
+      ...user,
+      telephone: user.telephone || "",
+      parent_email: user.parent_email || user.email_parent || "",
+      parent_phone: user.parent_phone || user.telephone_parent || "",
+      date_naissance: user.date_naissance || "",
+      lieu_naissance: user.lieu_naissance || "",
+      maison: studentHouse,
+      gpa: calculatedGpa,
+      gradesCount: studentGrades.length,
+      heure: timeString,
+      statut: status
+    });
+
     setScanStatus('success');
     
     setTimeout(() => {
@@ -217,7 +264,7 @@ export default function KioskMode({ onExit }: KioskModeProps) {
       if (onExit) {
         onExit();
       }
-    }, 3000);
+    }, 12000);
   };
 
   const handleRealBiometricScan = async () => {
@@ -413,45 +460,122 @@ export default function KioskMode({ onExit }: KioskModeProps) {
           <h2 className="text-2xl font-bold text-white mb-8 border-b border-gray-700 pb-4">Dernier Pointage</h2>
           
           {recognizedUser ? (
-            <div className="flex-1 flex flex-col animate-in slide-in-from-right duration-500">
-              <div className="flex justify-center mb-8">
+            <div className="flex-1 flex flex-col animate-in slide-in-from-right duration-500 overflow-y-auto max-h-[600px] pr-1 space-y-5">
+              <div className="flex flex-col items-center">
                 {recognizedUser.photo ? (
-                  <img src={recognizedUser.photo} alt="Profile" className="w-40 h-40 rounded-full object-cover border-4 border-emerald-500 shadow-lg shadow-emerald-500/20" referrerPolicy="no-referrer" />
+                  <img src={recognizedUser.photo} alt="Profile" className="w-24 h-24 rounded-full object-cover border-4 border-emerald-500 shadow-lg shadow-emerald-500/20" referrerPolicy="no-referrer" />
                 ) : (
-                  <div className="w-40 h-40 rounded-full bg-indigo-900 text-indigo-300 flex items-center justify-center font-bold text-5xl uppercase border-4 border-emerald-500 shadow-lg shadow-emerald-500/20">
+                  <div className="w-24 h-24 rounded-full bg-indigo-950 text-indigo-300 flex items-center justify-center font-bold text-3xl uppercase border-4 border-emerald-500 shadow-lg shadow-emerald-500/20">
                     {recognizedUser.prenom?.[0]}{recognizedUser.nom?.[0]}
                   </div>
                 )}
-              </div>
-              
-              <div className="text-center mb-8">
-                <h3 className="text-3xl font-bold text-white mb-2">{recognizedUser.prenom} {recognizedUser.nom}</h3>
-                <p className="text-indigo-400 font-medium text-xl capitalize">{recognizedUser.role}</p>
+                <h3 className="text-xl font-bold text-white mt-3 text-center">{recognizedUser.prenom} {recognizedUser.nom}</h3>
+                <span className="mt-1 px-3 py-0.5 rounded-full text-xs font-black bg-indigo-505/30 text-indigo-300 uppercase">
+                  {recognizedUser.role}
+                </span>
+                {recognizedUser.classe && (
+                  <span className="mt-1.5 bg-gray-900 border border-gray-700 text-white text-xs font-bold px-3 py-1 rounded-xl font-mono">
+                    Classe: {recognizedUser.classe}
+                  </span>
+                )}
               </div>
 
-              <div className="space-y-6 bg-gray-900 p-6 rounded-2xl border border-gray-700">
-                {recognizedUser.classe && (
-                  <div className="flex justify-between items-center">
-                    <span className="text-gray-400 text-lg">Classe</span>
-                    <span className="font-bold text-white text-lg">{recognizedUser.classe}</span>
+              {/* Maison Badge */}
+              {recognizedUser.maison && (
+                <div className="p-3 rounded-2xl border text-xs font-bold flex flex-col items-center gap-1 bg-gray-900 text-white" style={{ borderColor: `${recognizedUser.maison.color}50` }}>
+                  <span className="text-[10px] uppercase font-semibold text-gray-400">Maison</span>
+                  <div className="flex items-center gap-1.5">
+                    {recognizedUser.maison.logo?.startsWith('http') ? (
+                      <img src={recognizedUser.maison.logo} alt="Maison Logo" className="w-4 h-4 rounded-full object-cover shrink-0" referrerPolicy="no-referrer" />
+                    ) : (
+                      <span className="text-base">{recognizedUser.maison.logo || '🏆'}</span>
+                    )}
+                    <span style={{ color: recognizedUser.maison.color }}>{recognizedUser.maison.nom_maison}</span>
                   </div>
-                )}
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-400 text-lg">Action</span>
-                  <span className="font-bold text-white text-lg capitalize">{actionType || 'Arrivée'}</span>
+                  <p className="text-[10px] text-gray-400 font-bold">{recognizedUser.maison.total_points || 0} Points</p>
+                </div>
+              )}
+
+              {/* Personal Details */}
+              <div className="space-y-3 bg-gray-900 p-4 rounded-2xl border border-gray-700 text-xs text-left">
+                <h4 className="text-[10px] font-black uppercase text-indigo-400 tracking-wider">Informations Personnelles</h4>
+                
+                <div className="flex justify-between items-center border-b border-gray-800 pb-2">
+                  <span className="text-gray-400">Né(e) le :</span>
+                  <span className="font-bold text-gray-200">{recognizedUser.date_naissance ? new Date(recognizedUser.date_naissance).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }) : 'Non renseigné'}</span>
+                </div>
+                <div className="flex justify-between items-center border-b border-gray-800 pb-2">
+                  <span className="text-gray-400">Lieu de Naissance :</span>
+                  <span className="font-bold text-gray-200 capitalize truncate max-w-[150px]">{recognizedUser.lieu_naissance || 'Non renseigné'}</span>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-gray-400 text-lg">Heure</span>
-                  <span className="font-bold text-white font-mono text-xl">
-                    {new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
-                  </span>
+                  <span className="text-gray-400">Téléphone :</span>
+                  <span className="font-mono font-bold text-gray-200">{recognizedUser.telephone || 'Non renseigné'}</span>
+                </div>
+              </div>
+
+              {/* Parents Contacts */}
+              <div className="space-y-3 bg-gray-900 p-4 rounded-2xl border border-gray-700 text-xs text-left">
+                <h4 className="text-[10px] font-black uppercase text-amber-500 tracking-wider">Parents & Responsables</h4>
+                
+                <div className="flex justify-between items-center border-b border-gray-800 pb-2">
+                  <span className="text-gray-400">Téléphone Parent :</span>
+                  <span className="font-mono font-black text-amber-400 bg-amber-500/10 px-2.5 py-0.5 rounded-md">{recognizedUser.parent_phone || 'Non disponible'}</span>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-gray-400 text-lg">Statut</span>
-                  <span className={`px-4 py-1.5 rounded-full text-sm font-bold ${
-                    new Date().getHours() >= 8 ? 'bg-amber-500/20 text-amber-400 border border-amber-500/50' : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/50'
+                  <span className="text-gray-400">Email Parent :</span>
+                  <span className="font-mono text-gray-300 truncate max-w-[160px]">{recognizedUser.parent_email || 'Non disponible'}</span>
+                </div>
+              </div>
+
+              {/* Dynamic Academic GPA */}
+              {recognizedUser.role === 'élève' && (
+                <div className="bg-emerald-950/20 p-4 rounded-2xl border border-emerald-500/30 text-xs space-y-2 text-left">
+                  <h4 className="text-[10px] font-black uppercase text-emerald-400 tracking-widest">Performances</h4>
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <span className="text-gray-400 text-[10px] uppercase">Moyenne Générale</span>
+                      <p className="text-lg font-black text-emerald-400">
+                        {recognizedUser.gpa ? `${recognizedUser.gpa.toFixed(2)}/20` : 'Pas de notes'}
+                      </p>
+                    </div>
+                    <div>
+                      {recognizedUser.gpa ? (
+                        <span className={`px-2 py-0.5 rounded-md text-[10px] font-black uppercase ${
+                          recognizedUser.gpa >= 16 ? 'bg-emerald-500/20 text-emerald-400' :
+                          recognizedUser.gpa >= 12 ? 'bg-blue-500/20 text-blue-400' :
+                          recognizedUser.gpa >= 10 ? 'bg-amber-500/20 text-amber-400' :
+                          'bg-red-500/20 text-red-400'
+                        }`}>
+                          {recognizedUser.gpa >= 16 ? 'Excellent (A+)' :
+                           recognizedUser.gpa >= 12 ? 'Très Bien (B)' :
+                           recognizedUser.gpa >= 10 ? 'Passable' :
+                           'Insuffisant'}
+                        </span>
+                      ) : (
+                        <span className="text-gray-500 italic">En attente</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Pointage details */}
+              <div className="space-y-3 bg-gray-900 p-4 rounded-2xl border border-gray-700 text-xs text-left">
+                <div className="flex justify-between items-center border-b border-gray-800 pb-2">
+                  <span className="text-gray-400">Action</span>
+                  <span className="font-bold text-white capitalize">{actionType || 'Arrivée'}</span>
+                </div>
+                <div className="flex justify-between items-center border-b border-gray-800 pb-2">
+                  <span className="text-gray-400">Heure de scan</span>
+                  <span className="font-bold text-white font-mono">{recognizedUser.heure || new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-400">Statut scolaire</span>
+                  <span className={`px-3 py-1 rounded-full text-[10px] font-black ${
+                    recognizedUser.statut === 'Retard' ? 'bg-red-500/20 text-red-400 border border-red-500/30' : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
                   }`}>
-                    {new Date().getHours() >= 8 ? 'Retard' : 'Présent'}
+                    {recognizedUser.statut}
                   </span>
                 </div>
               </div>
