@@ -190,6 +190,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
               setCurrentUser({ id: firebaseUser.uid, ...adminStaffData } as User);
             } else {
               setCurrentUser(null);
+              signOut(auth).catch(err => console.error("Error signing out deleted user:", err));
             }
           }
           console.log("Auth initialization complete.");
