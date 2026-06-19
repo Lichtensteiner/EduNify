@@ -160,8 +160,7 @@ const Grades: React.FC = () => {
   const [viewingBulletin, setViewingBulletin] = useState<any | null>(null);
 
   const isGlobalAdmin = currentUser?.role === 'admin' || 
-                       currentUser?.email === 'martinienmvezogo@gmail.com' ||
-                       currentUser?.email === 'ludo.consulting3@gmail.com';
+                       currentUser?.email === 'martinienmvezogo@gmail.com';
 
   const userRight = bulletinRights.find(r => r.userId === currentUser?.id);
   const hasPublishRights = isGlobalAdmin || (userRight && userRight.canPublish === true);
@@ -283,8 +282,7 @@ const Grades: React.FC = () => {
   useEffect(() => {
     if (!currentUser) return;
     const isGlobalAdmin = currentUser.role === 'admin' || 
-                         currentUser.email === 'martinienmvezogo@gmail.com' ||
-                         currentUser.email === 'ludo.consulting3@gmail.com';
+                         currentUser.email === 'martinienmvezogo@gmail.com';
     if (isGlobalAdmin) {
       const unsub = onSnapshot(collection(db, 'users'), (snap) => {
         const staffList = snap.docs

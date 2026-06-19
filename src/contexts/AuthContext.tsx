@@ -131,31 +131,17 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
               setDoc(docRef, updateData, { merge: true }).catch(err => console.error(err));
               setCurrentUser({ id: docSnap.id, ...userData, ...updateData } as User);
             } else {
-              const isLudo = firebaseUser.email === 'ludo.consulting3@gmail.com';
-              if (isLudo && (!userData.responsibilities || userData.responsibilities.length === 0 || userData.role !== 'personnel administratif')) {
-                console.log("Enriching Ludovic profile with admin roles...");
-                const defaultResps = userData.responsibilities && userData.responsibilities.length > 0
-                  ? userData.responsibilities
-                  : ['gestionnaire_comptable', 'responsable_it', 'responsable_college', 'responsable_pedagogique'];
-                const updatedRole = 'personnel administratif';
-                setDoc(docRef, { 
-                  responsibilities: defaultResps,
-                  role: updatedRole
-                }, { merge: true }).catch(err => console.error(err));
-                setCurrentUser({ id: docSnap.id, ...userData, role: updatedRole, responsibilities: defaultResps } as User);
-              } else {
-                // If it is any personnel administratif with empty responsibilities but has a position, auto-map!
-                if (userData.role === 'personnel administratif' && (!userData.responsibilities || userData.responsibilities.length === 0) && userData.position) {
-                  const mappedResps = mapPositionToResponsibility(userData.position);
-                  if (mappedResps.length > 0) {
-                    setDoc(docRef, { responsibilities: mappedResps }, { merge: true }).catch(err => console.error(err));
-                    setCurrentUser({ id: docSnap.id, ...userData, responsibilities: mappedResps } as User);
-                  } else {
-                    setCurrentUser({ id: docSnap.id, ...userData } as User);
-                  }
+              // If it is any personnel administratif with empty responsibilities but has a position, auto-map!
+              if (userData.role === 'personnel administratif' && (!userData.responsibilities || userData.responsibilities.length === 0) && userData.position) {
+                const mappedResps = mapPositionToResponsibility(userData.position);
+                if (mappedResps.length > 0) {
+                  setDoc(docRef, { responsibilities: mappedResps }, { merge: true }).catch(err => console.error(err));
+                  setCurrentUser({ id: docSnap.id, ...userData, responsibilities: mappedResps } as User);
                 } else {
                   setCurrentUser({ id: docSnap.id, ...userData } as User);
                 }
+              } else {
+                setCurrentUser({ id: docSnap.id, ...userData } as User);
               }
             }
           } else {
@@ -174,20 +160,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
               };
               setDoc(docRef, adminData).catch(err => console.error("Error creating admin doc:", err));
               setCurrentUser({ id: firebaseUser.uid, ...adminData } as User);
-            } else if (firebaseUser.email === 'ludo.consulting3@gmail.com') {
-              console.log("Creating default administrative profile for Ludovic...");
-              const adminStaffData = {
-                email: firebaseUser.email,
-                role: 'personnel administratif',
-                prenom: 'Ludovic',
-                nom: 'Consulting',
-                responsibilities: ['gestionnaire_comptable', 'responsable_it', 'responsable_college', 'responsable_pedagogique'],
-                status: 'online',
-                lastSeen: serverTimestamp(),
-                date_creation: new Date().toISOString()
-              };
-              setDoc(docRef, adminStaffData).catch(err => console.error("Error creating staff doc:", err));
-              setCurrentUser({ id: firebaseUser.uid, ...adminStaffData } as User);
             } else {
               setCurrentUser(null);
               signOut(auth).catch(err => console.error("Error signing out deleted user:", err));
@@ -295,9 +267,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           if (email === 'martinienmvezogo@gmail.com' && (!prenom || !nom)) {
             prenom = 'Martinien';
             nom = 'Mvezogo';
-          } else if (email === 'ludo.consulting3@gmail.com' && (!prenom || !nom)) {
-            prenom = 'Ludo';
-            nom = 'Consulting';
           }
           
           await addDoc(collection(db, 'connections'), {
@@ -317,15 +286,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             role: 'admin',
             timestamp: new Date().toISOString()
           });
-        } else if (email === 'ludo.consulting3@gmail.com') {
-          await addDoc(collection(db, 'connections'), {
-            user_id: userCredential.user.uid,
-            nom: 'Consulting',
-            prenom: 'Ludo',
-            email: email,
-            role: 'enseignant',
-            timestamp: new Date().toISOString()
-          });
+
         } else {
           // If user document doesn't exist and it's not the admin, delete the auth user and throw error
           await userCredential.user.delete();
