@@ -16,7 +16,7 @@ interface SidebarProps {
 
 export default function Sidebar({ activeTab, setActiveTab, isMobileOpen, setIsMobileOpen }: SidebarProps) {
   const { currentUser, logout } = useAuth();
-  const { currentEstablishment } = useEstablishment();
+  const { currentEstablishment, isSuperAdmin } = useEstablishment();
   const { t, tData } = useLanguage();
   const { isStandalone } = usePWA();
   const [totalUnreadCount, setTotalUnreadCount] = useState(0);
@@ -162,9 +162,10 @@ export default function Sidebar({ activeTab, setActiveTab, isMobileOpen, setIsMo
         
         <div className="flex-1 py-4 px-4 overflow-y-auto custom-scrollbar">
           {categories.map((category, idx) => {
-            const filteredItems = category.items.filter(item => 
-              item.roles.includes(currentUser?.role || '')
-            );
+            const filteredItems = category.items.filter(item => {
+              if (item.id === 'establishments' && !isSuperAdmin) return false;
+              return item.roles.includes(currentUser?.role || '');
+            });
             if (filteredItems.length === 0) return null;
 
             return (

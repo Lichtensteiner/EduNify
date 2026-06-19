@@ -11,10 +11,12 @@ import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { resizeImage } from '../lib/imageUtils';
 import SuccessModal from '../components/SuccessModal';
 import { useNotification } from '../contexts/NotificationContext';
+import { useEstablishment } from '../contexts/EstablishmentContext';
 import { motion, AnimatePresence } from 'motion/react';
 
 export default function Users() {
   const { currentUser } = useAuth();
+  const { currentEstablishment, isSuperAdmin, establishments } = useEstablishment();
   const { t, tData } = useLanguage();
   const { notifyDelete, notifyUpdate, notifyAdd, notifySuccess, notifyError } = useNotification();
   const [searchTerm, setSearchTerm] = useState('');
@@ -59,7 +61,8 @@ export default function Users() {
     house_id: '',
     position: '',
     photo: '',
-    cover: ''
+    cover: '',
+    etablissement: ''
   });
   const [actionLoading, setActionLoading] = useState(false);
   const [uploadingImage, setUploadingImage] = useState<{type: 'photo' | 'cover', id: string | 'new'} | null>(null);
@@ -219,6 +222,7 @@ export default function Users() {
         prenom: newUser.prenom,
         email: newUser.email,
         role: finalRole,
+        etablissement: isSuperAdmin ? (newUser.etablissement || currentEstablishment?.id || 'EDU-001') : (currentEstablishment?.id || 'EDU-001'),
         classe: newUser.role === 'élève' ? newUser.classe : null,
         classes: newUser.role === 'enseignant' ? newUser.classes : null,
         matiere: newUser.role === 'enseignant' ? (newUser.matieres[0] || null) : null,
@@ -274,7 +278,8 @@ export default function Users() {
         house_id: '',
         position: '',
         photo: '',
-        cover: ''
+        cover: '',
+        etablissement: ''
       });
       setSuccessInfo({
         title: t('account_created'),
@@ -314,6 +319,7 @@ export default function Users() {
         nom: editUser.nom,
         prenom: editUser.prenom,
         role: finalRole,
+        etablissement: isSuperAdmin ? (editUser.etablissement || null) : (editUser.etablissement || currentEstablishment?.id || null),
         classe: editUser.role === 'élève' ? editUser.classe : null,
         classes: editUser.role === 'enseignant' ? (editUser.classes || []) : null,
         matiere: editUser.role === 'enseignant' ? (editUser.matieres?.[0] || null) : null,
@@ -439,6 +445,11 @@ export default function Users() {
   };
 
   const filteredUsers = users.filter(user => {
+    // Multi-tenant isolated workspace
+    if (!isSuperAdmin) {
+      const activeEstId = currentEstablishment?.id || currentUser?.etablissement || 'EDU-001';
+      if (user.etablissement !== activeEstId) return false;
+    }
     const matchesSearch = user.nom?.toLowerCase().includes(searchTerm.toLowerCase()) || 
                           user.prenom?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                           user.matricule?.toLowerCase().includes(searchTerm.toLowerCase());
@@ -1278,11 +1289,28 @@ export default function Users() {
                         <option value="enseignant">{tData('enseignant')}</option>
                         <option value="personnel administratif">{tData('personnel administratif')}</option>
                         <option value="cuisinier">{tData('cuisinier')}</option>
-                        {currentUser?.email === 'martinienmvezogo@gmail.com' && (
-                          <option value="admin">{tData('admin')}</option>
+                        {isSuperAdmin && (
+                          <option value="admin">Administrateur d'Établissement ({tData('admin')})</option>
                         )}
                       </select>
                     </div>
+
+                    {isSuperAdmin && (
+                      <div>
+                        <label className="block text-xs font-medium text-indigo-600 dark:text-indigo-400 mb-1.5 ml-1 uppercase font-bold text-[11px] tracking-wide">🏫 Établissement de rattachement</label>
+                        <select
+                          required
+                          value={editUser.etablissement || ''}
+                          onChange={(e) => setEditUser({...editUser, etablissement: e.target.value})}
+                          className="w-full px-4 py-2.5 bg-indigo-50/50 dark:bg-indigo-950/20 border border-indigo-200 dark:border-indigo-900/50 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-sm font-bold text-indigo-900 dark:text-indigo-300"
+                        >
+                          <option value="">Sélectionner un établissement</option>
+                          {establishments.map(est => (
+                            <option key={est.id} value={est.id}>{est.id} - {est.nom}</option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
 
                     {editUser.role === 'élève' && (
                       <div className="grid grid-cols-2 gap-4">
@@ -1846,11 +1874,28 @@ export default function Users() {
                           <option value="enseignant">{tData('enseignant')}</option>
                           <option value="personnel administratif">{tData('personnel administratif')}</option>
                           <option value="cuisinier">{tData('cuisinier')}</option>
-                          {currentUser?.email === 'martinienmvezogo@gmail.com' && (
-                            <option value="admin">{tData('admin')}</option>
+                          {isSuperAdmin && (
+                            <option value="admin">Administrateur d'Établissement ({tData('admin')})</option>
                           )}
                         </select>
                       </div>
+
+                      {isSuperAdmin && (
+                        <div>
+                          <label className="block text-xs font-medium text-indigo-600 dark:text-indigo-400 mb-1.5 ml-1 uppercase font-bold text-[11px] tracking-wide">🏫 Établissement de rattachement</label>
+                          <select
+                            required
+                            value={newUser.etablissement || currentEstablishment?.id || ''}
+                            onChange={(e) => setNewUser({...newUser, etablissement: e.target.value})}
+                            className="w-full px-4 py-2.5 bg-indigo-50/50 dark:bg-indigo-950/20 border border-indigo-200 dark:border-indigo-900/50 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-sm font-bold text-indigo-900 dark:text-indigo-300"
+                          >
+                            <option value="">Sélectionner un établissement</option>
+                            {establishments.map(est => (
+                              <option key={est.id} value={est.id}>{est.id} - {est.nom}</option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
                     </div>
 
                     <div className="space-y-4">
