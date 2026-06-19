@@ -409,5 +409,25 @@ service cloud.firestore {
       allow create: if true;
       allow read, update, delete: if isAdmin();
     }
+
+    // Bulletin Publishing Rights Delegation mapping
+    match /bulletin_rights/{userId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    // Student Bulletins
+    match /bulletins/{bulletinId} {
+      allow read: if isAuthenticated() && (
+        isAdmin() ||
+        resource.data.studentId == request.auth.uid ||
+        isChildOf(resource.data.studentId) ||
+        exists(/databases/$(database)/documents/bulletin_rights/$(request.auth.uid))
+      );
+      allow create, update, delete: if isAuthenticated() && (
+        isAdmin() ||
+        (exists(/databases/$(database)/documents/bulletin_rights/$(request.auth.uid)) && get(/databases/$(database)/documents/bulletin_rights/$(request.auth.uid)).data.canPublish == true)
+      );
+    }
   }
 }

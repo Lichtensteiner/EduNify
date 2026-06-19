@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Bell, Search, UserCircle, Clock, Check, Info, Globe, X, Menu, Download, Trash2, AlertTriangle, CheckCircle, ArrowLeft, Settings } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage, Language } from '../contexts/LanguageContext';
+import { useEstablishment } from '../contexts/EstablishmentContext';
 import { collection, query, where, orderBy, onSnapshot, updateDoc, doc, deleteDoc } from 'firebase/firestore';
 import { db, isFirebaseConfigured } from '../lib/firebase';
 
@@ -24,6 +25,7 @@ interface HeaderProps {
 
 export default function Header({ activeTab, setActiveTab, onMenuClick }: HeaderProps) {
   const { currentUser } = useAuth();
+  const { currentEstablishment, establishments, changeActiveEstablishment, isSuperAdmin } = useEstablishment();
   const { language, setLanguage, t } = useLanguage();
   const [time, setTime] = useState(new Date());
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -238,6 +240,38 @@ export default function Header({ activeTab, setActiveTab, onMenuClick }: HeaderP
             <Menu size={24} />
           </button>
         )}
+
+        {/* Corporate branding details or SaaS switcher dropdown */}
+        {isSuperAdmin && establishments.length > 0 ? (
+          <div className="flex items-center gap-2">
+            <span className="text-[9px] uppercase font-black text-indigo-700 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/30 border border-indigo-150/40 dark:border-indigo-900/30 px-2 py-1 rounded-lg hidden lg:inline font-bold">
+              SaaS Académique
+            </span>
+            <select
+              value={currentEstablishment?.id || ''}
+              onChange={(e) => changeActiveEstablishment(e.target.value)}
+              className="px-2 py-1 bg-gray-55 dark:bg-gray-750 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200 border border-gray-200 dark:border-gray-700 rounded-xl text-xs font-bold outline-none cursor-pointer max-w-[150px] sm:max-w-[220px]"
+            >
+              {establishments.map(est => (
+                <option key={est.id} value={est.id}>
+                  {est.id} - {est.nom} {!est.active ? ' (Suspendu)' : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+        ) : (
+          currentEstablishment && (
+            <div className="hidden lg:flex flex-col text-left mr-2">
+              <span className="text-xs font-black text-gray-800 dark:text-gray-100 leading-none">
+                {currentEstablishment.nom}
+              </span>
+              <span className="text-[10px] text-gray-400 font-bold italic mt-0.5 line-clamp-1 max-w-[250px]">
+                « {currentEstablishment.devise} »
+              </span>
+            </div>
+          )
+        )}
+
         <div className="relative w-full max-w-xs sm:max-w-md hidden sm:block" ref={searchRef}>
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500" size={18} />
           <input 

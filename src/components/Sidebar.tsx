@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { LayoutDashboard, Users, CalendarCheck, FileText, Settings, BookOpen, Code, LogOut, ScanLine, Smartphone, IdCard, Trophy, ScanFace, Activity, GraduationCap, UserCircle, Castle, X, Download, Calendar as CalendarIcon, MessageSquare, BookUser, MessageCircle, Info, Sparkles, Wallet, ShieldAlert, History, Award, ShieldCheck, Scale, Utensils, Library, Vote, FileBadge } from 'lucide-react';
+import { LayoutDashboard, Users, CalendarCheck, FileText, Settings, BookOpen, Code, LogOut, ScanLine, Smartphone, IdCard, Trophy, ScanFace, Activity, GraduationCap, UserCircle, Castle, X, Download, Calendar as CalendarIcon, MessageSquare, BookUser, MessageCircle, Info, Sparkles, Wallet, ShieldAlert, History, Award, ShieldCheck, Scale, Utensils, Library, Vote, FileBadge, Building2 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { useEstablishment } from '../contexts/EstablishmentContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { usePWA } from '../hooks/usePWA';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
@@ -15,6 +16,7 @@ interface SidebarProps {
 
 export default function Sidebar({ activeTab, setActiveTab, isMobileOpen, setIsMobileOpen }: SidebarProps) {
   const { currentUser, logout } = useAuth();
+  const { currentEstablishment } = useEstablishment();
   const { t, tData } = useLanguage();
   const { isStandalone } = usePWA();
   const [totalUnreadCount, setTotalUnreadCount] = useState(0);
@@ -89,6 +91,7 @@ export default function Sidebar({ activeTab, setActiveTab, isMobileOpen, setIsMo
     {
       title: t('administration_category'),
       items: [
+        { id: 'establishments', labelKey: 'establishments', icon: Building2, roles: ['admin'] },
         { id: 'users', labelKey: 'users', icon: Users, roles: ['admin'] },
         { id: 'staff', labelKey: 'admin_staff', icon: Scale, roles: ['admin', 'personnel administratif', 'enseignant'] },
         { id: 'responsibility_zones', labelKey: 'responsibility_zones', icon: ShieldCheck, roles: ['admin', 'personnel administratif', 'enseignant'] },
@@ -127,8 +130,27 @@ export default function Sidebar({ activeTab, setActiveTab, isMobileOpen, setIsMo
       {/* Sidebar */}
       <div className={`fixed inset-y-0 left-0 z-50 w-72 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex flex-col print:hidden transition-transform duration-300 ease-in-out lg:relative lg:translate-x-0 ${isMobileOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         <div className="h-16 flex items-center justify-between px-6 border-b border-gray-200 dark:border-gray-700 shrink-0">
-          <div className="flex items-center gap-2">
-            <img src="/logo.png" alt="Edu-Nify" className="h-10 object-contain" />
+          <div className="flex items-center gap-2 overflow-hidden">
+            {currentEstablishment ? (
+              <div className="flex items-center gap-2">
+                <img 
+                  src={currentEstablishment.logo || "/logo.png"} 
+                  alt={currentEstablishment.nom} 
+                  className="h-10 w-10 object-cover rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm shrink-0" 
+                  referrerPolicy="no-referrer"
+                />
+                <div className="min-w-0 flex flex-col justify-center">
+                  <span className="text-[10px] font-black text-indigo-650 dark:text-indigo-400 block tracking-wider uppercase leading-none mb-0.5 shrink-0">
+                    {currentEstablishment.id}
+                  </span>
+                  <span className="text-[11px] font-extrabold text-gray-800 dark:text-gray-200 block truncate leading-none max-w-[130px] shrink-0" title={currentEstablishment.nom}>
+                    {currentEstablishment.nom}
+                  </span>
+                </div>
+              </div>
+            ) : (
+              <img src="/logo.png" alt="Edu-Nify" className="h-10 object-contain" />
+            )}
           </div>
           <button 
             onClick={() => setIsMobileOpen && setIsMobileOpen(false)}
@@ -154,18 +176,20 @@ export default function Sidebar({ activeTab, setActiveTab, isMobileOpen, setIsMo
                   {filteredItems.map((item) => {
                     const Icon = item.icon;
                     const isActive = activeTab === item.id;
+                    const customPrimary = currentEstablishment?.primaryColor || '#4f46e5';
                     return (
                       <button
                         key={item.id}
                         onClick={() => handleTabClick(item.id)}
                         className={`w-full flex items-center justify-between px-4 py-2.5 rounded-xl transition-colors ${
                           isActive 
-                            ? 'bg-indigo-50 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 font-medium' 
+                            ? 'font-extrabold' 
                             : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700/50 hover:text-gray-900 dark:hover:text-white'
                         }`}
+                        style={isActive ? { backgroundColor: `${customPrimary}15`, color: customPrimary } : undefined}
                       >
                         <div className="flex items-center gap-3">
-                          <Icon size={20} className={isActive ? 'text-indigo-600 dark:text-indigo-400' : 'text-gray-400 dark:text-gray-500'} />
+                          <Icon size={20} style={isActive ? { color: customPrimary } : undefined} className={isActive ? '' : 'text-gray-400 dark:text-gray-500'} />
                           <span className="truncate">{t(item.labelKey)}</span>
                         </div>
                         {item.id === 'messaging' && totalUnreadCount > 0 && (

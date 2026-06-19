@@ -457,6 +457,42 @@
         "decision_by": { "type": "string" }
       },
       "required": ["nom", "prenom", "telephone", "role", "status", "date_demande"]
+    },
+    "bulletin_rights": {
+      "title": "Bulletin Delegated Rights",
+      "description": "Permissions delegated by admins to other staff members to publish student report cards",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "canPublish": { "type": "boolean" },
+        "delegatedBy": { "type": "string" },
+        "delegatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "canPublish"]
+    },
+    "bulletins": {
+      "title": "Student Bulletins Scolaires",
+      "description": "Structured quarterly report cards for students with grades, remarks, absences and class decisions",
+      "type": "object",
+      "properties": {
+        "studentId": { "type": "string" },
+        "studentName": { "type": "string" },
+        "classe": { "type": "string" },
+        "period": { "type": "string", "enum": ["Trimestre 1", "Trimestre 2", "Trimestre 3" ] },
+        "gradesSummary": { "type": "array" },
+        "generalAverage": { "type": "number" },
+        "remark": { "type": "string" },
+        "councilDecision": { "type": "string" },
+        "absencesCount": { "type": "number" },
+        "latenessesCount": { "type": "number" },
+        "isPublished": { "type": "boolean" },
+        "signatureParent": { "type": "string" },
+        "signatureParentDate": { "type": "string" },
+        "publishedBy": { "type": "string" },
+        "publishedByName": { "type": "string" },
+        "publishedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["studentId", "studentName", "period", "generalAverage", "isPublished"]
     }
   },
   "firestore": {
@@ -492,6 +528,8 @@
     "/resp_phone_calls/{callId}": { "schema": "resp_phone_calls", "description": "Phone call receipts." },
     "/resp_it_loans/{loanId}": { "schema": "resp_it_loans", "description": "Tablet cart loans." },
     "/resp_it_tickets/{ticketId}": { "schema": "resp_it_tickets", "description": "IT defect tickets." },
-    "/access_requests/{reqId}": { "schema": "access_requests", "description": "Access requests and public registrations pending admin validation." }
+    "/access_requests/{reqId}": { "schema": "access_requests", "description": "Access requests and public registrations pending admin validation." },
+    "/bulletin_rights/{userId}": { "schema": "bulletin_rights", "description": "Delegated bulletin publishing permissions mapping." },
+    "/bulletins/{bulletinId}": { "schema": "bulletins", "description": "Structured quarterly report cards." }
   }
 }

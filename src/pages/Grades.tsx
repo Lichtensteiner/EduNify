@@ -117,7 +117,7 @@ const Grades: React.FC = () => {
   const { notifySuccess, notifyError, notifyUpdate, notifyDelete, notifyAdd } = useNotification();
   
   // Navigation Tabs inside grade view
-  const [activeTab, setActiveTab] = useState<'grades' | 'audit' | 'anomalies'>('grades');
+  const [activeTab, setActiveTab] = useState<'grades' | 'bulletins' | 'audit' | 'anomalies'>('grades');
   
   // States
   const [grades, setGrades] = useState<Grade[]>([]);
@@ -133,6 +133,38 @@ const Grades: React.FC = () => {
   const [students, setStudents] = useState<any[]>([]);
   const [classes, setClasses] = useState<any[]>([]);
   const [selectedStudentId, setSelectedStudentId] = useState<string>('');
+  
+  // Bulletins & Permissions states
+  const [bulletins, setBulletins] = useState<any[]>([]);
+  const [bulletinRights, setBulletinRights] = useState<any[]>([]);
+  const [delegatableStaff, setDelegatableStaff] = useState<any[]>([]);
+  const [selectedClassBulletins, setSelectedClassBulletins] = useState<string>('all');
+  const [selectedStudentBulletin, setSelectedStudentBulletin] = useState<string>('');
+  const [selectedPeriodBulletin, setSelectedPeriodBulletin] = useState<string>('Trimestre 1');
+  const [isEditorOpen, setIsEditorOpen] = useState(false);
+  const [editingBulletin, setEditingBulletin] = useState<any | null>(null);
+  const [isSavingBulletin, setIsSavingBulletin] = useState(false);
+  
+  const [bulletinForm, setBulletinForm] = useState({
+    studentId: '',
+    period: 'Trimestre 1',
+    remark: '',
+    councilDecision: '',
+    absencesCount: 0,
+    latenessesCount: 0,
+    gradesSummary: [] as any[],
+    generalAverage: 0,
+    isPublished: true
+  });
+
+  const [viewingBulletin, setViewingBulletin] = useState<any | null>(null);
+
+  const isGlobalAdmin = currentUser?.role === 'admin' || 
+                       currentUser?.email === 'martinienmvezogo@gmail.com' ||
+                       currentUser?.email === 'ludo.consulting3@gmail.com';
+
+  const userRight = bulletinRights.find(r => r.userId === currentUser?.id);
+  const hasPublishRights = isGlobalAdmin || (userRight && userRight.canPublish === true);
   
   // Safety Simulator controls
   const [isOfflineMode, setIsOfflineMode] = useState(false);
@@ -230,6 +262,39 @@ const Grades: React.FC = () => {
     };
     fetchBaseData();
   }, []);
+
+  // Bulletins & delegation rights real-time listeners
+  useEffect(() => {
+    const unsubBulletins = onSnapshot(collection(db, 'bulletins'), (snap) => {
+      setBulletins(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    }, (error) => console.error("Error loading bulletins:", error));
+
+    const unsubRights = onSnapshot(collection(db, 'bulletin_rights'), (snap) => {
+      setBulletinRights(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    }, (error) => console.error("Error loading bulletin rights:", error));
+
+    return () => {
+      unsubBulletins();
+      unsubRights();
+    };
+  }, []);
+
+  // Fetch delegatable staff members (all personnel or teachers) for the delegation table
+  useEffect(() => {
+    if (!currentUser) return;
+    const isGlobalAdmin = currentUser.role === 'admin' || 
+                         currentUser.email === 'martinienmvezogo@gmail.com' ||
+                         currentUser.email === 'ludo.consulting3@gmail.com';
+    if (isGlobalAdmin) {
+      const unsub = onSnapshot(collection(db, 'users'), (snap) => {
+        const staffList = snap.docs
+          .map(doc => ({ id: doc.id, ...doc.data() }))
+          .filter((u: any) => u.role === 'personnel administratif' || u.role === 'enseignant');
+        setDelegatableStaff(staffList);
+      }, (error) => console.error("Error loading staff:", error));
+      return () => unsub();
+    }
+  }, [currentUser]);
 
   // Listen to grades & populate local safety trackers
   useEffect(() => {
@@ -709,6 +774,161 @@ const Grades: React.FC = () => {
     }
   };
 
+  // 📜 Bulletins Scolaires CRUD & Delegation Rights Helpers
+  const handleToggleRights = async (userId: string, currentVal: boolean) => {
+    try {
+      const rightRef = doc(db, 'bulletin_rights', userId);
+      if (currentVal) {
+        await deleteDoc(rightRef);
+        notifySuccess("Droits de publication retirés.");
+      } else {
+        await setDoc(rightRef, {
+          userId,
+          canPublish: true,
+          delegatedBy: currentUser?.id || 'admin',
+          delegatedAt: new Date().toISOString()
+        });
+        notifySuccess("Droits de publication accordés.");
+      }
+    } catch (e) {
+      console.error(e);
+      notifyError("Erreur lors de la modification des droits.");
+    }
+  };
+
+  const handleGenerateBulletinData = (studentId: string) => {
+    if (!studentId) return;
+    const student = students.find(s => s.id === studentId);
+    if (!student) return;
+
+    // Filter student grades
+    const studentGrades = grades.filter(g => g.studentId === studentId);
+
+    // Group grades by subject
+    const subjectMap = new Map<string, { sum: number; count: number; maxScore: number; coef: number }>();
+    studentGrades.forEach(g => {
+      const subject = g.subject || 'Général';
+      const existing = subjectMap.get(subject) || { sum: 0, count: 0, maxScore: 20, coef: 1 };
+      
+      const normalizedScore = g.maxScore > 0 ? (g.score / g.maxScore) * 20 : g.score;
+      const coef = parseFloat(g.coefficient as any) || 1;
+
+      existing.sum += normalizedScore * coef;
+      existing.count += coef;
+      existing.coef = coef;
+      
+      subjectMap.set(subject, existing);
+    });
+
+    const summaryList: any[] = [];
+    let totalScore = 0;
+    let totalCount = 0;
+
+    subjectMap.forEach((val, key) => {
+      const avg = val.count > 0 ? parseFloat((val.sum / val.count).toFixed(2)) : 0;
+      summaryList.push({
+        subject: key,
+        average: avg,
+        coefficient: val.coef || 1,
+        teacherComment: avg >= 16 ? 'Excellent trimestre' : avg >= 12 ? 'Assez bien' : avg >= 10 ? 'Passable' : 'Doit redoubler d’efforts'
+      });
+      totalScore += avg * (val.coef || 1);
+      totalCount += (val.coef || 1);
+    });
+
+    const generalAvg = totalCount > 0 ? parseFloat((totalScore / totalCount).toFixed(2)) : 0;
+
+    setBulletinForm({
+      studentId,
+      period: selectedPeriodBulletin,
+      gradesSummary: summaryList,
+      generalAverage: generalAvg,
+      remark: generalAvg >= 16 ? 'Félicitations du Conseil' : generalAvg >= 12 ? 'Tableau d’Honneur' : generalAvg >= 10 ? 'Encouragements' : 'Travail insuffisant',
+      councilDecision: generalAvg >= 10 ? 'Admis' : 'Avertissement',
+      absencesCount: 0,
+      latenessesCount: 0,
+      isPublished: true
+    });
+  };
+
+  const handleSaveBulletin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!bulletinForm.studentId || !bulletinForm.period) {
+      notifyError("Veuillez sélectionner un élève et un trimestre.");
+      return;
+    }
+
+    const student = students.find(s => s.id === bulletinForm.studentId);
+    if (!student) {
+      notifyError("Élève introuvable.");
+      return;
+    }
+
+    setIsSavingBulletin(true);
+    try {
+      const docId = `${bulletinForm.studentId}_${bulletinForm.period.replace(/\s+/g, '_')}`;
+      const bulletRef = doc(db, 'bulletins', docId);
+
+      await setDoc(bulletRef, {
+        studentId: bulletinForm.studentId,
+        studentName: `${student.prenom || ''} ${student.nom || ''}`,
+        classe: student.classe || student.className || 'Non assigné',
+        period: bulletinForm.period,
+        gradesSummary: bulletinForm.gradesSummary,
+        generalAverage: bulletinForm.generalAverage,
+        remark: bulletinForm.remark,
+        councilDecision: bulletinForm.councilDecision,
+        absencesCount: Number(bulletinForm.absencesCount) || 0,
+        latenessesCount: Number(bulletinForm.latenessesCount) || 0,
+        isPublished: bulletinForm.isPublished,
+        publishedBy: currentUser?.id || 'admin',
+        publishedByName: currentUser ? `${currentUser.prenom} ${currentUser.nom}` : 'Administrateur',
+        publishedAt: new Date().toISOString()
+      }, { merge: true });
+
+      notifySuccess("Bulletin scolaire enregistré et publié avec succès !");
+      setIsEditorOpen(false);
+      setEditingBulletin(null);
+      
+      setBulletinForm({
+        studentId: '',
+        period: 'Trimestre 1',
+        remark: '',
+        councilDecision: '',
+        absencesCount: 0,
+        latenessesCount: 0,
+        gradesSummary: [],
+        generalAverage: 0,
+        isPublished: true
+      });
+    } catch (err) {
+      console.error(err);
+      notifyError("Erreur lors de la sauvegarde du bulletin.");
+    } finally {
+      setIsSavingBulletin(false);
+    }
+  };
+
+  const handleSignBulletin = async (bulletinId: string, parentName: string) => {
+    if (!parentName.trim()) {
+      notifyError("Veuillez inscrire votre nom pour signer.");
+      return;
+    }
+    
+    try {
+      const bulletRef = doc(db, 'bulletins', bulletinId);
+      await setDoc(bulletRef, {
+        signatureParent: parentName,
+        signatureParentDate: new Date().toISOString()
+      }, { merge: true });
+
+      notifySuccess("Bulletin signé avec succès par le parent !");
+    } catch (e) {
+      console.error(e);
+      notifyError("Erreur lors de la signature du bulletin.");
+    }
+  };
+
   // Administrative Unlock Functionality
   const handleRequestUnlock = (grade: Grade) => {
     if (!isAdmin) {
@@ -790,7 +1010,7 @@ const Grades: React.FC = () => {
         </div>
 
         {/* Navigation tabs */}
-        <div className="flex bg-gray-100 dark:bg-gray-950 p-1.5 rounded-2xl border border-gray-200/50 dark:border-gray-850">
+        <div className="flex bg-gray-100 dark:bg-gray-950 p-1.5 rounded-2xl border border-gray-200/50 dark:border-gray-850 animate-fade-in">
           <button
             onClick={() => setActiveTab('grades')}
             className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all ${
@@ -800,6 +1020,16 @@ const Grades: React.FC = () => {
             }`}
           >
             📊 Notes & Évaluations
+          </button>
+          <button
+            onClick={() => setActiveTab('bulletins')}
+            className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all ${
+              activeTab === 'bulletins'
+                ? 'bg-white dark:bg-gray-800 text-indigo-600 dark:text-indigo-400 shadow-md'
+                : 'text-gray-500 hover:text-gray-750 dark:hover:text-gray-400'
+            }`}
+          >
+            📜 Bulletins Scolaires
           </button>
           <button
             onClick={() => setActiveTab('audit')}
@@ -1318,6 +1548,283 @@ const Grades: React.FC = () => {
         </div>
       )}
 
+      {/* TAB : BULLETINS SCOLAIRES */}
+      {activeTab === 'bulletins' && (
+        <div className="space-y-6">
+          {/* Welcome Alert banner */}
+          <div className="bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-950/20 dark:to-purple-950/20 p-6 rounded-3xl border border-indigo-100/50 dark:border-indigo-900/30 flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <h3 className="text-lg font-black text-indigo-900 dark:text-indigo-400 flex items-center gap-2">
+                <Award size={20} className="text-indigo-600 dark:text-indigo-400" />
+                Livrets Scolaires & Bulletins de Notes
+              </h3>
+              <p className="text-xs text-indigo-750 dark:text-indigo-250">
+                Génération automatique des moyennes par trimestre, décisions du conseil de classe, et régularisation des absences avec signature électronique des parents.
+              </p>
+            </div>
+            
+            {/* Action buttons (only for authorized writers) */}
+            {hasPublishRights && (
+              <button
+                type="button"
+                onClick={() => {
+                  setEditingBulletin(null);
+                  setBulletinForm({
+                    studentId: '',
+                    period: 'Trimestre 1',
+                    remark: '',
+                    councilDecision: '',
+                    absencesCount: 0,
+                    latenessesCount: 0,
+                    gradesSummary: [],
+                    generalAverage: 0,
+                    isPublished: true
+                  });
+                  setIsEditorOpen(true);
+                }}
+                className="px-5 py-2.5 text-xs font-black bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow-md transition-all flex items-center gap-2 cursor-pointer"
+              >
+                <Plus size={14} />
+                Émettre un Nouveau Bulletin
+              </button>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* LEFT / CENTER COLUMN: LIST OF BULLETINS & VIEWER */}
+            <div className="lg:col-span-2 space-y-6">
+              {/* Filter controls */}
+              <div className="bg-white dark:bg-gray-800 p-5 rounded-3xl border border-gray-100 dark:border-gray-700 shadow-sm flex flex-wrap items-center justify-between gap-4">
+                <div className="flex flex-wrap items-center gap-4">
+                  {/* Class Filter */}
+                  {(currentUser?.role === 'admin' || currentUser?.role === 'enseignant' || hasPublishRights) && (
+                    <div className="space-y-1">
+                      <span className="text-[10px] text-gray-400 uppercase font-bold block">Filtrer par Classe</span>
+                      <select
+                        value={selectedClassBulletins}
+                        onChange={(e) => setSelectedClassBulletins(e.target.value)}
+                        className="px-3 py-1.5 text-xs bg-gray-50 dark:bg-gray-900 border border-gray-250/50 dark:border-gray-700 rounded-xl font-bold text-gray-750 focus:ring-1 focus:ring-indigo-600"
+                      >
+                        <option value="all">Toutes les classes</option>
+                        {classes.map(cl => (
+                          <option key={cl.id} value={cl.nom || cl.id}>{cl.nom || cl.id}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
+                  {/* Period filter */}
+                  <div className="space-y-1">
+                    <span className="text-[10px] text-gray-400 uppercase font-bold block">Trimestre</span>
+                    <select
+                      value={selectedPeriodBulletin}
+                      onChange={(e) => setSelectedPeriodBulletin(e.target.value)}
+                      className="px-3 py-1.5 text-xs bg-gray-50 dark:bg-gray-900 border border-gray-250/50 dark:border-gray-700 rounded-xl font-bold text-gray-750 focus:ring-1 focus:ring-indigo-600"
+                    >
+                      <option value="Trimestre 1">Trimestre 1</option>
+                      <option value="Trimestre 2">Trimestre 2</option>
+                      <option value="Trimestre 3">Trimestre 3</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="text-xs text-gray-450 font-bold">
+                  {bulletins.length} bulletin(s) répertorié(s)
+                </div>
+              </div>
+
+              {/* LIST OF BULLETINS */}
+              <div className="bg-white dark:bg-gray-800 p-6 rounded-3xl border border-gray-100 dark:border-gray-700 shadow-sm space-y-4">
+                <h3 className="text-sm font-black text-gray-900 dark:text-white flex items-center gap-2">
+                  <FileText size={16} className="text-indigo-600" />
+                  Bulletins de l'Établissement {selectedPeriodBulletin}
+                </h3>
+
+                <div className="space-y-3">
+                  {bulletins
+                    .filter(b => {
+                      if (currentUser?.role === 'élève') {
+                        return b.studentId === currentUser.id;
+                      }
+                      if (currentUser?.role === 'parent') {
+                        const parentChildrenIds = currentUser.children_ids || [];
+                        return parentChildrenIds.includes(b.studentId);
+                      }
+                      return true;
+                    })
+                    .filter(b => selectedClassBulletins === 'all' || b.classe === selectedClassBulletins)
+                    .filter(b => b.period === selectedPeriodBulletin)
+                    .map(b => (
+                      <div 
+                        key={b.id} 
+                        className="p-4 bg-gray-50 dark:bg-gray-900/40 rounded-2xl border border-gray-100 dark:border-gray-700 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 transition-all hover:border-indigo-100 dark:hover:border-indigo-900"
+                      >
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-black text-gray-850 dark:text-white">{b.studentName}</span>
+                            <span className="text-[10px] font-extrabold uppercase bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 px-2 py-0.5 rounded-full">
+                              {b.classe}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-4 text-xs font-bold text-gray-450">
+                            <span>Moyenne Générale : <strong className="text-indigo-600 dark:text-indigo-400">{b.generalAverage}/20</strong></span>
+                            <span>•</span>
+                            <span>{b.period}</span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+                          <button
+                            type="button"
+                            onClick={() => setViewingBulletin(b)}
+                            className="p-2 text-indigo-600 bg-indigo-50 dark:bg-indigo-900/20 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 rounded-xl transition-all cursor-pointer"
+                            title="Consulter"
+                          >
+                            <Eye size={16} />
+                          </button>
+
+                          {hasPublishRights && (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEditingBulletin(b);
+                                  setBulletinForm({
+                                    studentId: b.studentId,
+                                    period: b.period,
+                                    remark: b.remark || '',
+                                    councilDecision: b.councilDecision || '',
+                                    absencesCount: b.absencesCount || 0,
+                                    latenessesCount: b.latenessesCount || 0,
+                                    gradesSummary: b.gradesSummary || [],
+                                    generalAverage: b.generalAverage || 0,
+                                    isPublished: b.isPublished !== false
+                                  });
+                                  setIsEditorOpen(true);
+                                }}
+                                className="p-2 text-amber-600 bg-amber-50 dark:bg-amber-900/20 hover:bg-amber-100 dark:hover:bg-amber-900/40 rounded-xl transition-all cursor-pointer"
+                                title="Modifier"
+                              >
+                                <Edit2 size={16} />
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={async () => {
+                                  if (window.confirm("Êtes-vous sûr de vouloir supprimer définitivement ce bulletin scolaire ?")) {
+                                    try {
+                                      await deleteDoc(doc(db, 'bulletins', b.id));
+                                      notifySuccess("Bulletin supprimé avec succès.");
+                                    } catch (e) {
+                                      notifyError("Erreur lors de la suppression.");
+                                    }
+                                  }
+                                }}
+                                className="p-2 text-rose-600 bg-rose-50 dark:bg-rose-900/20 hover:bg-rose-100 dark:hover:bg-rose-900/40 rounded-xl transition-all cursor-pointer"
+                                title="Supprimer"
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+
+                  {bulletins
+                    .filter(b => {
+                      if (currentUser?.role === 'élève') return b.studentId === currentUser.id;
+                      if (currentUser?.role === 'parent') {
+                        const parentChildrenIds = currentUser.children_ids || [];
+                        return parentChildrenIds.includes(b.studentId);
+                      }
+                      return true;
+                    })
+                    .filter(b => selectedClassBulletins === 'all' || b.classe === selectedClassBulletins)
+                    .filter(b => b.period === selectedPeriodBulletin).length === 0 && (
+                      <div className="text-center py-12 bg-gray-50/50 dark:bg-gray-900/20 border border-dashed border-gray-100 dark:border-gray-700 rounded-3xl animate-fade-in">
+                        <FileText size={32} className="text-gray-300 mx-auto mb-2" />
+                        <h4 className="font-black text-gray-750 dark:text-gray-300">Aucun bulletin publié</h4>
+                        <p className="text-xs text-gray-500 max-w-sm mx-auto mt-1">
+                          Les livrets scolaires officiels pour le trimestre et la classe sélectionnés n’ont pas encore été publiés par la scolarité.
+                        </p>
+                      </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* RIGHT COLUMN: ADMINISTRATIVE PERMISSIONS DELEGATION */}
+            <div className="space-y-6">
+              {currentUser?.role === 'admin' && (
+                <div className="bg-white dark:bg-gray-800 p-6 rounded-3xl border border-gray-100 dark:border-gray-700 shadow-sm space-y-4">
+                  <div>
+                    <h3 className="text-sm font-black text-gray-900 dark:text-white flex items-center gap-2">
+                      <ShieldCheck className="text-indigo-600" size={18} />
+                      Détention de Pouvoirs & Délégation de Droits
+                    </h3>
+                    <p className="text-xs text-gray-450 mt-1">
+                      En tant que Super-Administrateur, vous pouvez cocher ou décocher des privilèges pour attribuer en temps réel les droits de signature et d'émission de bulletins à d'autres responsables.
+                    </p>
+                  </div>
+
+                  <div className="space-y-3 max-h-[350px] overflow-y-auto custom-scrollbar pr-1 pt-1">
+                    {delegatableStaff.map(staff => {
+                      const hasRights = bulletinRights.some(r => r.userId === staff.id && r.canPublish === true);
+                      return (
+                        <div 
+                          key={staff.id} 
+                          className="p-3 bg-gray-50 dark:bg-gray-900/30 rounded-2xl border border-gray-150/40 dark:border-gray-700/50 flex items-center justify-between gap-4"
+                        >
+                          <div className="space-y-0.5">
+                            <span className="text-xs font-black text-gray-850 dark:text-white block">{staff.prenom} {staff.nom}</span>
+                            <span className="text-[10px] font-bold text-gray-400 block uppercase tracking-wider">{staff.role} {staff.position ? `(${staff.position})` : ''}</span>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => handleToggleRights(staff.id, hasRights)}
+                            className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-1 focus:ring-indigo-600 ${
+                              hasRights ? 'bg-indigo-600' : 'bg-gray-200 dark:bg-gray-700'
+                            }`}
+                          >
+                            <span
+                              className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                                hasRights ? 'translate-x-5' : 'translate-x-0'
+                              }`}
+                            />
+                          </button>
+                        </div>
+                      );
+                    })}
+
+                    {delegatableStaff.length === 0 && (
+                      <p className="text-xs text-gray-400 italic text-center py-4">Aucun personnel administratif ou enseignant répertorié dans la base Firebase.</p>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Informative block for current rights */}
+              <div className="bg-gradient-to-r from-slate-900 to-indigo-950 text-white p-6 rounded-3xl border border-slate-800 shadow-md space-y-3">
+                <span className="text-[10px] font-black uppercase tracking-widest text-indigo-300">Votre habilitation d'accès</span>
+                <h4 className="text-sm font-black">Niveau des privilèges scolaires</h4>
+                <p className="text-xs text-indigo-100/80 leading-relaxed">
+                  {hasPublishRights 
+                    ? "Vous disposez des droits d'émission académique. Vous pouvez dresser, éditer et publier en temps réel les livrets et bulletins de notes visés de votre signature."
+                    : "Votre profil est actuellement restreint en lecture seule pour les relevés finaux. Seuls les administrateurs globaux et les directions pédagogiques habilitées peuvent notifier et éditer les signatures."}
+                </p>
+                {hasPublishRights && (
+                  <span className="inline-flex items-center gap-1 text-[10px] bg-indigo-600/50 px-2 py-0.5 rounded font-black uppercase text-indigo-300">
+                    🛡️ Accrédité Émetteur
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* MODAL : ENREGISTRER / MODIFIER NOTE */}
       <AnimatePresence>
         {showAddModal && (
@@ -1590,6 +2097,403 @@ const Grades: React.FC = () => {
                     Déverrouiller
                   </button>
                 </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* BULLETIN EDITOR MODAL */}
+      <AnimatePresence>
+        {isEditorOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsEditorOpen(false)}
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            />
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="relative bg-white dark:bg-gray-850 rounded-3xl shadow-xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh]"
+              onClick={e => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div className="p-6 border-b border-gray-150 dark:border-gray-800/80 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Award size={20} className="text-indigo-600 dark:text-indigo-400" />
+                  <h3 className="text-sm font-black text-gray-900 dark:text-white uppercase tracking-wider">
+                    {editingBulletin ? "Modifier le livret" : "Nouveau Livret Académique"}
+                  </h3>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsEditorOpen(false)}
+                  className="p-1.5 text-gray-450 hover:text-gray-600 dark:hover:text-white rounded-xl transition-all cursor-pointer"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              {/* Form Body */}
+              <form onSubmit={handleSaveBulletin} className="p-6 overflow-y-auto custom-scrollbar flex-1 space-y-4">
+                {/* Student Selection */}
+                <div>
+                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-wider mb-1">Élève bénéficiaire</label>
+                  <select
+                    value={bulletinForm.studentId}
+                    onChange={(e) => {
+                      const id = e.target.value;
+                      handleGenerateBulletinData(id);
+                    }}
+                    required
+                    disabled={!!editingBulletin}
+                    className="w-full px-3.5 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl outline-none text-xs font-bold text-gray-850 dark:text-white cursor-pointer"
+                  >
+                    <option value="">Sélectionner un élève</option>
+                    {students.map(s => (
+                      <option key={s.id} value={s.id}>
+                        {s.prenom} {s.nom} ({s.classe || s.className || 'Sans classe'})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  {/* Period Selection */}
+                  <div>
+                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-wider mb-1">Trimestre Académique</label>
+                    <select
+                      value={bulletinForm.period}
+                      onChange={(e) => {
+                        const newPeriod = e.target.value;
+                        setBulletinForm(prev => ({ ...prev, period: newPeriod }));
+                        if (bulletinForm.studentId) {
+                          // Regenerate scores with new period if already selected
+                          handleGenerateBulletinData(bulletinForm.studentId);
+                        }
+                      }}
+                      required
+                      className="w-full px-3.5 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl outline-none text-xs font-bold text-gray-850 dark:text-white"
+                    >
+                      <option value="Trimestre 1">Trimestre 1</option>
+                      <option value="Trimestre 2">Trimestre 2</option>
+                      <option value="Trimestre 3">Trimestre 3</option>
+                    </select>
+                  </div>
+
+                  {/* General Average */}
+                  <div>
+                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-wider mb-1">Moyenne Générale Estimée</label>
+                    <div className="px-3.5 py-2.5 bg-indigo-50 dark:bg-indigo-950/20 border border-indigo-100 dark:border-indigo-900 text-indigo-600 dark:text-indigo-400 rounded-xl font-black text-sm text-center">
+                      {bulletinForm.generalAverage}/20
+                    </div>
+                  </div>
+                </div>
+
+                {/* Absences / Latenesses */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-wider mb-1">Absences (Heures cumulées)</label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={bulletinForm.absencesCount}
+                      onChange={(e) => setBulletinForm({ ...bulletinForm, absencesCount: Number(e.target.value) || 0 })}
+                      className="w-full px-3.5 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-205 dark:border-gray-800 rounded-xl outline-none text-xs font-bold"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-wider mb-1">Retards comptabilisés</label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={bulletinForm.latenessesCount}
+                      onChange={(e) => setBulletinForm({ ...bulletinForm, latenessesCount: Number(e.target.value) || 0 })}
+                      className="w-full px-3.5 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-205 dark:border-gray-800 rounded-xl outline-none text-xs font-bold"
+                    />
+                  </div>
+                </div>
+
+                {/* Summary list of grades per subject (read-only visualization) */}
+                {bulletinForm.gradesSummary && bulletinForm.gradesSummary.length > 0 && (
+                  <div className="p-4 bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-2xl">
+                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-wider block mb-2">Détail des notes cumulées & moyennes</span>
+                    <div className="space-y-2 max-h-[140px] overflow-y-auto custom-scrollbar">
+                      {bulletinForm.gradesSummary.map((sub: any, i: number) => (
+                        <div key={i} className="flex justify-between items-center text-xs border-b border-gray-100 dark:border-gray-800 pb-1">
+                          <span className="font-bold text-gray-700 dark:text-gray-300">{sub.subject} <span className="text-gray-400 font-medium">(Coef {sub.coefficient})</span></span>
+                          <span className={`font-black ${sub.average >= 10 ? 'text-emerald-600' : 'text-rose-600'}`}>{sub.average}/20</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Remark */}
+                <div>
+                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-wider mb-1">Observation générale Pédagogique</label>
+                  <textarea
+                    placeholder="Motivez l'évaluation globale de l'élève..."
+                    value={bulletinForm.remark}
+                    onChange={(e) => setBulletinForm({ ...bulletinForm, remark: e.target.value })}
+                    className="w-full px-3.5 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl outline-none text-xs font-bold text-gray-800 dark:text-gray-200 h-16 resize-none"
+                  />
+                </div>
+
+                {/* Council decision */}
+                <div>
+                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-wider mb-1">Décision Finale du Conseil de Classe</label>
+                  <select
+                    value={bulletinForm.councilDecision}
+                    onChange={(e) => setBulletinForm({ ...bulletinForm, councilDecision: e.target.value })}
+                    className="w-full px-3.5 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl outline-none text-xs font-bold text-gray-850 dark:text-white"
+                  >
+                    <option value="Admis">Admis</option>
+                    <option value="Avertissement Travail">Avertissement Travail</option>
+                    <option value="Avertissement Conduite">Avertissement Conduite</option>
+                    <option value="Blâme de conduite">Blâme de conduite</option>
+                    <option value="Félicitations">Félicitations</option>
+                    <option value="Tableau d'honneur">Tableau d'honneur</option>
+                  </select>
+                </div>
+
+                {/* Published state */}
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="isPublishedBulletin"
+                    checked={bulletinForm.isPublished}
+                    onChange={(e) => setBulletinForm({ ...bulletinForm, isPublished: e.target.checked })}
+                    className="rounded text-indigo-600 bg-gray-100 border-gray-300 focus:ring-indigo-500 cursor-pointer h-4 w-4"
+                  />
+                  <label htmlFor="isPublishedBulletin" className="text-xs font-extrabold text-gray-700 dark:text-gray-300 select-none cursor-pointer">
+                    Publier et rendre immédiatement accessible aux parents & élèves
+                  </label>
+                </div>
+
+                {/* Actions */}
+                <div className="flex gap-2.5 pt-4">
+                  <button
+                    type="button"
+                    onClick={() => setIsEditorOpen(false)}
+                    className="flex-1 py-3 bg-gray-100 hover:bg-gray-200 dark:bg-gray-750 dark:hover:bg-gray-700 rounded-xl text-xs font-black uppercase tracking-wider transition-all"
+                  >
+                    Abandonner
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSavingBulletin}
+                    className="flex-1 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black uppercase tracking-wider shadow-md transition-all flex justify-center items-center"
+                  >
+                    {isSavingBulletin ? "Enregistrement..." : "Enregistrer le livret"}
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* BULLETIN DETAILS VIEWER MODAL */}
+      <AnimatePresence>
+        {viewingBulletin && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setViewingBulletin(null)}
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            />
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="relative bg-white dark:bg-gray-900 rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[95vh]"
+              onClick={e => e.stopPropagation()}
+            >
+              {/* Top Banner / Close button */}
+              <div className="p-6 bg-gradient-to-r from-indigo-900 to-slate-950 text-white flex items-center justify-between">
+                <div>
+                  <span className="text-[10px] font-black uppercase tracking-widest text-indigo-300">Livret Scolaire Officiel</span>
+                  <h3 className="text-lg font-black tracking-tight mt-0.5">{viewingBulletin.studentName}</h3>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setViewingBulletin(null)}
+                  className="p-1.5 bg-white/10 hover:bg-white/20 text-white rounded-xl transition-all cursor-pointer"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              {/* Bulletin Document Sheets content */}
+              <div className="p-6 md:p-8 overflow-y-auto custom-scrollbar flex-1 space-y-6">
+                
+                {/* Meta details */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 border-b border-gray-100 dark:border-gray-800 pb-5">
+                  <div className="space-y-0.5">
+                    <span className="text-[10px] text-gray-400 font-extrabold uppercase">Établissement</span>
+                    <span className="text-xs font-black text-gray-850 dark:text-gray-200 block">Collège National d'Excellence</span>
+                  </div>
+                  <div className="space-y-0.5">
+                    <span className="text-[10px] text-gray-400 font-extrabold uppercase">Classe</span>
+                    <span className="text-xs font-black text-indigo-650 dark:text-indigo-400 block">{viewingBulletin.classe}</span>
+                  </div>
+                  <div className="space-y-0.5">
+                    <span className="text-[10px] text-gray-400 font-extrabold uppercase">Période</span>
+                    <span className="text-xs font-black text-gray-850 dark:text-gray-200 block">{viewingBulletin.period}</span>
+                  </div>
+                  <div className="space-y-0.5">
+                    <span className="text-[10px] text-gray-400 font-extrabold uppercase">Année Scolaire</span>
+                    <span className="text-xs font-black text-gray-850 dark:text-gray-200 block">2025 - 2026</span>
+                  </div>
+                </div>
+
+                {/* Summary Table of subjects */}
+                <div className="space-y-2">
+                  <span className="text-[10px] text-gray-450 font-black uppercase tracking-widest block">Matières & Appréciations Trimestrielles</span>
+                  <div className="border border-gray-150 dark:border-gray-800 rounded-2xl overflow-hidden shadow-sm">
+                    <table className="w-full text-left border-collapse text-xs">
+                      <thead>
+                        <tr className="bg-gray-50 dark:bg-gray-850/50 text-gray-405 dark:text-gray-400 border-b border-gray-150 dark:border-gray-800 font-black uppercase">
+                          <th className="p-3">Matière</th>
+                          <th className="p-3 text-center">Coef</th>
+                          <th className="p-3 text-center">Moyenne</th>
+                          <th className="p-3">Observations de l'Enseignant</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-150 dark:divide-gray-850">
+                        {viewingBulletin.gradesSummary && viewingBulletin.gradesSummary.map((item: any, i: number) => (
+                          <tr key={i} className="hover:bg-gray-50/50 dark:hover:bg-gray-850/30 font-medium">
+                            <td className="p-3 font-black text-gray-800 dark:text-gray-200">{item.subject}</td>
+                            <td className="p-3 text-center text-gray-500 font-bold">{item.coefficient || 1}</td>
+                            <td className={`p-3 text-center font-black ${item.average >= 10 ? 'text-emerald-600 dark:text-emerald-450' : 'text-rose-600 dark:text-rose-400'}`}>
+                              {item.average}/20
+                            </td>
+                            <td className="p-3 text-gray-650 dark:text-gray-350 italic">{item.teacherComment || 'Très satisfaisant.'}</td>
+                          </tr>
+                        ))}
+                        {(!viewingBulletin.gradesSummary || viewingBulletin.gradesSummary.length === 0) && (
+                          <tr>
+                            <td colSpan={4} className="p-6 text-center text-gray-400">Aucune moyenne de matière n'a été cumulée.</td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                {/* Performance stats overall */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 bg-gray-50 dark:bg-gray-850/40 p-5 rounded-3xl border border-gray-100 dark:border-gray-800">
+                  {/* General average card */}
+                  <div className="space-y-1 text-center md:text-left">
+                    <span className="text-[10px] text-gray-400 font-extrabold uppercase">Moyenne Générale</span>
+                    <div className="flex items-baseline justify-center md:justify-start gap-1">
+                      <span className="text-2xl font-black text-indigo-600 dark:text-indigo-400">{viewingBulletin.generalAverage}</span>
+                      <span className="text-xs text-gray-400 font-bold">/20</span>
+                    </div>
+                  </div>
+
+                  {/* Absences / Latenesses */}
+                  <div className="space-y-1 text-center md:text-left border-y md:border-y-0 md:border-x border-gray-150 dark:border-gray-800 py-3 md:py-0 md:px-5">
+                    <span className="text-[10px] text-gray-400 font-extrabold uppercase">Assiduité & Discipline</span>
+                    <div className="text-xs text-gray-750 dark:text-gray-250 font-bold space-y-0.5">
+                      <p>Absences non justifiées : <span className="text-rose-600">{viewingBulletin.absencesCount || 0} h</span></p>
+                      <p>Retards : <span className="text-amber-600">{viewingBulletin.latenessesCount || 0}</span></p>
+                    </div>
+                  </div>
+
+                  {/* Class Council Decision */}
+                  <div className="space-y-1 text-center md:text-left md:pl-2">
+                    <span className="text-[10px] text-gray-400 font-extrabold uppercase">Conseil de Classe</span>
+                    <div className="text-xs font-black">
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400">
+                        <CheckCircle2 size={12} />
+                        {viewingBulletin.councilDecision || "Décision en attente"}
+                      </span>
+                      <p className="text-[11px] text-gray-500 italic mt-1 font-medium">"{viewingBulletin.remark || 'Félicitations pour ces résultats.'}"</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Parent Signature section */}
+                <div className="border-t border-gray-150 dark:border-gray-800 pt-6 space-y-4">
+                  <div className="flex flex-col sm:flex-row justify-between gap-4">
+                    <div className="space-y-1 flex-1">
+                      <h4 className="text-xs font-black uppercase text-gray-800 dark:text-gray-200">Signature officielle de la direction</h4>
+                      <div className="bg-gray-50 dark:bg-gray-850 p-4 rounded-2xl border border-gray-100 dark:border-gray-800 text-[11px] text-gray-500 text-center relative overflow-hidden">
+                        <span className="font-bold text-gray-700 dark:text-gray-300 block">Signé Numériquement par</span>
+                        <span className="font-extrabold text-indigo-600/80 block mt-0.5">{viewingBulletin.publishedByName || 'L\'administration académique'}</span>
+                        <span className="text-[9px] text-gray-400 block mt-1">Le {new Date(viewingBulletin.publishedAt).toLocaleDateString('fr-FR')}</span>
+                      </div>
+                    </div>
+
+                    <div className="space-y-1 flex-1 sm:max-w-[300px]">
+                      <h4 className="text-xs font-black uppercase text-gray-800 dark:text-gray-200">Visa Parent / Tuteur Légal</h4>
+                      
+                      {viewingBulletin.signatureParent ? (
+                        <div className="bg-indigo-50/50 dark:bg-indigo-950/10 p-4 rounded-2xl border border-dashed border-indigo-200/50 dark:border-indigo-900/30 text-[11px] text-center relative">
+                          <span className="text-[10px] text-indigo-400 uppercase font-black tracking-widest block mb-1">Visé de la Mention Lu et Approuvé</span>
+                          <span className="text-lg font-bold text-indigo-700 dark:text-indigo-400 italic block font-mono">
+                            {viewingBulletin.signatureParent}
+                          </span>
+                          <span className="text-[9px] text-gray-400 block mt-1">Saisie de conformité le {new Date(viewingBulletin.signatureParentDate).toLocaleDateString('fr-FR')}</span>
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          {(currentUser?.role === 'parent' || currentUser?.role === 'admin') ? (
+                            <div className="space-y-2 bg-gray-50 dark:bg-gray-850 p-3 rounded-2xl border border-gray-100 dark:border-gray-800">
+                              <span className="text-[9px] text-gray-400 font-extrabold block uppercase tracking-wider mb-1">Moyen d'identification de signature</span>
+                              <input
+                                id="parentSignName"
+                                type="text"
+                                placeholder="Entrez votre nom complet pour signer"
+                                className="w-full px-3 py-1.5 text-xs bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg outline-none font-bold text-gray-800 dark:text-white"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const val = (document.getElementById('parentSignName') as HTMLInputElement)?.value;
+                                  if (val) {
+                                    handleSignBulletin(viewingBulletin.id, val);
+                                    setViewingBulletin({ ...viewingBulletin, signatureParent: val, signatureParentDate: new Date().toISOString() });
+                                  } else {
+                                    notifyError("Veuillez saisir votre nom pour apposer la signature.");
+                                  }
+                                }}
+                                className="w-full py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-black uppercase tracking-wider transition-all cursor-pointer"
+                              >
+                                Apposer Signature Parent
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="p-4 bg-gray-50 dark:bg-gray-850 rounded-2xl border border-gray-100 dark:border-gray-800 text-[11px] text-center text-gray-450 italic">
+                              En attente du visa et de la signature électronique du parent.
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+              </div>
+              
+              {/* Bottom footer bar */}
+              <div className="p-4 bg-gray-50 dark:bg-gray-850 border-t border-gray-150 dark:border-gray-800/80 flex justify-end gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setViewingBulletin(null)}
+                  className="px-5 py-2 bg-indigo-600 hover:bg-indigo-750 text-white font-extrabold rounded-xl text-xs uppercase cursor-pointer"
+                >
+                  Fermer
+                </button>
               </div>
             </motion.div>
           </div>

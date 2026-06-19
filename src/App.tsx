@@ -52,6 +52,8 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { LanguageProvider } from './contexts/LanguageContext';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { NotificationProvider } from './contexts/NotificationContext';
+import { EstablishmentProvider, useEstablishment } from './contexts/EstablishmentContext';
+import Establishments from './pages/Establishments';
 import ReloadPrompt from './components/ReloadPrompt';
 import PWAPrompt from './components/PWAPrompt';
 import Footer from './components/Footer';
@@ -219,6 +221,8 @@ function AppContent() {
       case 'strategic_optimizations':
         return ['admin', 'enseignant'].includes(role) ? <StrategicOptimizations /> : <Dashboard onNavigate={handleNavigate} />;
       case 'profile': return <Profile />;
+      case 'establishments':
+        return role === 'admin' || currentUser?.email === 'ludo.consulting3@gmail.com' ? <Establishments /> : <Dashboard onNavigate={handleNavigate} />;
       case 'about': return <About />;
       case 'terms': return <TermsAndConditions />;
       default: return role === 'élève' ? <StudentDashboard onNavigate={handleNavigate} /> : <Dashboard onNavigate={handleNavigate} />;
@@ -254,11 +258,13 @@ export default function App() {
       <ThemeProvider>
         <LanguageProvider>
           <AuthProvider>
-            <NotificationProvider>
-              <AppContent />
-              <ReloadPrompt />
-              <PWAPrompt />
-            </NotificationProvider>
+            <EstablishmentProvider>
+              <NotificationProvider>
+                <AppContent />
+                <ReloadPrompt />
+                <PWAPrompt />
+              </NotificationProvider>
+            </EstablishmentProvider>
           </AuthProvider>
         </LanguageProvider>
       </ThemeProvider>

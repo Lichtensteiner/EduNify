@@ -1339,17 +1339,19 @@ export default function Dashboard({ onNavigate }: any) {
       usersMap.set(user.id, user);
       const role = user.role?.toLowerCase() || '';
       
-      if (role === 'enseignant') pCount++;
-      else if (role === 'élève' || role === 'eleve') {
+      if (role.includes('enseignant') || role.includes('teacher') || role.includes('prof')) {
+        pCount++;
+        expectedTotal++;
+      } else if (role.includes('élève') || role.includes('eleve') || role.includes('student')) {
         eCount++;
+        expectedTotal++;
         if (user.classe) {
           countsByClass[user.classe] = (countsByClass[user.classe] || 0) + 1;
         }
-      }
-      else if (role === 'admin' || role === 'personnel' || role === 'personnel administratif') sCount++;
-      else if (role === 'parent') parCount++;
-
-      if (['enseignant', 'élève', 'eleve', 'personnel', 'admin', 'personnel administratif'].includes(role)) {
+      } else if (role.includes('parent')) {
+        parCount++;
+      } else if (role) {
+        sCount++;
         expectedTotal++;
       }
     });
@@ -1361,7 +1363,7 @@ export default function Dashboard({ onNavigate }: any) {
       { name: 'Administration', value: sCount, color: COLORS[3] }
     ]);
 
-    const totalStudents = rawUsers.filter(u => ['élève', 'eleve'].includes(u.role?.toLowerCase())).length;
+    const totalStudents = eCount;
 
     // Calculate class redistribution indicators
     const cData = Object.entries(countsByClass).map(([name, students]) => ({
@@ -1373,7 +1375,8 @@ export default function Dashboard({ onNavigate }: any) {
 
     const levelMap = new Map();
     rawUsers.forEach(user => {
-      if (user.role === 'élève' || user.role === 'eleve') {
+      const r = user.role?.toLowerCase() || '';
+      if (r.includes('élève') || r.includes('eleve') || r.includes('student')) {
         const level = (user.classe || 'N/A').split(' ')[0];
         levelMap.set(level, (levelMap.get(level) || 0) + 1);
       }

@@ -132,6 +132,7 @@ const translations: Translations = {
   'real_distribution_desc': { fr: 'Répartition des effectifs par classe', en: 'Real class distribution and headcount', es: 'Distribución real por clase', zh: '实际班级人数分布', ja: '実際のクラス別の生徒数分布' },
 
   'surveys': { fr: 'Sondages & Élections', en: 'Surveys & Elections', es: 'Encuestas y Elecciones', zh: '调查与选举', ja: 'アンケートと選挙' },
+  'establishments': { fr: 'SaaS Établissements', en: 'SaaS Campuses', es: 'Gestión SaaS', zh: 'SaaS 院校管理', ja: 'SaaS 院校管理' },
   'document_generator': { fr: 'Documents Officiels', en: 'Official Documents', es: 'Documentos Oficiales', zh: '官方文件', ja: '公式書類' },
   'houses': { fr: 'Maisons', en: 'Houses', es: 'Casas', zh: '学院', ja: 'ハウス' },
   'integration': { fr: 'Architecture', en: 'Architecture', es: 'Arquitectura', zh: '架构', ja: 'アーキテクチャ' },
