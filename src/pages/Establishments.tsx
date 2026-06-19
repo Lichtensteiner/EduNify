@@ -5,7 +5,8 @@ import {
   Building2, Plus, Edit2, ShieldAlert, CheckCircle, RefreshCw, 
   MapPin, Phone, Mail, Globe, Calendar, Key, Award, 
   Sliders, Search, Layout, Check, Palette, CreditCard, Ban,
-  Users, UserPlus, Shield, Clipboard, Eye, EyeOff, Lock, Trash2, CheckCircle2
+  Users, UserPlus, Shield, Clipboard, Eye, EyeOff, Lock, Trash2, CheckCircle2,
+  Upload, Image
 } from 'lucide-react';
 import { collection, onSnapshot, doc, setDoc, deleteDoc, query, where } from 'firebase/firestore';
 import { initializeApp, getApps } from 'firebase/app';
@@ -59,6 +60,40 @@ export default function Establishments() {
   const [formResponsablePrenom, setFormResponsablePrenom] = useState('');
   const [formResponsableEmail, setFormResponsableEmail] = useState('');
   const [formResponsableTelephone, setFormResponsableTelephone] = useState('');
+
+  const handleLogoFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 2 * 1024 * 1024) {
+        alert("La taille du logo ne doit pas dépasser 2 Mo.");
+        return;
+      }
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        if (typeof reader.result === 'string') {
+          setFormLogo(reader.result);
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleBannerFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 2 * 1024 * 1024) {
+        alert("La taille de la bannière ne doit pas dépasser 2 Mo.");
+        return;
+      }
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        if (typeof reader.result === 'string') {
+          setFormBanner(reader.result);
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+  };
 
   // Administrator state fields (role === 'admin')
   const [adminsList, setAdminsList] = useState<any[]>([]);
@@ -976,35 +1011,137 @@ Veuillez conserver et remettre ces données de manière sécurisée uniquement a
                   placeholder="e.g. Discipline, Travail, Succès"
                   value={formDevise}
                   onChange={(e) => setFormDevise(e.target.value)}
-                  className="w-full px-3 py-2.5 bg-gray-50 dark:bg-gray-950 border border-gray-200 dark:border-gray-855 rounded-xl outline-none text-xs font-bold text-gray-850 dark:text-white"
+                  className="w-full px-3 py-2.5 bg-gray-50 dark:bg-gray-950 border border-gray-200 dark:border-gray-850 rounded-xl outline-none text-xs font-bold text-gray-850 dark:text-white"
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                {/* Logo URL */}
-                <div>
-                  <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1.5 font-bold font-mono">Logo (Image URL)</label>
-                  <input
-                    id="input-campus-logo"
-                    type="url"
-                    placeholder="https://..."
-                    value={formLogo}
-                    onChange={(e) => setFormLogo(e.target.value)}
-                    className="w-full px-3 py-2.5 bg-gray-50 dark:bg-gray-950 border border-gray-200 dark:border-gray-850 rounded-xl outline-none text-xs font-semibold text-[#855] dark:text-white font-mono"
-                  />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5 animate-fade-in" id="logo-banner-upload-grid">
+                {/* Logo Section */}
+                <div className="p-4 bg-gray-55 dark:bg-gray-900/40 border border-gray-200 dark:border-gray-850 rounded-2xl space-y-3 font-sans">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-black text-gray-500 dark:text-gray-400 uppercase tracking-widest block font-sans">
+                      Logo de l'Établissement
+                    </span>
+                    {formLogo && (
+                      <button
+                        type="button"
+                        onClick={() => setFormLogo('')}
+                        className="text-[9px] font-black text-red-500 hover:text-red-650 uppercase tracking-wider cursor-pointer"
+                      >
+                        Retirer
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-4">
+                    {/* Visual Preview */}
+                    <div className="relative w-16 h-16 rounded-2xl border-2 border-dashed border-gray-200 dark:border-gray-855 bg-white dark:bg-gray-950 flex items-center justify-center overflow-hidden shrink-0">
+                      {formLogo ? (
+                        <img 
+                          src={formLogo} 
+                          alt="Logo Preview" 
+                          className="w-full h-full object-contain p-1"
+                          referrerPolicy="no-referrer"
+                        />
+                      ) : (
+                        <Building2 className="text-gray-300 dark:text-gray-700" size={24} />
+                      )}
+                    </div>
+
+                    <div className="flex-1">
+                      <label 
+                        htmlFor="logo-file-input"
+                        className="inline-flex items-center gap-1.5 px-4 py-2 bg-indigo-50 border border-indigo-100 text-indigo-600 dark:bg-indigo-950/30 dark:border-indigo-900/50 dark:text-indigo-400 rounded-xl text-xs font-extrabold cursor-pointer hover:bg-indigo-100 dark:hover:bg-indigo-950/50 transition-all font-sans"
+                      >
+                        <Upload size={14} />
+                        Charger un fichier
+                      </label>
+                      <input 
+                        id="logo-file-input"
+                        type="file"
+                        accept="image/*"
+                        onChange={handleLogoFileChange}
+                        className="hidden"
+                      />
+                      <p className="text-[9px] text-gray-400 font-medium mt-1">PNG, JPG ou SVG. Max 2Mo.</p>
+                    </div>
+                  </div>
+
+                  <div className="pt-2 border-t border-gray-150 dark:border-gray-800">
+                    <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1.5 font-mono">Ou adresse URL directe (optionnel)</label>
+                    <input
+                      id="input-campus-logo"
+                      type="url"
+                      placeholder="https://exemples.com/logo.png"
+                      value={formLogo.startsWith('data:') ? '' : formLogo}
+                      onChange={(e) => setFormLogo(e.target.value)}
+                      className="w-full px-3 py-2 bg-white dark:bg-gray-950 border border-gray-200 dark:border-gray-850 rounded-xl outline-none text-xs text-gray-700 dark:text-white font-mono font-semibold"
+                    />
+                  </div>
                 </div>
 
-                {/* Banner URL */}
-                <div>
-                  <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1.5 font-bold font-mono">Bannière (Image URL)</label>
-                  <input
-                    id="input-campus-banner"
-                    type="url"
-                    placeholder="https://..."
-                    value={formBanner}
-                    onChange={(e) => setFormBanner(e.target.value)}
-                    className="w-full px-3 py-2.5 bg-gray-50 dark:bg-gray-955 border border-gray-200 dark:border-gray-850 rounded-xl outline-none text-xs font-semibold text-[#855] dark:text-white font-mono"
-                  />
+                {/* Banner Section */}
+                <div className="p-4 bg-gray-55 dark:bg-gray-900/40 border border-gray-200 dark:border-gray-850 rounded-2xl space-y-3 font-sans">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest block font-sans">
+                      Bannière d'accueil
+                    </span>
+                    {formBanner && (
+                      <button
+                        type="button"
+                        onClick={() => setFormBanner('')}
+                        className="text-[9px] font-black text-red-500 hover:text-red-650 uppercase tracking-wider cursor-pointer"
+                      >
+                        Retirer
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-4">
+                    {/* Visual Preview */}
+                    <div className="relative w-24 h-16 rounded-2xl border-2 border-dashed border-gray-200 dark:border-gray-850 bg-white dark:bg-gray-950 flex items-center justify-center overflow-hidden shrink-0">
+                      {formBanner ? (
+                        <img 
+                          src={formBanner} 
+                          alt="Banner Preview" 
+                          className="w-full h-full object-cover"
+                          referrerPolicy="no-referrer"
+                        />
+                      ) : (
+                        <Image className="text-gray-300 dark:text-gray-700" size={24} />
+                      )}
+                    </div>
+
+                    <div className="flex-1">
+                      <label 
+                        htmlFor="banner-file-input"
+                        className="inline-flex items-center gap-1.5 px-4 py-2 bg-indigo-50 border border-indigo-100 text-indigo-600 dark:bg-indigo-950/30 dark:border-indigo-900/50 dark:text-indigo-400 rounded-xl text-xs font-extrabold cursor-pointer hover:bg-indigo-100 dark:hover:bg-indigo-950/50 transition-all font-sans"
+                      >
+                        <Upload size={14} />
+                        Charger un fichier
+                      </label>
+                      <input 
+                        id="banner-file-input"
+                        type="file"
+                        accept="image/*"
+                        onChange={handleBannerFileChange}
+                        className="hidden"
+                      />
+                      <p className="text-[9px] text-gray-400 font-medium mt-1">Format paysage. Max 2Mo.</p>
+                    </div>
+                  </div>
+
+                  <div className="pt-2 border-t border-gray-150 dark:border-gray-800 font-sans">
+                    <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1.5 font-mono">Ou adresse URL directe (optionnel)</label>
+                    <input
+                      id="input-campus-banner"
+                      type="url"
+                      placeholder="https://exemples.com/banner.png"
+                      value={formBanner.startsWith('data:') ? '' : formBanner}
+                      onChange={(e) => setFormBanner(e.target.value)}
+                      className="w-full px-3 py-2 bg-white dark:bg-gray-950 border border-gray-200 dark:border-gray-850 rounded-xl outline-none text-xs text-gray-700 dark:text-white font-mono font-semibold"
+                    />
+                  </div>
                 </div>
               </div>
 
