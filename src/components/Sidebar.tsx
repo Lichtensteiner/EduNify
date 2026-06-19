@@ -91,7 +91,7 @@ export default function Sidebar({ activeTab, setActiveTab, isMobileOpen, setIsMo
     {
       title: t('administration_category'),
       items: [
-        { id: 'establishments', labelKey: 'establishments', icon: Building2, roles: ['admin'] },
+        { id: 'establishments', labelKey: isSuperAdmin ? 'establishments' : 'my_establishment', icon: Building2, roles: ['admin'] },
         { id: 'users', labelKey: 'users', icon: Users, roles: ['admin'] },
         { id: 'staff', labelKey: 'admin_staff', icon: Scale, roles: ['admin', 'personnel administratif', 'enseignant'] },
         { id: 'responsibility_zones', labelKey: 'responsibility_zones', icon: ShieldCheck, roles: ['admin', 'personnel administratif', 'enseignant'] },
@@ -163,7 +163,6 @@ export default function Sidebar({ activeTab, setActiveTab, isMobileOpen, setIsMo
         <div className="flex-1 py-4 px-4 overflow-y-auto custom-scrollbar">
           {categories.map((category, idx) => {
             const filteredItems = category.items.filter(item => {
-              if (item.id === 'establishments' && !isSuperAdmin) return false;
               return item.roles.includes(currentUser?.role || '');
             });
             if (filteredItems.length === 0) return null;

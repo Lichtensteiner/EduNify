@@ -53,6 +53,13 @@ export default function Establishments() {
   const [formSecondaryColor, setFormSecondaryColor] = useState('#ea580c');
   const [formActiveSchoolYear, setFormActiveSchoolYear] = useState('2025-2026');
 
+  // Representative (Proviseur/Principal) state fields
+  const [formResponsableCivility, setFormResponsableCivility] = useState<'M.' | 'Mme' | 'Dr' | 'Pr'>('M.');
+  const [formResponsableNom, setFormResponsableNom] = useState('');
+  const [formResponsablePrenom, setFormResponsablePrenom] = useState('');
+  const [formResponsableEmail, setFormResponsableEmail] = useState('');
+  const [formResponsableTelephone, setFormResponsableTelephone] = useState('');
+
   // Administrator state fields (role === 'admin')
   const [adminsList, setAdminsList] = useState<any[]>([]);
   const [adminSearchTerm, setAdminSearchTerm] = useState('');
@@ -226,6 +233,11 @@ Veuillez conserver et remettre ces données de manière sécurisée uniquement a
     setFormPrimaryColor('#4f46e5');
     setFormSecondaryColor('#ea580c');
     setFormActiveSchoolYear('2025-2026');
+    setFormResponsableCivility('M.');
+    setFormResponsableNom('');
+    setFormResponsablePrenom('');
+    setFormResponsableEmail('');
+    setFormResponsableTelephone('');
     setFormError('');
     setIsModalOpen(true);
   };
@@ -246,6 +258,11 @@ Veuillez conserver et remettre ces données de manière sécurisée uniquement a
     setFormPrimaryColor(est.primaryColor || '#4f46e5');
     setFormSecondaryColor(est.secondaryColor || '#ea580c');
     setFormActiveSchoolYear(est.activeSchoolYear || '2025-2026');
+    setFormResponsableCivility(est.responsableCivility || 'M.');
+    setFormResponsableNom(est.responsableNom || '');
+    setFormResponsablePrenom(est.responsablePrenom || '');
+    setFormResponsableEmail(est.responsableEmail || '');
+    setFormResponsableTelephone(est.responsableTelephone || '');
     setFormError('');
     setIsModalOpen(true);
   };
@@ -275,7 +292,12 @@ Veuillez conserver et remettre ces données de manière sécurisée uniquement a
           plan: formPlan,
           primaryColor: formPrimaryColor,
           secondaryColor: formSecondaryColor,
-          activeSchoolYear: formActiveSchoolYear
+          activeSchoolYear: formActiveSchoolYear,
+          responsableCivility: formResponsableCivility,
+          responsableNom: formResponsableNom.trim(),
+          responsablePrenom: formResponsablePrenom.trim(),
+          responsableEmail: formResponsableEmail.trim(),
+          responsableTelephone: formResponsableTelephone.trim()
         });
       } else {
         // Enforce uniqueness of ID for creation
@@ -298,7 +320,12 @@ Veuillez conserver et remettre ces données de manière sécurisée uniquement a
           plan: formPlan,
           primaryColor: formPrimaryColor,
           secondaryColor: formSecondaryColor,
-          activeSchoolYear: formActiveSchoolYear
+          activeSchoolYear: formActiveSchoolYear,
+          responsableCivility: formResponsableCivility,
+          responsableNom: formResponsableNom.trim(),
+          responsablePrenom: formResponsablePrenom.trim(),
+          responsableEmail: formResponsableEmail.trim(),
+          responsableTelephone: formResponsableTelephone.trim()
         });
       }
       setIsModalOpen(false);
@@ -321,6 +348,9 @@ Veuillez conserver et remettre ces données de manière sécurisée uniquement a
 
   // Filters
   const filteredList = establishments.filter(est => {
+    if (!isSuperAdmin) {
+      return est.id === currentUser?.etablissement;
+    }
     const matchesSearch = est.nom.toLowerCase().includes(searchTerm.toLowerCase()) || 
                           est.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
                           est.devise.toLowerCase().includes(searchTerm.toLowerCase());
@@ -340,46 +370,50 @@ Veuillez conserver et remettre ces données de manière sécurisée uniquement a
         </div>
         <div className="relative z-10 space-y-2">
           <span className="text-[10px] bg-indigo-500/30 text-indigo-300 font-extrabold uppercase px-2.5 py-1 rounded-full border border-indigo-400/25 tracking-wider">
-            SaaS Platform - Centre de Contrôle Général
+            {isSuperAdmin ? "SaaS Platform - Centre de Contrôle Général" : "Configuration de l'Établissement - Portail SaaS"}
           </span>
           <h1 className="text-2xl md:text-3xl font-black tracking-tight" id="main-saas-title">
-            Edu-Nify Multi-Tenancy Core
+            {isSuperAdmin ? "Edu-Nify Multi-Tenancy Core" : "Identité & Configuration du Campus"}
           </h1>
           <p className="text-gray-300 text-xs md:text-sm font-medium max-w-2xl">
-            Supervisez tous les campus rattachés en temps réel. Créez des instances isolées, configurez leur charte graphique unique et générez des accès sécurisés pour les responsables administratifs de chaque établissement.
+            {isSuperAdmin 
+              ? "Supervisez tous les campus rattachés en temps réel. Créez des instances isolées, configurez leur charte graphique unique et générez des accès sécurisés pour les responsables administratifs de chaque établissement."
+              : "Consultez et ajustez la charte graphique, les coordonnées de contact, le logo et la bannière de votre établissement scolaire en temps réel pour configurer instantanément votre portail personnalisé."}
           </p>
         </div>
       </div>
 
       {/* Modern Tab Selector */}
-      <div className="flex border-b border-gray-200 dark:border-gray-800 pb-px" id="saas-tab-navigation">
-        <button
-          id="tab-btn-establishments"
-          onClick={() => setActiveSection('establishments')}
-          className={`px-6 py-3.5 border-b-2 font-black text-xs uppercase tracking-wider transition-all flex items-center gap-2.5 cursor-pointer ${
-            activeSection === 'establishments'
-              ? 'border-indigo-600 text-indigo-600 dark:border-indigo-400 dark:text-indigo-400 font-extrabold'
-              : 'border-transparent text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
-          }`}
-        >
-          <Building2 size={16} />
-          Gérer les Établissements ({totalCampuses})
-        </button>
-        <button
-          id="tab-btn-admins"
-          onClick={() => setActiveSection('admins')}
-          className={`px-6 py-3.5 border-b-2 font-black text-xs uppercase tracking-wider transition-all flex items-center gap-2.5 cursor-pointer ${
-            activeSection === 'admins'
-              ? 'border-indigo-600 text-indigo-600 dark:border-indigo-400 dark:text-indigo-400 font-extrabold'
-              : 'border-transparent text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
-          }`}
-        >
-          <Users size={16} />
-          Comptes des Responsables ({adminsList.length})
-        </button>
-      </div>
+      {isSuperAdmin && (
+        <div className="flex border-b border-gray-200 dark:border-gray-800 pb-px" id="saas-tab-navigation">
+          <button
+            id="tab-btn-establishments"
+            onClick={() => setActiveSection('establishments')}
+            className={`px-6 py-3.5 border-b-2 font-black text-xs uppercase tracking-wider transition-all flex items-center gap-2.5 cursor-pointer ${
+              activeSection === 'establishments'
+                ? 'border-indigo-600 text-indigo-600 dark:border-indigo-400 dark:text-indigo-400 font-extrabold'
+                : 'border-transparent text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+            }`}
+          >
+            <Building2 size={16} />
+            Gérer les Établissements ({totalCampuses})
+          </button>
+          <button
+            id="tab-btn-admins"
+            onClick={() => setActiveSection('admins')}
+            className={`px-6 py-3.5 border-b-2 font-black text-xs uppercase tracking-wider transition-all flex items-center gap-2.5 cursor-pointer ${
+              activeSection === 'admins'
+                ? 'border-indigo-600 text-indigo-600 dark:border-indigo-400 dark:text-indigo-400 font-extrabold'
+                : 'border-transparent text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+            }`}
+          >
+            <Users size={16} />
+            Comptes des Responsables ({adminsList.length})
+          </button>
+        </div>
+      )}
 
-      {activeSection === 'admins' ? (
+      {activeSection === 'admins' && isSuperAdmin ? (
         <div className="space-y-6" id="admins-manager-section">
           {/* Admin Stats Overview */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4" id="admins-stats-grid">
@@ -543,96 +577,98 @@ Veuillez conserver et remettre ces données de manière sécurisée uniquement a
       ) : (
         <>
           {/* SaaS Statistics Metrics Panel */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4" id="saas-statistics-metrics">
-            {/* Total subscription campus count */}
-            <div className="bg-white dark:bg-gray-800 rounded-2xl p-5 border border-gray-200/80 dark:border-gray-700/60 shadow-sm flex items-center gap-4" id="met-total-campuses">
-              <div className="p-3 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 rounded-xl">
-                <Building2 size={24} />
+          {isSuperAdmin && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4" id="saas-statistics-metrics">
+              {/* Total subscription campus count */}
+              <div className="bg-white dark:bg-gray-800 rounded-2xl p-5 border border-gray-200/80 dark:border-gray-700/60 shadow-sm flex items-center gap-4" id="met-total-campuses">
+                <div className="p-3 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 rounded-xl">
+                  <Building2 size={24} />
+                </div>
+                <div>
+                  <span className="text-[10px] text-gray-400 font-extrabold uppercase tracking-widest block font-sans">Total Campus</span>
+                  <span className="text-xl font-black text-gray-800 dark:text-gray-100">{totalCampuses} Établissements</span>
+                </div>
               </div>
-              <div>
-                <span className="text-[10px] text-gray-400 font-extrabold uppercase tracking-widest block font-sans">Total Campus</span>
-                <span className="text-xl font-black text-gray-800 dark:text-gray-100">{totalCampuses} Établissements</span>
-              </div>
-            </div>
 
-            {/* Active systems count */}
-            <div className="bg-white dark:bg-gray-800 rounded-2xl p-5 border border-gray-200/80 dark:border-gray-700/60 shadow-sm flex items-center gap-4" id="met-active-campuses">
-              <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 rounded-xl">
-                <CheckCircle size={24} />
+              {/* Active systems count */}
+              <div className="bg-white dark:bg-gray-800 rounded-2xl p-5 border border-gray-200/80 dark:border-gray-700/60 shadow-sm flex items-center gap-4" id="met-active-campuses">
+                <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 rounded-xl">
+                  <CheckCircle size={24} />
+                </div>
+                <div>
+                  <span className="text-[10px] text-gray-400 font-extrabold uppercase tracking-widest block font-sans">SaaS Académiques Actifs</span>
+                  <span className="text-xl font-black text-emerald-600 dark:text-emerald-450">{activeCampuses} opérationnels</span>
+                </div>
               </div>
-              <div>
-                <span className="text-[10px] text-gray-400 font-extrabold uppercase tracking-widest block font-sans">SaaS Académiques Actifs</span>
-                <span className="text-xl font-black text-emerald-600 dark:text-emerald-450">{activeCampuses} opérationnels</span>
-              </div>
-            </div>
 
-            {/* Suspended systems count */}
-            <div className="bg-white dark:bg-gray-800 rounded-2xl p-5 border border-gray-200/80 dark:border-gray-700/60 shadow-sm flex items-center gap-4" id="met-suspended-campuses">
-              <div className="p-3 bg-red-50 dark:bg-red-950/45 text-red-650 dark:text-red-400 rounded-xl">
-                <ShieldAlert size={24} />
+              {/* Suspended systems count */}
+              <div className="bg-white dark:bg-gray-800 rounded-2xl p-5 border border-gray-200/80 dark:border-gray-700/60 shadow-sm flex items-center gap-4" id="met-suspended-campuses">
+                <div className="p-3 bg-red-50 dark:bg-red-950/45 text-red-650 dark:text-red-400 rounded-xl">
+                  <ShieldAlert size={24} />
+                </div>
+                <div>
+                  <span className="text-[10px] text-gray-400 font-extrabold uppercase tracking-widest block font-sans">Campus Suspendus</span>
+                  <span className="text-xl font-black text-red-600 dark:text-red-400">{suspendedCampuses} hors-ligne</span>
+                </div>
               </div>
-              <div>
-                <span className="text-[10px] text-gray-400 font-extrabold uppercase tracking-widest block font-sans">Campus Suspendus</span>
-                <span className="text-xl font-black text-red-600 dark:text-red-400">{suspendedCampuses} hors-ligne</span>
-              </div>
-            </div>
 
-            {/* Financial MRR from subscription plans */}
-            <div className="bg-white dark:bg-gray-800 rounded-2xl p-5 border border-gray-200/80 dark:border-gray-700/60 shadow-sm flex items-center gap-4" id="met-financial-mrr font-sans">
-              <div className="p-3 bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 rounded-xl">
-                <CreditCard size={24} />
-              </div>
-              <div>
-                <span className="text-[10px] text-gray-400 font-extrabold uppercase tracking-widest block font-sans">SaaS MRR récurrent</span>
-                <span className="text-xl font-black text-gray-850 dark:text-white font-mono">{estimatedMRR.toLocaleString("fr-FR")} € / mois</span>
+              {/* Financial MRR from subscription plans */}
+              <div className="bg-white dark:bg-gray-800 rounded-2xl p-5 border border-gray-200/80 dark:border-gray-700/60 shadow-sm flex items-center gap-4" id="met-financial-mrr font-sans">
+                <div className="p-3 bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 rounded-xl">
+                  <CreditCard size={24} />
+                </div>
+                <div>
+                  <span className="text-[10px] text-gray-400 font-extrabold uppercase tracking-widest block font-sans">SaaS MRR récurrent</span>
+                  <span className="text-xl font-black text-gray-850 dark:text-white font-mono">{estimatedMRR.toLocaleString("fr-FR")} € / mois</span>
+                </div>
               </div>
             </div>
-          </div>
+          )}
 
           {/* Control Actions & Searching */}
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white dark:bg-gray-850 p-4 rounded-2xl border border-gray-150 dark:border-gray-800 shadow-sm font-sans" id="campus-filtering-container">
-            {/* Search Input bar */}
-            <div className="relative flex-1 max-w-md">
-              <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
-              <input
-                id="search-campus-input"
-                type="text"
-                placeholder="Rechercher par nom d'établissement, code..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl text-xs font-bold outline-none text-gray-855 dark:text-white"
-              />
-            </div>
+          {isSuperAdmin && (
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white dark:bg-gray-850 p-4 rounded-2xl border border-gray-150 dark:border-gray-800 shadow-sm font-sans" id="campus-filtering-container">
+              {/* Search Input bar */}
+              <div className="relative flex-1 max-w-md">
+                <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                <input
+                  id="search-campus-input"
+                  type="text"
+                  placeholder="Rechercher par nom d'établissement, code..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2 bg-gray-55 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl text-xs font-bold outline-none text-gray-855 dark:text-white"
+                />
+              </div>
 
-            {/* Selection Dropdowns for filtering */}
-            <div className="flex flex-wrap items-center gap-2.5 font-sans">
-              {/* Plan Filter */}
-              <select
-                id="select-filter-plan"
-                value={filterPlan}
-                onChange={(e) => setFilterPlan(e.target.value)}
-                className="px-3 py-2 bg-gray-50 dark:bg-gray-905 border border-gray-200 dark:border-gray-800 rounded-xl text-xs font-black text-gray-800 dark:text-gray-300"
-              >
-                <option value="all">Tous les abonnements</option>
-                {plansList.map(plan => (
-                  <option key={plan} value={plan}>{plan}</option>
-                ))}
-              </select>
+              {/* Selection Dropdowns for filtering */}
+              <div className="flex flex-wrap items-center gap-2.5 font-sans">
+                {/* Plan Filter */}
+                <select
+                  id="select-filter-plan"
+                  value={filterPlan}
+                  onChange={(e) => setFilterPlan(e.target.value)}
+                  className="px-3 py-2 bg-gray-50 dark:bg-gray-905 border border-gray-200 dark:border-gray-800 rounded-xl text-xs font-black text-gray-800 dark:text-gray-300"
+                >
+                  <option value="all">Tous les abonnements</option>
+                  {plansList.map(plan => (
+                    <option key={plan} value={plan}>{plan}</option>
+                  ))}
+                </select>
 
-              {/* Status Filter */}
-              <select
-                id="select-filter-status"
-                value={filterStatus}
-                onChange={(e) => setFilterStatus(e.target.value)}
-                className="px-3 py-2 bg-gray-50 dark:bg-gray-905 border border-gray-200 dark:border-gray-800 rounded-xl text-xs font-black text-gray-800 dark:text-gray-300"
-              >
-                <option value="all">Tous les statuts</option>
-                <option value="active">Actif</option>
-                <option value="inactive">Suspendu</option>
-              </select>
+                {/* Status Filter */}
+                <select
+                  id="select-filter-status"
+                  value={filterStatus}
+                  onChange={(e) => setFilterStatus(e.target.value)}
+                  className="px-3 py-2 bg-gray-50 dark:bg-gray-905 border border-gray-200 dark:border-gray-800 rounded-xl text-xs font-black text-gray-800 dark:text-gray-300"
+                >
+                  <option value="all">Tous les statuts</option>
+                  <option value="active">Actif</option>
+                  <option value="inactive">Suspendu</option>
+                </select>
 
-              {/* Create action button */}
-              {isSuperAdmin && (
+                {/* Create action button */}
                 <button
                   id="btn-create-campus-trigger"
                   onClick={handleOpenCreate}
@@ -641,9 +677,9 @@ Veuillez conserver et remettre ces données de manière sécurisée uniquement a
                   <Plus size={15} />
                   Nouveau Campus
                 </button>
-              )}
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Grid of establishments cards */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6" id="campus-cards-grid">
@@ -771,6 +807,42 @@ Veuillez conserver et remettre ces données de manière sécurisée uniquement a
                         <Mail size={13} className="text-gray-400 font-mono" />
                         <span className="line-clamp-1 font-mono">{est.email || 'Email non spécifié'}</span>
                       </div>
+
+                      {/* Proviseur / Principal profile display */}
+                      <div className="mt-3.5 pt-3.5 border-t border-dashed border-gray-150 dark:border-gray-800 space-y-2">
+                        <div className="flex items-center gap-1.5 text-[10px] font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-widest font-sans">
+                          <Shield size={12} />
+                          <span>Direction / Responsable</span>
+                        </div>
+                        {est.responsableNom ? (
+                          <div className="space-y-1.5 bg-gray-50/70 dark:bg-gray-900/45 p-2.5 rounded-xl border border-gray-100 dark:border-gray-850 animate-fade-in">
+                            <span className="text-[11px] font-black text-gray-800 dark:text-gray-200 block">
+                              {est.responsableCivility || 'M.'} {est.responsablePrenom} {est.responsableNom}
+                            </span>
+                            {(est.responsableEmail || est.responsableTelephone) && (
+                              <div className="flex flex-col gap-1 text-[10px] text-gray-400 font-bold font-mono">
+                                {est.responsableEmail && (
+                                  <span className="flex items-center gap-1">
+                                    <Mail size={10} className="shrink-0 text-gray-400" />
+                                    <span className="truncate">{est.responsableEmail}</span>
+                                  </span>
+                                )}
+                                {est.responsableTelephone && (
+                                  <span className="flex items-center gap-1">
+                                    <Phone size={10} className="shrink-0 text-gray-400" />
+                                    <span>{est.responsableTelephone}</span>
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="text-[10px] italic text-gray-400 dark:text-gray-500 font-medium">
+                            Aucun proviseur ou principal configuré.
+                          </div>
+                        )}
+                      </div>
+
                       <div className="flex items-center justify-between gap-2 bg-indigo-50/20 dark:bg-indigo-950/10 p-2 rounded-xl mt-3 text-xs border border-dashed border-indigo-150/40 dark:border-indigo-900/30">
                         <div className="flex items-center gap-1.5 font-bold text-gray-500 dark:text-gray-400 text-[10px] font-mono">
                           <Key size={12} />
@@ -783,16 +855,17 @@ Veuillez conserver et remettre ces données de manière sécurisée uniquement a
                     </div>
 
                     {/* Edit & Suspension actions */}
-                    {isSuperAdmin && (
-                      <div className="mt-5 pt-4 border-t border-gray-150 dark:border-gray-850 flex gap-2">
-                        <button
-                          onClick={() => handleOpenEdit(est)}
-                          className="p-2 aspect-square rounded-xl bg-gray-100 hover:bg-gray-150 dark:bg-gray-750 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 transition-all cursor-pointer"
-                          title="Modifier les réglages et design"
-                        >
-                          <Edit2 size={14} />
-                        </button>
+                    <div className="mt-5 pt-4 border-t border-gray-150 dark:border-gray-800 flex gap-2">
+                      <button
+                        onClick={() => handleOpenEdit(est)}
+                        className="flex-1 py-1.5 px-3 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 cursor-pointer bg-indigo-50 border border-indigo-100 text-indigo-600 hover:bg-indigo-100 dark:bg-indigo-950/20 dark:border-indigo-900/30 dark:text-indigo-400"
+                        title="Modifier les réglages et design"
+                      >
+                        <Edit2 size={12} />
+                        Modifier la Configuration
+                      </button>
 
+                      {isSuperAdmin && (
                         <button
                           onClick={() => toggleEstablishmentStatus(est.id)}
                           className={`flex-1 py-1.5 px-3 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1 cursor-pointer ${
@@ -813,8 +886,8 @@ Veuillez conserver et remettre ces données de manière sécurisée uniquement a
                             </>
                           )}
                         </button>
-                      </div>
-                    )}
+                      )}
+                    </div>
                   </div>
                 </div>
               );
@@ -986,8 +1059,9 @@ Veuillez conserver et remettre ces données de manière sécurisée uniquement a
                   <select
                     id="input-campus-plan"
                     value={formPlan}
+                    disabled={!isSuperAdmin}
                     onChange={(e) => setFormPlan(e.target.value as any)}
-                    className="w-full px-3 py-2.5 bg-gray-55 dark:bg-gray-950 border border-gray-200 dark:border-gray-850 rounded-xl outline-none text-xs font-bold text-gray-800 dark:text-white"
+                    className="w-full px-3 py-2.5 bg-gray-55 dark:bg-gray-955 border border-gray-200 dark:border-gray-850 rounded-xl outline-none text-xs font-bold text-gray-800 dark:text-white disabled:opacity-60"
                   >
                     {plansList.map(plan => (
                       <option key={plan} value={plan}>{plan} ({planPrices[plan]}€/mois)</option>
@@ -1001,9 +1075,10 @@ Veuillez conserver et remettre ces données de manière sécurisée uniquement a
                     id="input-campus-licence"
                     type="text"
                     value={formLicence}
+                    disabled={!isSuperAdmin}
                     onChange={(e) => setFormLicence(e.target.value)}
                     required
-                    className="w-full px-3 py-2.5 bg-gray-50 dark:bg-gray-955 border border-gray-200 dark:border-gray-850 rounded-xl outline-none text-xs font-mono font-bold text-gray-855 dark:text-white"
+                    className="w-full px-3 py-2.5 bg-gray-50 dark:bg-gray-955 border border-gray-200 dark:border-gray-850 rounded-xl outline-none text-xs font-mono font-bold text-gray-855 dark:text-white disabled:opacity-60"
                   />
                 </div>
 
@@ -1014,9 +1089,10 @@ Veuillez conserver et remettre ces données de manière sécurisée uniquement a
                     type="text"
                     placeholder="2025-2026"
                     value={formActiveSchoolYear}
+                    disabled={!isSuperAdmin}
                     onChange={(e) => setFormActiveSchoolYear(e.target.value)}
                     required
-                    className="w-full px-3 py-2.5 bg-gray-50 dark:bg-gray-955 border border-gray-200 dark:border-gray-850 rounded-xl outline-none text-xs font-black text-gray-855 dark:text-white font-mono"
+                    className="w-full px-3 py-2.5 bg-gray-55 dark:bg-gray-950 border border-gray-200 dark:border-gray-855 rounded-xl outline-none text-xs font-black text-gray-855 dark:text-white font-mono disabled:opacity-60"
                   />
                 </div>
               </div>
@@ -1071,6 +1147,80 @@ Veuillez conserver et remettre ces données de manière sécurisée uniquement a
                   onChange={(e) => setFormAdresse(e.target.value)}
                   className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-955 border border-gray-200 dark:border-gray-850 rounded-xl outline-none text-xs font-bold text-gray-850 dark:text-white"
                 />
+              </div>
+
+              {/* Proviseur / Principal Profile Section */}
+              <div className="p-4 bg-indigo-50/20 dark:bg-indigo-950/10 border border-indigo-100/50 dark:border-indigo-900/30 rounded-2xl space-y-3 font-sans" id="rep-profile-form-container">
+                <div className="flex items-center gap-2 border-b border-indigo-150/50 dark:border-indigo-900/20 pb-2">
+                  <Shield size={14} className="text-indigo-600 dark:text-indigo-400" />
+                  <span className="text-[10px] font-black text-indigo-700 dark:text-indigo-400 uppercase tracking-widest block">
+                    Direction (Proviseur ou Principal de l'établissement)
+                  </span>
+                </div>
+                
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-[9px] font-bold text-gray-400 uppercase mb-1">Civilité</label>
+                    <select
+                      id="input-resp-civility"
+                      value={formResponsableCivility}
+                      onChange={(e) => setFormResponsableCivility(e.target.value as any)}
+                      className="w-full px-3 py-2 bg-white dark:bg-gray-950 border border-gray-200 dark:border-gray-850 rounded-xl outline-none text-xs font-bold text-gray-800 dark:text-white"
+                    >
+                      <option value="M.">M.</option>
+                      <option value="Mme">Mme</option>
+                      <option value="Dr">Dr</option>
+                      <option value="Pr">Pr</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[9px] font-bold text-gray-400 uppercase mb-1">Prénom du Responsable</label>
+                    <input
+                      id="input-resp-prenom"
+                      type="text"
+                      placeholder="e.g. Martinien"
+                      value={formResponsablePrenom}
+                      onChange={(e) => setFormResponsablePrenom(e.target.value)}
+                      className="w-full px-3 py-2 bg-white dark:bg-gray-955 border border-gray-200 dark:border-gray-850 rounded-xl outline-none text-xs font-extrabold text-gray-850 dark:text-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[9px] font-bold text-gray-400 uppercase mb-1">Nom du Responsable</label>
+                    <input
+                      id="input-resp-nom"
+                      type="text"
+                      placeholder="e.g. MVEZOGO"
+                      value={formResponsableNom}
+                      onChange={(e) => setFormResponsableNom(e.target.value)}
+                      className="w-full px-3 py-2 bg-white dark:bg-gray-955 border border-gray-200 dark:border-gray-850 rounded-xl outline-none text-xs font-extrabold text-gray-850 dark:text-white"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[9px] font-bold text-gray-400 uppercase mb-1">Email Direct</label>
+                    <input
+                      id="input-resp-email"
+                      type="email"
+                      placeholder="mvezogo@direction.edu"
+                      value={formResponsableEmail}
+                      onChange={(e) => setFormResponsableEmail(e.target.value)}
+                      className="w-full px-3 py-2 bg-white dark:bg-gray-955 border border-gray-200 dark:border-gray-850 rounded-xl outline-none text-xs font-semibold text-gray-800 dark:text-white font-mono"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[9px] font-bold text-gray-400 uppercase mb-1">Téléphone Direct</label>
+                    <input
+                      id="input-resp-tel"
+                      type="text"
+                      placeholder="+241 66 12 34 56"
+                      value={formResponsableTelephone}
+                      onChange={(e) => setFormResponsableTelephone(e.target.value)}
+                      className="w-full px-3 py-2 bg-white dark:bg-gray-955 border border-gray-200 dark:border-gray-850 rounded-xl outline-none text-xs font-semibold text-gray-800 dark:text-white font-mono"
+                    />
+                  </div>
+                </div>
               </div>
 
               {/* Action buttons */}

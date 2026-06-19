@@ -133,6 +133,7 @@ const translations: Translations = {
 
   'surveys': { fr: 'Sondages & Élections', en: 'Surveys & Elections', es: 'Encuestas y Elecciones', zh: '调查与选举', ja: 'アンケートと選挙' },
   'establishments': { fr: 'SaaS Établissements', en: 'SaaS Campuses', es: 'Gestión SaaS', zh: 'SaaS 院校管理', ja: 'SaaS 院校管理' },
+  'my_establishment': { fr: 'SaaS Établissement', en: 'SaaS Campus', es: 'Mon Établissement', zh: 'SaaS 院校管理', ja: 'SaaS 院校管理' },
   'document_generator': { fr: 'Documents Officiels', en: 'Official Documents', es: 'Documentos Oficiales', zh: '官方文件', ja: '公式書類' },
   'houses': { fr: 'Maisons', en: 'Houses', es: 'Casas', zh: '学院', ja: 'ハウス' },
   'integration': { fr: 'Architecture', en: 'Architecture', es: 'Arquitectura', zh: '架构', ja: 'アーキテクチャ' },

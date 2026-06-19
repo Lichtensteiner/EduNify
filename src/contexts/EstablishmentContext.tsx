@@ -21,6 +21,12 @@ export interface Establishment {
   primaryColor: string; // Hex code
   secondaryColor: string; // Hex code
   activeSchoolYear: string;
+  // Principal / representative details (Proviseur / Principal / Directeur)
+  responsableCivility?: 'M.' | 'Mme' | 'Dr' | 'Pr';
+  responsableNom?: string;
+  responsablePrenom?: string;
+  responsableEmail?: string;
+  responsableTelephone?: string;
 }
 
 interface EstablishmentContextType {
