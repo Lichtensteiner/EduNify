@@ -62,6 +62,7 @@ import ErrorBoundary from './components/ErrorBoundary';
 
 function AppContent() {
   const { currentUser } = useAuth();
+  const { isSuperAdmin } = useEstablishment();
   console.log("AppContent rendering. CurrentUser:", currentUser ? currentUser.email : "None");
   const [activeTab, setActiveTab] = useState('dashboard');
   const [tabParams, setTabParams] = useState<any>(null);
@@ -151,14 +152,15 @@ function AppContent() {
 
   const renderContent = () => {
     const role = currentUser?.role || '';
+    const isAdmin = role === 'admin' || isSuperAdmin;
     
     switch (activeTab) {
       case 'kiosk':
-        return role === 'admin' ? <KioskMode onExit={() => setActiveTab('users')} /> : <Dashboard onNavigate={handleNavigate} />;
+        return isAdmin ? <KioskMode onExit={() => setActiveTab('users')} /> : <Dashboard onNavigate={handleNavigate} />;
       case 'dashboard': 
         if (role === 'parent') return <ParentDashboard onNavigate={handleNavigate} />;
         if (role === 'cuisinier') return <CanteenDashboard onNavigate={handleNavigate} />;
-        return ['admin', 'enseignant', 'personnel administratif'].includes(role) ? <Dashboard onNavigate={handleNavigate} /> : <StudentDashboard onNavigate={handleNavigate} />;
+        return (isAdmin || ['enseignant', 'personnel administratif'].includes(role)) ? <Dashboard onNavigate={handleNavigate} /> : <StudentDashboard onNavigate={handleNavigate} />;
       case 'student_dashboard': 
         return role === 'élève' ? <StudentDashboard onNavigate={handleNavigate} /> : <Dashboard onNavigate={handleNavigate} />;
       case 'parent_dashboard':
@@ -166,63 +168,63 @@ function AppContent() {
       case 'student_card': 
         return role === 'élève' ? <StudentCard /> : <Dashboard onNavigate={handleNavigate} />;
       case 'users': 
-        return role === 'admin' ? <Users /> : <Dashboard onNavigate={handleNavigate} />;
+        return isAdmin ? <Users /> : <Dashboard onNavigate={handleNavigate} />;
       case 'attendance': 
-        return ['admin', 'enseignant', 'personnel administratif'].includes(role) ? <Attendance /> : <StudentDashboard onNavigate={handleNavigate} />;
+        return (isAdmin || ['enseignant', 'personnel administratif'].includes(role)) ? <Attendance /> : <StudentDashboard onNavigate={handleNavigate} />;
       case 'reports': 
-        return ['admin', 'enseignant', 'personnel administratif'].includes(role) ? <Reports /> : <StudentDashboard onNavigate={handleNavigate} />;
+        return (isAdmin || ['enseignant', 'personnel administratif'].includes(role)) ? <Reports /> : <StudentDashboard onNavigate={handleNavigate} />;
       case 'classes': 
-        return role === 'admin' ? <Classes /> : <Classroom initialClassName={tabParams?.className} />;
+        return isAdmin ? <Classes /> : <Classroom initialClassName={tabParams?.className} />;
       case 'settings': 
         return <Settings />;
       case 'scanner': 
-        return role === 'admin' ? <Scanner /> : <Dashboard onNavigate={handleNavigate} />;
+        return isAdmin ? <Scanner /> : <Dashboard onNavigate={handleNavigate} />;
       case 'mobile_app': 
-        return role === 'admin' ? <MobileApp /> : <Dashboard onNavigate={handleNavigate} />;
+        return isAdmin ? <MobileApp /> : <Dashboard onNavigate={handleNavigate} />;
       case 'integration': 
-        return role === 'admin' ? <IntegrationCode /> : <Dashboard onNavigate={handleNavigate} />;
+        return isAdmin ? <IntegrationCode /> : <Dashboard onNavigate={handleNavigate} />;
       case 'leaderboard': return <Leaderboard />;
       case 'houses': return <Houses />;
       case 'classroom': 
-        return ['admin', 'enseignant', 'élève'].includes(role) ? <Classroom initialClassName={tabParams?.className} /> : <Dashboard onNavigate={handleNavigate} />;
+        return (isAdmin || ['enseignant', 'élève'].includes(role)) ? <Classroom initialClassName={tabParams?.className} /> : <Dashboard onNavigate={handleNavigate} />;
       case 'courses_subjects':
         return role !== 'parent' ? <CoursesSubjects initialPrepId={tabParams?.prepId} /> : <Dashboard onNavigate={handleNavigate} />;
       case 'planning':
-        return ['admin', 'enseignant', 'élève'].includes(role) ? <TeacherPlanning /> : <Dashboard onNavigate={handleNavigate} />;
+        return (isAdmin || ['enseignant', 'élève'].includes(role)) ? <TeacherPlanning /> : <Dashboard onNavigate={handleNavigate} />;
       case 'calendar': 
-        return ['admin', 'enseignant', 'personnel administratif'].includes(role) ? <Calendar /> : <StudentDashboard onNavigate={handleNavigate} />;
+        return (isAdmin || ['enseignant', 'personnel administratif'].includes(role)) ? <Calendar /> : <StudentDashboard onNavigate={handleNavigate} />;
       case 'newsfeed': return <NewsFeed />;
       case 'ai_assistant': 
-        return ['admin', 'enseignant'].includes(role) ? <AIAssistant onNavigate={handleNavigate} /> : <StudentDashboard onNavigate={handleNavigate} />;
+        return (isAdmin || ['enseignant'].includes(role)) ? <AIAssistant onNavigate={handleNavigate} /> : <StudentDashboard onNavigate={handleNavigate} />;
       case 'directory': 
-        return ['admin', 'enseignant', 'personnel administratif'].includes(role) ? <Directory onNavigate={handleNavigate} /> : <StudentDashboard onNavigate={handleNavigate} />;
+        return (isAdmin || ['enseignant', 'personnel administratif'].includes(role)) ? <Directory onNavigate={handleNavigate} /> : <StudentDashboard onNavigate={handleNavigate} />;
       case 'messaging': return <Messaging initialChatTargetId={tabParams?.userId} onClearTarget={() => setTabParams(null)} />;
       case 'grades': return <Grades />;
       case 'homework': return <Homework />;
       case 'ludo_ai_plus': return <LudoAIPlus />;
       case 'clubs': return <Clubs />;
-      case 'finance': return role === 'admin' ? <Finance /> : <Dashboard onNavigate={handleNavigate} />;
-      case 'discipline': return ['admin', 'enseignant', 'personnel administratif'].includes(role) ? <Discipline /> : <Dashboard onNavigate={handleNavigate} />;
-      case 'audit_logs': return role === 'admin' ? <AuditLogs /> : <Dashboard onNavigate={handleNavigate} />;
+      case 'finance': return isAdmin ? <Finance /> : <Dashboard onNavigate={handleNavigate} />;
+      case 'discipline': return (isAdmin || ['enseignant', 'personnel administratif'].includes(role)) ? <Discipline /> : <Dashboard onNavigate={handleNavigate} />;
+      case 'audit_logs': return isAdmin ? <AuditLogs /> : <Dashboard onNavigate={handleNavigate} />;
       case 'recent_connections': 
-        return role === 'admin' ? <RecentConnections /> : <Dashboard onNavigate={handleNavigate} />;
+        return isAdmin ? <RecentConnections /> : <Dashboard onNavigate={handleNavigate} />;
       case 'staff':
-        return ['admin', 'personnel administratif', 'enseignant'].includes(role) ? <Staff /> : <Dashboard onNavigate={handleNavigate} />;
+        return (isAdmin || ['personnel administratif', 'enseignant'].includes(role)) ? <Staff /> : <Dashboard onNavigate={handleNavigate} />;
       case 'responsibility_zones':
-        return ['admin', 'personnel administratif', 'enseignant'].includes(role) ? <ResponsibilityZones /> : <Dashboard onNavigate={handleNavigate} />;
+        return (isAdmin || ['personnel administratif', 'enseignant'].includes(role)) ? <ResponsibilityZones /> : <Dashboard onNavigate={handleNavigate} />;
       case 'library':
         return <Library />;
       case 'canteen':
-        return ['admin', 'enseignant', 'élève', 'parent', 'cuisinier', 'personnel administratif'].includes(role) ? <Canteen /> : <Dashboard onNavigate={handleNavigate} />;
+        return (isAdmin || ['enseignant', 'élève', 'parent', 'cuisinier', 'personnel administratif'].includes(role)) ? <Canteen /> : <Dashboard onNavigate={handleNavigate} />;
       case 'surveys':
         return <Surveys />;
       case 'document_generator':
-        return ['admin', 'personnel administratif'].includes(role) ? <DocumentGenerator /> : <Dashboard onNavigate={handleNavigate} />;
+        return (isAdmin || ['personnel administratif'].includes(role)) ? <DocumentGenerator /> : <Dashboard onNavigate={handleNavigate} />;
       case 'strategic_optimizations':
-        return ['admin', 'enseignant'].includes(role) ? <StrategicOptimizations /> : <Dashboard onNavigate={handleNavigate} />;
+        return (isAdmin || ['enseignant'].includes(role)) ? <StrategicOptimizations /> : <Dashboard onNavigate={handleNavigate} />;
       case 'profile': return <Profile />;
       case 'establishments':
-        return role === 'admin' || currentUser?.email === 'ludo.consulting3@gmail.com' ? <Establishments /> : <Dashboard onNavigate={handleNavigate} />;
+        return isAdmin ? <Establishments /> : <Dashboard onNavigate={handleNavigate} />;
       case 'about': return <About />;
       case 'terms': return <TermsAndConditions />;
       default: return role === 'élève' ? <StudentDashboard onNavigate={handleNavigate} /> : <Dashboard onNavigate={handleNavigate} />;
