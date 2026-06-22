@@ -62,7 +62,11 @@ export default function Users() {
     position: '',
     photo: '',
     cover: '',
-    etablissement: ''
+    etablissement: '',
+    preciseRole: 'Proviseur / Directeur Général',
+    adminPowerLevel: 'Total',
+    authorizedModules: ['all'] as string[],
+    signerBadgeId: ''
   });
   const [actionLoading, setActionLoading] = useState(false);
   const [uploadingImage, setUploadingImage] = useState<{type: 'photo' | 'cover', id: string | 'new'} | null>(null);
@@ -241,7 +245,11 @@ export default function Users() {
         department: finalRole === 'personnel administratif' ? 'Administration' : null,
         photo: newUser.photo || null,
         cover: newUser.cover || null,
-        date_creation: new Date().toISOString()
+        date_creation: new Date().toISOString(),
+        preciseRole: finalRole === 'admin' ? (newUser.preciseRole || 'Proviseur / Directeur Général') : (finalRole === 'personnel administratif' ? newUser.position : null),
+        adminPowerLevel: finalRole === 'admin' ? (newUser.adminPowerLevel || 'Total') : null,
+        authorizedModules: finalRole === 'admin' ? (newUser.authorizedModules || ['all']) : null,
+        signerBadgeId: finalRole === 'admin' ? (newUser.signerBadgeId || `ADM-${Math.floor(1000 + Math.random() * 9000)}`) : null
       }, { merge: true });
       
       // Sign out and clean up the secondary app
@@ -279,7 +287,11 @@ export default function Users() {
         position: '',
         photo: '',
         cover: '',
-        etablissement: ''
+        etablissement: '',
+        preciseRole: 'Proviseur / Directeur Général',
+        adminPowerLevel: 'Total',
+        authorizedModules: ['all'],
+        signerBadgeId: ''
       });
       setSuccessInfo({
         title: t('account_created'),
@@ -337,7 +349,11 @@ export default function Users() {
         cover: editUser.cover || null,
         house_id: editUser.role === 'élève' && editUser.house_id ? editUser.house_id : null,
         position: finalRole === 'personnel administratif' ? (editUser.position || null) : null,
-        department: finalRole === 'personnel administratif' ? 'Administration' : null
+        department: finalRole === 'personnel administratif' ? 'Administration' : null,
+        preciseRole: finalRole === 'admin' ? (editUser.preciseRole || 'Proviseur / Directeur Général') : (finalRole === 'personnel administratif' ? editUser.position : null),
+        adminPowerLevel: finalRole === 'admin' ? (editUser.adminPowerLevel || 'Total') : null,
+        authorizedModules: finalRole === 'admin' ? (editUser.authorizedModules || ['all']) : null,
+        signerBadgeId: finalRole === 'admin' ? (editUser.signerBadgeId || '') : null
       });
 
       await recordAuditLog({
@@ -1427,6 +1443,132 @@ export default function Users() {
                         </div>
                       </div>
                     )}
+
+                    {editUser.role === 'admin' && (
+                      <div className="p-5 border border-amber-200 dark:border-amber-900/40 rounded-2xl bg-amber-50/40 dark:bg-amber-950/10 space-y-5 animate-fade-in col-span-1 md:col-span-2">
+                        {/* Elegance visual header badge */}
+                        <div className="flex items-center gap-3 pb-3 border-b border-amber-100 dark:border-amber-950/20">
+                          <div className="p-2.5 bg-amber-500/10 text-amber-600 dark:bg-amber-500/20 dark:text-amber-400 rounded-xl">
+                            <Key size={18} />
+                          </div>
+                          <div>
+                            <h4 className="text-xs font-extrabold text-amber-850 dark:text-amber-200 uppercase tracking-widest font-mono">Profil Administrateur D'Établissement</h4>
+                            <p className="text-[10px] text-amber-600 dark:text-amber-400 font-medium mt-0.5">Ce compte disposera d’accès et d'autorisations critiques sur le campus.</p>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-[11px] font-bold text-gray-700 dark:text-gray-300 mb-1.5 ml-1 uppercase tracking-wider">Function Exacte / Titre</label>
+                            <select
+                              required
+                              value={editUser.preciseRole || 'Proviseur / Directeur Général'}
+                              onChange={(e) => setEditUser({...editUser, preciseRole: e.target.value})}
+                              className="w-full px-4 py-2.5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-sm font-bold text-gray-800 dark:text-gray-200"
+                            >
+                              <option value="Proviseur / Directeur Général">Proviseur / Directeur Général</option>
+                              <option value="Principal de l'Établissement">Principal de l'Établissement</option>
+                              <option value="Directeur d’École">Directeur d’École</option>
+                              <option value="Directeur des Études">Directeur des Études</option>
+                              <option value="Secrétaire Général administratif">Secrétaire Général administratif</option>
+                              <option value="Administrateur Technique Système">Administrateur Technique Système</option>
+                            </select>
+                          </div>
+
+                          <div>
+                            <label className="block text-[11px] font-bold text-gray-700 dark:text-gray-300 mb-1.5 ml-1 uppercase tracking-wider">🛡️ Niveau d’Accréditation</label>
+                            <select
+                              required
+                              value={editUser.adminPowerLevel || 'Total'}
+                              onChange={(e) => setEditUser({...editUser, adminPowerLevel: e.target.value})}
+                              className="w-full px-4 py-2.5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-sm font-bold text-gray-800 dark:text-gray-200"
+                            >
+                              <option value="Total">Contrôle Total (Lecture/Écriture/Sécurité)</option>
+                              <option value="Standard">Administrateur Standard (Saisie/Scolarité)</option>
+                              <option value="Consultation">Supervision Déléguée (Consultation uniquement)</option>
+                            </select>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-[11px] font-bold text-gray-700 dark:text-gray-300 mb-1.5 ml-1 uppercase tracking-wider">📇 Code Personnel ou Signature ID</label>
+                            <div className="relative">
+                              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[10px] font-bold font-mono text-indigo-400">ADM -</span>
+                              <input
+                                type="text"
+                                maxLength={5}
+                                placeholder="54823"
+                                value={editUser.signerBadgeId ? editUser.signerBadgeId.replace('ADM-', '') : ''}
+                                onChange={(e) => setEditUser({...editUser, signerBadgeId: `ADM-${e.target.value.replace(/\D/g, '')}`})}
+                                className="w-full pl-12 pr-4 py-2.5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-sm font-bold text-gray-800 dark:text-gray-200 font-mono tracking-widest"
+                              />
+                            </div>
+                          </div>
+
+                          <div>
+                            <label className="block text-[11px] font-bold text-gray-700 dark:text-gray-300 mb-1.5 ml-1 uppercase tracking-wider">📞 Contact Direct</label>
+                            <div className="relative">
+                              <Phone className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" size={14} />
+                              <input
+                                type="tel"
+                                placeholder="+241 07 12 34 56"
+                                value={editUser.contact || ''}
+                                onChange={(e) => setEditUser({...editUser, contact: e.target.value})}
+                                className="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-sm font-bold text-gray-800 dark:text-gray-200"
+                              />
+                            </div>
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="block text-[11px] font-bold text-gray-700 dark:text-gray-300 mb-2 ml-1 uppercase tracking-wider">⚡ Modules d'habilitation autorisés</label>
+                          <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                            {[
+                              { id: 'all', label: 'Tout le système ⚡' },
+                              { id: 'scolarite', label: 'Gestion Scolaire' },
+                              { id: 'finance', label: 'Caisse & Comptabilité' },
+                              { id: 'evaluations', label: 'Bulletins & Notes' },
+                              { id: 'cantine', label: 'Services de Restauration' },
+                              { id: 'biometrie', label: 'Guichets Biométriques' }
+                            ].map((mod) => {
+                              const isChecked = (editUser.authorizedModules || ['all']).includes(mod.id);
+                              return (
+                                <label
+                                  key={mod.id}
+                                  className={`flex items-center gap-2 p-2 rounded-xl cursor-pointer border transition-colors ${
+                                    isChecked
+                                      ? 'bg-indigo-50/50 border-indigo-200 text-indigo-700 dark:bg-indigo-950/20 dark:border-indigo-900/50 dark:text-indigo-400'
+                                      : 'bg-white border-gray-200 dark:bg-gray-950 dark:border-gray-850 text-gray-700 dark:text-gray-300 hover:bg-gray-50'
+                                  }`}
+                                >
+                                  <input
+                                    type="checkbox"
+                                    className="rounded border-gray-350 text-indigo-600 focus:ring-indigo-500"
+                                    checked={isChecked}
+                                    onChange={() => {
+                                      let updated: string[];
+                                      if (mod.id === 'all') {
+                                        updated = isChecked ? [] : ['all'];
+                                      } else {
+                                        let current = (editUser.authorizedModules || ['all']).filter((m: string) => m !== 'all');
+                                        if (isChecked) {
+                                          updated = current.filter((m: string) => m !== mod.id);
+                                        } else {
+                                          updated = [...current, mod.id];
+                                        }
+                                      }
+                                      setEditUser({ ...editUser, authorizedModules: updated });
+                                    }}
+                                  />
+                                  <span className="text-[10px] font-extrabold font-sans leading-none">{mod.label}</span>
+                                </label>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -2010,6 +2152,133 @@ export default function Users() {
                                   <span className="text-xs text-gray-700 dark:text-gray-300">{cls.nom}</span>
                                 </label>
                               ))}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {newUser.role === 'admin' && (
+                        <div className="p-5 border border-amber-200 dark:border-amber-900/40 rounded-2xl bg-amber-50/40 dark:bg-amber-950/10 space-y-5 animate-fade-in">
+                          {/* Elegance visual header badge */}
+                          <div className="flex items-center gap-3 pb-3 border-b border-amber-100 dark:border-amber-950/20">
+                            <div className="p-2.5 bg-amber-500/10 text-amber-600 dark:bg-amber-500/20 dark:text-amber-400 rounded-xl">
+                              <Key size={18} />
+                            </div>
+                            <div>
+                              <h4 className="text-xs font-extrabold text-amber-850 dark:text-amber-200 uppercase tracking-widest font-mono">Profil Administrateur D'Établissement</h4>
+                              <p className="text-[10px] text-amber-600 dark:text-amber-400 font-medium mt-0.5">Ce compte disposera d’accès et d'autorisations critiques sur le campus.</p>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                              <label className="block text-[11px] font-bold text-gray-700 dark:text-gray-300 mb-1.5 ml-1 uppercase tracking-wider">🎓 Fonction / Titre Exact</label>
+                              <select
+                                required
+                                value={newUser.preciseRole}
+                                onChange={(e) => setNewUser({...newUser, preciseRole: e.target.value})}
+                                className="w-full px-4 py-2.5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-xs font-bold text-gray-805 dark:text-gray-200"
+                              >
+                                <option value="Proviseur / Directeur Général">Proviseur / Directeur Général</option>
+                                <option value="Principal de l'Établissement">Principal de l'Établissement</option>
+                                <option value="Directeur d’École">Directeur d’École</option>
+                                <option value="Directeur des Études">Directeur des Études</option>
+                                <option value="Secrétaire Général administratif">Secrétaire Général administratif</option>
+                                <option value="Administrateur Technique Système">Administrateur Technique Système</option>
+                              </select>
+                            </div>
+
+                            <div>
+                              <label className="block text-[11px] font-bold text-gray-700 dark:text-gray-300 mb-1.5 ml-1 uppercase tracking-wider">🛡️ Niveau d’Accréditation</label>
+                              <select
+                                required
+                                value={newUser.adminPowerLevel}
+                                onChange={(e) => setNewUser({...newUser, adminPowerLevel: e.target.value})}
+                                className="w-full px-4 py-2.5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-xs font-bold text-gray-805 dark:text-gray-200"
+                              >
+                                <option value="Total">Contrôle Total (Lecture/Écriture/Sécurité)</option>
+                                <option value="Standard">Administrateur Standard (Saisie/Scolarité)</option>
+                                <option value="Consultation">Supervision Déléguée (Consultation uniquement)</option>
+                              </select>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                              <label className="block text-[11px] font-bold text-gray-700 dark:text-gray-300 mb-1.5 ml-1 uppercase tracking-wider">📇 Code Personnel ou Signature ID</label>
+                              <div className="relative">
+                                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[10px] font-bold font-mono text-indigo-400 font-sans">ADM -</span>
+                                <input
+                                  type="text"
+                                  maxLength={5}
+                                  placeholder="54823"
+                                  value={newUser.signerBadgeId}
+                                  onChange={(e) => setNewUser({...newUser, signerBadgeId: e.target.value.replace(/\D/g, '')})}
+                                  className="w-full pl-12 pr-4 py-2.5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-sm font-bold text-gray-800 dark:text-gray-200 font-mono tracking-widest"
+                                />
+                              </div>
+                              <p className="text-[9px] text-gray-400 font-medium mt-1">Laissez vide pour auto-générer un identifiant de sécurité unique.</p>
+                            </div>
+
+                            <div>
+                              <label className="block text-[11px] font-bold text-gray-700 dark:text-gray-300 mb-1.5 ml-1 uppercase tracking-wider">📞 Contact Administratif Direct</label>
+                              <div className="relative">
+                                <Phone className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" size={14} />
+                                <input
+                                  type="tel"
+                                  placeholder="+241 07 12 34 56"
+                                  value={newUser.contact}
+                                  onChange={(e) => setNewUser({...newUser, contact: e.target.value})}
+                                  className="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-sm font-bold text-gray-800 dark:text-gray-200"
+                                />
+                              </div>
+                            </div>
+                          </div>
+
+                          <div>
+                            <label className="block text-[11px] font-bold text-gray-700 dark:text-gray-300 mb-2 ml-1 uppercase tracking-wider">⚡ Modules d'habilitation autorisés</label>
+                            <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                              {[
+                                { id: 'all', label: 'Tout le système ⚡' },
+                                { id: 'scolarite', label: 'Gestion Scolaire' },
+                                { id: 'finance', label: 'Caisse & Comptabilité' },
+                                { id: 'evaluations', label: 'Bulletins & Notes' },
+                                { id: 'cantine', label: 'Services de Restauration' },
+                                { id: 'biometrie', label: 'Guichets Biométriques' }
+                              ].map((mod) => {
+                                const isChecked = newUser.authorizedModules.includes(mod.id);
+                                return (
+                                  <label
+                                    key={mod.id}
+                                    className={`flex items-center gap-2 p-2 rounded-xl cursor-pointer border transition-colors ${
+                                      isChecked
+                                        ? 'bg-indigo-50/50 border-indigo-200 text-indigo-700 dark:bg-indigo-950/20 dark:border-indigo-900/50 dark:text-indigo-400'
+                                        : 'bg-white border-gray-200 dark:bg-gray-950 dark:border-gray-850 text-gray-700 dark:text-gray-300 hover:bg-gray-50'
+                                    }`}
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                                      checked={isChecked}
+                                      onChange={() => {
+                                        let updated: string[];
+                                        if (mod.id === 'all') {
+                                          updated = isChecked ? [] : ['all'];
+                                        } else {
+                                          let current = newUser.authorizedModules.filter(m => m !== 'all');
+                                          if (isChecked) {
+                                            updated = current.filter(m => m !== mod.id);
+                                          } else {
+                                            updated = [...current, mod.id];
+                                          }
+                                        }
+                                        setNewUser({ ...newUser, authorizedModules: updated });
+                                      }}
+                                    />
+                                    <span className="text-[10px] font-extrabold font-sans leading-none">{mod.label}</span>
+                                  </label>
+                                );
+                              })}
                             </div>
                           </div>
                         </div>
