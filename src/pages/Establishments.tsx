@@ -11,7 +11,9 @@ import {
 import { collection, onSnapshot, doc, setDoc, deleteDoc, query, where } from 'firebase/firestore';
 import { initializeApp, getApps } from 'firebase/app';
 import { getAuth, createUserWithEmailAndPassword, signOut } from 'firebase/auth';
-import { db, firebaseConfig } from '../lib/firebase';
+import { db, firebaseConfig, storage } from '../lib/firebase';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { resizeImage } from '../lib/imageUtils';
 
 export default function Establishments() {
   const { currentUser } = useAuth();
@@ -61,37 +63,78 @@ export default function Establishments() {
   const [formResponsableEmail, setFormResponsableEmail] = useState('');
   const [formResponsableTelephone, setFormResponsableTelephone] = useState('');
 
-  const handleLogoFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const [isUploadingLogo, setIsUploadingLogo] = useState(false);
+  const [isUploadingBanner, setIsUploadingBanner] = useState(false);
+
+  const handleLogoFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (file.size > 2 * 1024 * 1024) {
-        alert("La taille du logo ne doit pas dépasser 2 Mo.");
-        return;
-      }
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        if (typeof reader.result === 'string') {
-          setFormLogo(reader.result);
+      setIsUploadingLogo(true);
+      try {
+        // Step 1: Resize the image to keep size minuscule (300x300 is perfect for a logo)
+        const resizedBlob = await resizeImage(file, 300, 300);
+        
+        // Step 2: Try to upload to Firebase Storage
+        try {
+          const estId = formId.trim() || 'temp';
+          const storageRef = ref(storage, `etablissements/${estId}_logo_${Date.now()}.jpg`);
+          await uploadBytes(storageRef, resizedBlob);
+          const downloadURL = await getDownloadURL(storageRef);
+          setFormLogo(downloadURL);
+          console.log("Logo successfully uploaded to Firebase Storage:", downloadURL);
+        } catch (uploadErr) {
+          console.warn("Storage upload failed or disabled, falling back to lightweight resized base64:", uploadErr);
+          // Fallback to small base64
+          const reader = new FileReader();
+          reader.readAsDataURL(resizedBlob);
+          reader.onloadend = () => {
+            if (typeof reader.result === 'string') {
+              setFormLogo(reader.result);
+            }
+          };
         }
-      };
-      reader.readAsDataURL(file);
+      } catch (err) {
+        console.error("Error processing logo:", err);
+        alert("Une erreur s'est produite lors du traitement du logo.");
+      } finally {
+        setIsUploadingLogo(false);
+      }
     }
   };
 
-  const handleBannerFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleBannerFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (file.size > 2 * 1024 * 1024) {
-        alert("La taille de la bannière ne doit pas dépasser 2 Mo.");
-        return;
-      }
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        if (typeof reader.result === 'string') {
-          setFormBanner(reader.result);
+      setIsUploadingBanner(true);
+      try {
+        // Step 1: Resize the banner (1200x400 max)
+        const resizedBlob = await resizeImage(file, 1200, 400);
+        
+        // Step 2: Try to upload to Firebase Storage
+        try {
+          const estId = formId.trim() || 'temp';
+          const storageRef = ref(storage, `etablissements/${estId}_banner_${Date.now()}.jpg`);
+          await uploadBytes(storageRef, resizedBlob);
+          const downloadURL = await getDownloadURL(storageRef);
+          setFormBanner(downloadURL);
+          console.log("Banner successfully uploaded to Firebase Storage:", downloadURL);
+        } catch (uploadErr) {
+          console.warn("Storage upload failed or disabled, falling back to lightweight resized base64:", uploadErr);
+          // Fallback to small base64
+          const reader = new FileReader();
+          reader.readAsDataURL(resizedBlob);
+          reader.onloadend = () => {
+            if (typeof reader.result === 'string') {
+              setFormBanner(reader.result);
+            }
+          };
         }
-      };
-      reader.readAsDataURL(file);
+      } catch (err) {
+        console.error("Error processing banner:", err);
+        alert("Une erreur s'est produite lors du traitement de la bannière.");
+      } finally {
+        setIsUploadingBanner(false);
+      }
     }
   };
 
@@ -1036,7 +1079,9 @@ Veuillez conserver et remettre ces données de manière sécurisée uniquement a
                   <div className="flex items-center gap-4">
                     {/* Visual Preview */}
                     <div className="relative w-16 h-16 rounded-2xl border-2 border-dashed border-gray-200 dark:border-gray-855 bg-white dark:bg-gray-950 flex items-center justify-center overflow-hidden shrink-0">
-                      {formLogo ? (
+                      {isUploadingLogo ? (
+                        <RefreshCw className="animate-spin text-indigo-600" size={20} />
+                      ) : formLogo ? (
                         <img 
                           src={formLogo} 
                           alt="Logo Preview" 
@@ -1051,16 +1096,17 @@ Veuillez conserver et remettre ces données de manière sécurisée uniquement a
                     <div className="flex-1">
                       <label 
                         htmlFor="logo-file-input"
-                        className="inline-flex items-center gap-1.5 px-4 py-2 bg-indigo-50 border border-indigo-100 text-indigo-600 dark:bg-indigo-950/30 dark:border-indigo-900/50 dark:text-indigo-400 rounded-xl text-xs font-extrabold cursor-pointer hover:bg-indigo-100 dark:hover:bg-indigo-950/50 transition-all font-sans"
+                        className={`inline-flex items-center gap-1.5 px-4 py-2 bg-indigo-50 border border-indigo-100 text-indigo-600 dark:bg-indigo-950/30 dark:border-indigo-900/50 dark:text-indigo-400 rounded-xl text-xs font-extrabold cursor-pointer hover:bg-indigo-100 dark:hover:bg-indigo-950/50 transition-all font-sans ${isUploadingLogo ? 'opacity-50 pointer-events-none' : ''}`}
                       >
                         <Upload size={14} />
-                        Charger un fichier
+                        {isUploadingLogo ? 'Chargement...' : 'Charger un fichier'}
                       </label>
                       <input 
                         id="logo-file-input"
                         type="file"
                         accept="image/*"
                         onChange={handleLogoFileChange}
+                        disabled={isUploadingLogo}
                         className="hidden"
                       />
                       <p className="text-[9px] text-gray-400 font-medium mt-1">PNG, JPG ou SVG. Max 2Mo.</p>
@@ -1099,8 +1145,10 @@ Veuillez conserver et remettre ces données de manière sécurisée uniquement a
 
                   <div className="flex items-center gap-4">
                     {/* Visual Preview */}
-                    <div className="relative w-24 h-16 rounded-2xl border-2 border-dashed border-gray-200 dark:border-gray-850 bg-white dark:bg-gray-950 flex items-center justify-center overflow-hidden shrink-0">
-                      {formBanner ? (
+                    <div className="relative w-24 h-16 rounded-2xl border-2 border-dashed border-gray-200 dark:border-gray-855 bg-white dark:bg-gray-950 flex items-center justify-center overflow-hidden shrink-0 font-sans">
+                      {isUploadingBanner ? (
+                        <RefreshCw className="animate-spin text-indigo-600" size={20} />
+                      ) : formBanner ? (
                         <img 
                           src={formBanner} 
                           alt="Banner Preview" 
@@ -1115,16 +1163,17 @@ Veuillez conserver et remettre ces données de manière sécurisée uniquement a
                     <div className="flex-1">
                       <label 
                         htmlFor="banner-file-input"
-                        className="inline-flex items-center gap-1.5 px-4 py-2 bg-indigo-50 border border-indigo-100 text-indigo-600 dark:bg-indigo-950/30 dark:border-indigo-900/50 dark:text-indigo-400 rounded-xl text-xs font-extrabold cursor-pointer hover:bg-indigo-100 dark:hover:bg-indigo-950/50 transition-all font-sans"
+                        className={`inline-flex items-center gap-1.5 px-4 py-2 bg-indigo-50 border border-indigo-100 text-indigo-600 dark:bg-indigo-950/30 dark:border-indigo-900/50 dark:text-indigo-400 rounded-xl text-xs font-extrabold cursor-pointer hover:bg-indigo-100 dark:hover:bg-indigo-950/50 transition-all font-sans ${isUploadingBanner ? 'opacity-50 pointer-events-none' : ''}`}
                       >
                         <Upload size={14} />
-                        Charger un fichier
+                        {isUploadingBanner ? 'Chargement...' : 'Charger un fichier'}
                       </label>
                       <input 
                         id="banner-file-input"
                         type="file"
                         accept="image/*"
                         onChange={handleBannerFileChange}
+                        disabled={isUploadingBanner}
                         className="hidden"
                       />
                       <p className="text-[9px] text-gray-400 font-medium mt-1">Format paysage. Max 2Mo.</p>
@@ -1372,10 +1421,14 @@ Veuillez conserver et remettre ces données de manière sécurisée uniquement a
                 </button>
                 <button
                   type="submit"
-                  disabled={isSubmitting}
-                  className="flex-1 py-3 bg-indigo-650 hover:bg-indigo-700 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-md shadow-indigo-200 dark:shadow-none animate-pulse-slow"
+                  disabled={isSubmitting || isUploadingLogo || isUploadingBanner}
+                  className="flex-1 py-3 bg-indigo-650 hover:bg-indigo-700 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-md shadow-indigo-200 dark:shadow-none animate-pulse-slow disabled:opacity-50"
                 >
-                  {isSubmitting ? 'Enregistrement...' : 'Enregistrer'}
+                  {isSubmitting 
+                    ? 'Enregistrement...' 
+                    : (isUploadingLogo || isUploadingBanner) 
+                      ? 'Téléchargement...' 
+                      : 'Enregistrer'}
                 </button>
               </div>
             </form>
