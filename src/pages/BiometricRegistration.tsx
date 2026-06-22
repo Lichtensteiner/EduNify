@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Camera, Fingerprint, ScanFace, CheckCircle2, RefreshCw, AlertCircle } from 'lucide-react';
-import { doc, updateDoc } from 'firebase/firestore';
+import { doc, updateDoc, setDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '../lib/firebase';
 import { useAuth } from '../contexts/AuthContext';
@@ -88,11 +88,11 @@ export default function BiometricRegistration() {
     if (currentUser) {
       try {
         const userRef = doc(db, 'users', currentUser.id);
-        await updateDoc(userRef, {
+        await setDoc(userRef, {
           face_id: `face_${currentUser.id}`,
           fingerprint_id: `print_${currentUser.id}`,
           credential_id: `mock_${currentUser.id}`
-        });
+        }, { merge: true });
         setStep('success');
       } catch (err) {
         console.error(err);
@@ -126,7 +126,7 @@ export default function BiometricRegistration() {
             
             // Update user document
             const userRef = doc(db, 'users', currentUser.id);
-            await updateDoc(userRef, { photo: downloadURL });
+            await setDoc(userRef, { photo: downloadURL }, { merge: true });
           }
         }
       }
@@ -177,11 +177,11 @@ export default function BiometricRegistration() {
 
         if (credential) {
           const userRef = doc(db, 'users', currentUser.id);
-          await updateDoc(userRef, {
+          await setDoc(userRef, {
             face_id: true,
             fingerprint_id: true,
             credential_id: credential.id // Save the real WebAuthn credential ID
-          });
+          }, { merge: true });
           setStep('success');
           return;
         }

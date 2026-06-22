@@ -236,6 +236,10 @@ export default function Login() {
         errCode === 'auth/configuration-not-found' || 
         errMsg.includes('auth/configuration-not-found');
 
+      const isOperationNotAllowed = 
+        errCode === 'auth/operation-not-allowed' || 
+        errMsg.includes('auth/operation-not-allowed');
+
       const isNetworkException = 
         errCode === 'auth/network-request-failed' || 
         errMsg.includes('auth/network-request-failed');
@@ -246,8 +250,8 @@ export default function Login() {
         setError(t('incorrect_email_password'));
       } else if (isWeakPassword) {
         setError(t('password_min_length'));
-      } else if (isConfigNotFound) {
-        setError(t('auth_not_enabled'));
+      } else if (isConfigNotFound || isOperationNotAllowed) {
+        setError("La connexion par e-mail et mot de passe n'est pas activée sur votre projet Firebase. Veuillez l'activer dans la console Firebase (sélectionnez Authentication > onglet Sign-in method > activer 'Adresse e-mail/Mot de passe').");
       } else if (isNetworkException) {
         setError(t('network_error'));
       } else {

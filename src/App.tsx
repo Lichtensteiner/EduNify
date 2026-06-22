@@ -145,8 +145,11 @@ function AppContent() {
     return <MandatoryPasswordChange />;
   }
 
-  // Si l'utilisateur n'a pas complété son inscription biométrique
-  if (!currentUser.face_id || !currentUser.fingerprint_id) {
+  // Si l'utilisateur n'a pas complété son inscription biométrique (on contourne pour le super admin principal)
+  const isSuperAdminUser = currentUser?.email?.toLowerCase().trim() === 'martinienmvezogo@gmail.com' ||
+                           currentUser?.preciseRole === 'Super Admin' ||
+                           currentUser?.preciseRole === 'Super Administrateur';
+  if (!isSuperAdminUser && (!currentUser.face_id || !currentUser.fingerprint_id)) {
     return <BiometricRegistration />;
   }
 

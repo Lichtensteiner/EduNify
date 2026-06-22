@@ -3,23 +3,24 @@ import { getFirestore } from 'firebase/firestore';
 import { getAnalytics } from 'firebase/analytics';
 import { getAuth } from 'firebase/auth';
 import { getStorage } from 'firebase/storage';
+import appletConfig from '../../firebase-applet-config.json';
 
 // Firebase configuration provided by the user
 export const firebaseConfig = {
-  apiKey: "AIzaSyDi3QwS5IilFBGYt96S5OQwHCB03c8ulPQ",
-  authDomain: "shopuniversities.firebaseapp.com",
-  projectId: "shopuniversities",
-  storageBucket: "shopuniversities.firebasestorage.app",
-  messagingSenderId: "344186577304",
-  appId: "1:344186577304:web:01135f7548108e1621cbed",
-  measurementId: "G-E75L1K07GN"
+  apiKey: appletConfig.apiKey,
+  authDomain: appletConfig.authDomain,
+  projectId: appletConfig.projectId,
+  storageBucket: appletConfig.storageBucket,
+  messagingSenderId: appletConfig.messagingSenderId,
+  appId: appletConfig.appId,
+  measurementId: appletConfig.measurementId || ""
 };
 
 export const isFirebaseConfigured = true;
 
 const app = initializeApp(firebaseConfig);
 
-export const db = getFirestore(app);
+export const db = getFirestore(app, appletConfig.firestoreDatabaseId);
 export const auth = getAuth(app);
 export const storage = getStorage(app);
 

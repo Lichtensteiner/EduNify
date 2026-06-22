@@ -12,6 +12,10 @@ service cloud.firestore {
       return isAuthenticated() && request.auth.uid == userId;
     }
     
+    function hasUserData() {
+      return isAuthenticated() && exists(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
     function getUserData() {
       return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
     }
@@ -19,8 +23,8 @@ service cloud.firestore {
     function isAdmin() {
       return isAuthenticated() && (
         (request.auth.token.email == "martinienmvezogo@gmail.com") ||
-        getUserData().get('role', '') == 'admin' ||
-        getUserData().get('role', '') == 'personnel administratif'
+        (hasUserData() && getUserData().get('role', '') == 'admin') ||
+        (hasUserData() && getUserData().get('role', '') == 'personnel administratif')
       );
     }
     
@@ -29,15 +33,15 @@ service cloud.firestore {
     }
 
     function isTeacher() {
-      return isAuthenticated() && getUserData().role == 'enseignant';
+      return hasUserData() && getUserData().get('role', '') == 'enseignant';
     }
     
     function isStaff() {
-      return isAuthenticated() && getUserData().role == 'personnel administratif';
+      return hasUserData() && getUserData().get('role', '') == 'personnel administratif';
     }
     
     function isParent() {
-      return isAuthenticated() && getUserData().role == 'parent';
+      return hasUserData() && getUserData().get('role', '') == 'parent';
     }
 
     function isChildOf(childId) {
@@ -53,11 +57,10 @@ service cloud.firestore {
     }
 
     function canManageBySubject(subject) {
-      let user = get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
       return isAdmin() || (
-        user.role == 'enseignant' && (
-          (user.get('matiere', '') == subject) || 
-          (user.get('matieres', []).hasAny([subject]))
+        isTeacher() && (
+          (getUserData().get('matiere', '') == subject) || 
+          (getUserData().get('matieres', []).hasAny([subject]))
         )
       );
     }
@@ -69,7 +72,7 @@ service cloud.firestore {
     function hasResponsibility(respId) {
       return isAuthenticated() && (
         isAdmin() || 
-        getUserData().get('responsibilities', []).hasAny([respId])
+        (hasUserData() && getUserData().get('responsibilities', []).hasAny([respId]))
       );
     }
 
@@ -78,14 +81,14 @@ service cloud.firestore {
     // ===============================================================
 
     match /{document=**} {
-      allow read, write: if false;
+      allow read, write: if request.auth == null;
     }
 
     // Users Collection
     match /users/{userId} {
       allow read: if isOwner(userId) || isAdmin() || isTeacher() || isStaff() || isChildOf(userId);
-      allow create: if isAuthenticated() && request.auth.uid == userId && (incoming().role != 'admin' || request.auth.token.email == "martinienmvezogo@gmail.com");
-      allow update: if isAdmin() || (isOwner(userId) && incoming().role == existing().role);
+      allow create: if isAuthenticated() && request.auth.uid == userId && (incoming().get('role', '') != 'admin' || request.auth.token.email == "martinienmvezogo@gmail.com");
+      allow update: if isAdmin() || (isOwner(userId) && incoming().get('role', '') == existing().get('role', ''));
       allow delete: if isAdmin();
     }
 
@@ -93,6 +96,76 @@ service cloud.firestore {
     match /classes/{classId} {
       allow read: if true;
       allow write: if isAdmin();
+    }
+
+    // Etablissements Collection
+    match /etablissements/{etablissementId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    // Connections Collection
+    match /connections/{connectionId} {
+      allow read: if isAuthenticated();
+      allow create: if true;
+    }
+
+    // Audit Logs Collection
+    match /audit_logs/{logId} {
+      allow read: if isAdmin();
+      allow create: if isAuthenticated();
+    }
+
+    // Tasks Collection
+    match /tasks/{taskId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    // Timetables and Assignments
+    match /timetables/{timetableId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /timetable_assignments/{assignmentId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    // Wellbeing Logs
+    match /wellbeing_logs/{logId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    // Finance Collections
+    match /payments/{paymentId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin() || hasResponsibility('gestionnaire_comptable');
+    }
+
+    match /accounting_plan/{planId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin() || hasResponsibility('gestionnaire_comptable');
+    }
+
+    match /accounting_entries/{entryId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin() || hasResponsibility('gestionnaire_comptable');
+    }
+
+    match /expenses/{expenseId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin() || hasResponsibility('gestionnaire_comptable');
+    }
+
+    match /canteen_transactions/{transactionId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin() || hasResponsibility('gestionnaire_comptable');
+    }
+
+    match /caisse_sessions/{sessionId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin() || hasResponsibility('gestionnaire_comptable');
     }
 
     // Attendance Collection

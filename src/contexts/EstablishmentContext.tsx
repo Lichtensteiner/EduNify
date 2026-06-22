@@ -53,7 +53,9 @@ export const EstablishmentProvider: React.FC<{ children: React.ReactNode }> = ({
   const [loading, setLoading] = useState(true);
 
   // Check if current user is global platform owner (Super Admin)
-  const isSuperAdmin = currentUser?.email === 'martinienmvezogo@gmail.com';
+  const isSuperAdmin = currentUser?.email?.toLowerCase().trim() === 'martinienmvezogo@gmail.com' ||
+                       currentUser?.preciseRole === 'Super Admin' ||
+                       currentUser?.preciseRole === 'Super Administrateur';
 
   // Seed establishments if empty
   useEffect(() => {

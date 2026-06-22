@@ -205,7 +205,7 @@ export default function Users() {
 
     // Force role to non-admin if not super-admin
     let finalRole = newUser.role;
-    if (finalRole === 'admin' && currentUser?.email !== 'martinienmvezogo@gmail.com') {
+    if (finalRole === 'admin' && !isSuperAdmin) {
       finalRole = 'personnel administratif';
     }
 
@@ -308,7 +308,7 @@ export default function Users() {
 
     // Force role to non-admin if not super-admin
     let finalRole = editUser.role;
-    if (finalRole === 'admin' && currentUser?.email !== 'martinienmvezogo@gmail.com') {
+    if (finalRole === 'admin' && !isSuperAdmin) {
         const originalUser = users.find(u => u.id === editUser.id);
         finalRole = originalUser?.role || 'élève';
     }
@@ -450,9 +450,16 @@ export default function Users() {
       const activeEstId = currentEstablishment?.id || currentUser?.etablissement || 'EDU-001';
       if (user.etablissement !== activeEstId) return false;
     }
-    const matchesSearch = user.nom?.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                          user.prenom?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          user.matricule?.toLowerCase().includes(searchTerm.toLowerCase());
+    const userNom = (user.nom || '').toLowerCase();
+    const userPrenom = (user.prenom || '').toLowerCase();
+    const userMatricule = (user.matricule || '').toLowerCase();
+    const userEmail = (user.email || '').toLowerCase();
+    const term = searchTerm.toLowerCase();
+
+    const matchesSearch = userNom.includes(term) || 
+                          userPrenom.includes(term) || 
+                          userMatricule.includes(term) ||
+                          userEmail.includes(term);
     const matchesRole = filterRole === 'all' || user.role === filterRole;
     return matchesSearch && matchesRole;
   }).sort((a, b) => {

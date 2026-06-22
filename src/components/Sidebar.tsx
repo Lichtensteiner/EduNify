@@ -16,7 +16,11 @@ interface SidebarProps {
 
 export default function Sidebar({ activeTab, setActiveTab, isMobileOpen, setIsMobileOpen }: SidebarProps) {
   const { currentUser, logout } = useAuth();
-  const { currentEstablishment, isSuperAdmin } = useEstablishment();
+  const { currentEstablishment, isSuperAdmin: contextIsSuperAdmin } = useEstablishment();
+  const isSuperAdmin = contextIsSuperAdmin || 
+                       currentUser?.email?.toLowerCase().trim() === 'martinienmvezogo@gmail.com' ||
+                       currentUser?.preciseRole === 'Super Admin' ||
+                       currentUser?.preciseRole === 'Super Administrateur';
   const { t, tData } = useLanguage();
   const { isStandalone } = usePWA();
   const [totalUnreadCount, setTotalUnreadCount] = useState(0);
@@ -131,7 +135,7 @@ export default function Sidebar({ activeTab, setActiveTab, isMobileOpen, setIsMo
       <div className={`fixed inset-y-0 left-0 z-50 w-72 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex flex-col print:hidden transition-transform duration-300 ease-in-out lg:relative lg:translate-x-0 ${isMobileOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         <div className="h-16 flex items-center justify-between px-6 border-b border-gray-200 dark:border-gray-700 shrink-0">
           <div className="flex items-center gap-2 overflow-hidden">
-            {currentEstablishment ? (
+            {currentEstablishment && !isSuperAdmin ? (
               <div className="flex items-center gap-2">
                 <img 
                   src={currentEstablishment.logo || "/logo.png"} 
@@ -149,7 +153,17 @@ export default function Sidebar({ activeTab, setActiveTab, isMobileOpen, setIsMo
                 </div>
               </div>
             ) : (
-              <img src="/logo.png" alt="Edu-Nify" className="h-10 object-contain" />
+              <div className="flex items-center gap-2">
+                <img src="/logo.png" alt="Edu-Nify" className="h-10 object-contain shrink-0" />
+                <div className="min-w-0 flex flex-col justify-center">
+                  <span className="text-[10px] font-black text-indigo-650 dark:text-indigo-400 block tracking-wider uppercase leading-none mb-0.5 shrink-0">
+                    Super Admin
+                  </span>
+                  <span className="text-[11px] font-extrabold text-gray-800 dark:text-gray-200 block truncate leading-none max-w-[130px] shrink-0">
+                    Edu-Nify SaaS
+                  </span>
+                </div>
+              </div>
             )}
           </div>
           <button 
