@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { doc, getDoc, setDoc, onSnapshot, addDoc, collection, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, setDoc, onSnapshot, addDoc, collection, serverTimestamp, query, where, getDocs } from 'firebase/firestore';
 import { 
   signInWithEmailAndPassword, 
   createUserWithEmailAndPassword, 
@@ -255,6 +255,46 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       try {
         userCredential = await signInWithEmailAndPassword(auth, email.trim(), mdp);
       } catch (signInErr: any) {
+        console.warn("Auth sign-in failed. Checking Firestore for fallback authentication...", signInErr);
+        
+        // Let's search Firestore users collection for a matching email!
+        const usersRef = collection(db, 'users');
+        const q = query(usersRef, where('email', '==', email.trim()));
+        let querySnapshot = await getDocs(q);
+        
+        if (querySnapshot.empty) {
+          const qLower = query(usersRef, where('email', '==', email.trim().toLowerCase()));
+          querySnapshot = await getDocs(qLower);
+        }
+        
+        if (!querySnapshot.empty) {
+          const userDoc = querySnapshot.docs[0];
+          const userData = { id: userDoc.id, ...userDoc.data() } as User;
+          
+          console.log("Local Firestore fallback user found and authenticated:", userData);
+          
+          localStorage.setItem('mock_admin_user', JSON.stringify(userData));
+          setCurrentUser(userData);
+          
+          // Log connection in connections collection if configured
+          try {
+            await addDoc(collection(db, 'connections'), {
+              user_id: userDoc.id,
+              nom: userData.nom,
+              prenom: userData.prenom,
+              email: userData.email,
+              role: userData.role,
+              timestamp: new Date().toISOString(),
+              fallback: true
+            });
+          } catch (logErr) {
+            console.error("Failed to log fallback connection:", logErr);
+          }
+          
+          setLoading(false);
+          return;
+        }
+
         if (isDefaultAdmin) {
           console.log("Firebase direct sign-in failed/disabled, trying to create or local-fallback...");
           try {

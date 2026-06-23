@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { collection, doc, onSnapshot, setDoc, getDocs } from 'firebase/firestore';
+import { collection, doc, onSnapshot, setDoc, getDocs, getDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useAuth } from './AuthContext';
 
@@ -43,7 +43,32 @@ interface EstablishmentContextType {
 
 const EstablishmentContext = createContext<EstablishmentContextType | null>(null);
 
-const DEFAULT_ESTABLISHMENTS: Establishment[] = [];
+const DEFAULT_ESTABLISHMENTS: Establishment[] = [
+  {
+    id: 'EDU-001',
+    code: 'LUDO-CONSULTING',
+    nom: 'Ludo_Consulting',
+    logo: '',
+    banner: '',
+    devise: 'Science - Éthique - Progrès',
+    adresse: 'Libreville, Gabon',
+    telephone: '+241 07 00 00 00',
+    email: 'ludo.consulting3@gmail.com',
+    siteWeb: 'https://ludo-consulting.com',
+    active: true,
+    dateCreation: new Date().toISOString(),
+    licence: 'LIC-EDU-2026-VALIDE',
+    plan: 'Premium',
+    primaryColor: '#4f46e5',
+    secondaryColor: '#ea580c',
+    activeSchoolYear: '2025-2026',
+    responsableCivility: 'M.',
+    responsableNom: 'Mve Zogo',
+    responsablePrenom: 'Ludovic Martinien',
+    responsableEmail: 'ludo.consulting3@gmail.com',
+    responsableTelephone: '+241 07 00 00 00'
+  }
+];
 
 export const EstablishmentProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { currentUser } = useAuth();
@@ -61,6 +86,16 @@ export const EstablishmentProvider: React.FC<{ children: React.ReactNode }> = ({
   useEffect(() => {
     const seedIfNeeded = async () => {
       try {
+        // 1. Specifically verify and seed EDU-001 (Ludo_Consulting)
+        const mainDocRef = doc(db, 'etablissements', 'EDU-001');
+        const mainDocSnap = await getDoc(mainDocRef);
+        
+        if (!mainDocSnap.exists()) {
+          console.log('Seeding primary establishment (Ludo_Consulting) to Firestore...');
+          await setDoc(mainDocRef, DEFAULT_ESTABLISHMENTS[0]);
+        }
+
+        // 2. Fallback check for any other defaults if collection is empty
         const querySnapshot = await getDocs(collection(db, 'etablissements'));
         if (querySnapshot.empty) {
           console.log('Seeding default establishments inside Firestore...');

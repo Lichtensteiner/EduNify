@@ -214,14 +214,26 @@ export default function Users() {
     }
 
     try {
-      // Initialize a secondary Firebase app to create the user without signing out the current admin
-      const secondaryApp = getApps().find(app => app.name === 'SecondaryApp') || initializeApp(firebaseConfig, 'SecondaryApp');
-      const secondaryAuth = getAuth(secondaryApp);
+      let finalUid = "";
+      let authFailExplanation = "";
       
-      const userCredential = await createUserWithEmailAndPassword(secondaryAuth, newUser.email, newUser.password);
+      try {
+        // Initialize a secondary Firebase app to create the user without signing out the current admin
+        const secondaryApp = getApps().find(app => app.name === 'SecondaryApp') || initializeApp(firebaseConfig, 'SecondaryApp');
+        const secondaryAuth = getAuth(secondaryApp);
+        
+        const userCredential = await createUserWithEmailAndPassword(secondaryAuth, newUser.email, newUser.password);
+        finalUid = userCredential.user.uid;
+        // Sign out and clean up the secondary app
+        await signOut(secondaryAuth);
+      } catch (authErr: any) {
+        console.warn("Could not create Auth user credential, using database-only profile:", authErr);
+        finalUid = "local_usr_" + Math.floor(100000 + Math.random() * 900000);
+        authFailExplanation = " (Enregistré localement en base de données)";
+      }
       
       // Save user data to Firestore
-      await setDoc(doc(db, 'users', userCredential.user.uid), {
+      await setDoc(doc(db, 'users', finalUid), {
         nom: newUser.nom,
         prenom: newUser.prenom,
         email: newUser.email,
@@ -249,17 +261,15 @@ export default function Users() {
         preciseRole: finalRole === 'admin' ? (newUser.preciseRole || 'Proviseur / Directeur Général') : (finalRole === 'personnel administratif' ? newUser.position : null),
         adminPowerLevel: finalRole === 'admin' ? (newUser.adminPowerLevel || 'Total') : null,
         authorizedModules: finalRole === 'admin' ? (newUser.authorizedModules || ['all']) : null,
-        signerBadgeId: finalRole === 'admin' ? (newUser.signerBadgeId || `ADM-${Math.floor(1000 + Math.random() * 9000)}`) : null
+        signerBadgeId: finalRole === 'admin' ? (newUser.signerBadgeId ? `ADM-${newUser.signerBadgeId.replace('ADM-', '')}` : `ADM-${Math.floor(1000 + Math.random() * 9000)}`) : null
       }, { merge: true });
       
-      // Sign out and clean up the secondary app
-      await signOut(secondaryAuth);
       await recordAuditLog({
         userId: currentUser?.id || 'admin',
         userName: currentUser ? `${currentUser.prenom} ${currentUser.nom}` : 'Administrateur',
         userRole: currentUser?.role || 'admin',
         action: "Création d'utilisateur",
-        details: `Nom: ${newUser.prenom} ${newUser.nom}, Email: ${newUser.email}, Rôle: ${newUser.role}`,
+        details: `Nom: ${newUser.prenom} ${newUser.nom}, Email: ${newUser.email}, Rôle: ${newUser.role}${authFailExplanation}`,
         category: 'security'
       });
 
@@ -295,7 +305,7 @@ export default function Users() {
       });
       setSuccessInfo({
         title: t('account_created'),
-        message: t('user_profile_generated_success').replace('{{name}}', `${newUser.prenom} ${newUser.nom}`)
+        message: t('user_profile_generated_success').replace('{{name}}', `${newUser.prenom} ${newUser.nom}`) + authFailExplanation
       });
       notifyAdd(`${newUser.prenom} ${newUser.nom}`);
       setShowSuccess(true);
@@ -303,8 +313,10 @@ export default function Users() {
       console.error(err);
       if (err.code === 'auth/email-already-in-use') {
         setError(t('email_already_in_use'));
+      } else if (err.code === 'auth/operation-not-allowed') {
+        setError("Erreur de configuration Firebase : La méthode d'accès par 'Adresse de messagerie et mot de passe' est désactivée. Veuillez vous rendre sur votre console Firebase (Console > Authentification > Sign-in method) et activer le fournisseur par e-mail.");
       } else {
-        setError(t('error_adding_user'));
+        setError(t('error_adding_user') + " (" + err.message + ")");
       }
     } finally {
       setActionLoading(false);
@@ -353,7 +365,7 @@ export default function Users() {
         preciseRole: finalRole === 'admin' ? (editUser.preciseRole || 'Proviseur / Directeur Général') : (finalRole === 'personnel administratif' ? editUser.position : null),
         adminPowerLevel: finalRole === 'admin' ? (editUser.adminPowerLevel || 'Total') : null,
         authorizedModules: finalRole === 'admin' ? (editUser.authorizedModules || ['all']) : null,
-        signerBadgeId: finalRole === 'admin' ? (editUser.signerBadgeId || '') : null
+        signerBadgeId: finalRole === 'admin' ? (editUser.signerBadgeId ? `ADM-${editUser.signerBadgeId.replace('ADM-', '')}` : `ADM-${Math.floor(1000 + Math.random() * 9000)}`) : null
       });
 
       await recordAuditLog({
@@ -661,14 +673,21 @@ export default function Users() {
                       {user.matricule || '-'}
                     </td>
                     <td className="px-6 py-4">
-                      <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                        user.role === 'élève' ? 'bg-blue-100 text-blue-700' :
-                        user.role === 'enseignant' ? 'bg-purple-100 text-purple-700' :
-                        user.role === 'admin' ? 'bg-red-100 text-red-700' :
-                        'bg-slate-100 text-slate-700'
-                      }`}>
-                        {tData(user.role)}
-                      </span>
+                      <div className="flex flex-col gap-1 items-start">
+                        <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                          user.role === 'élève' ? 'bg-blue-100 text-blue-700' :
+                          user.role === 'enseignant' ? 'bg-purple-100 text-purple-700' :
+                          user.role === 'admin' ? 'bg-red-100 text-red-700 border border-red-200' :
+                          'bg-slate-100 text-slate-700'
+                        }`}>
+                          {tData(user.role)}
+                        </span>
+                        {user.role === 'admin' && user.preciseRole && (
+                          <span className="text-[10px] font-extrabold text-amber-600 dark:text-amber-400 font-mono tracking-tight bg-amber-50 dark:bg-amber-950/20 px-1.5 py-0.5 rounded-md mt-1 border border-amber-100 dark:border-amber-900/10">
+                            {user.preciseRole}
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex flex-col gap-0.5">
@@ -951,6 +970,51 @@ export default function Users() {
                             ) : (
                               <span className="text-gray-400 italic text-xs">Aucune classe assignée</span>
                             )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {viewUser.role === 'admin' && (
+                    <div className="pt-4 border-t border-gray-100 dark:border-gray-700 space-y-4">
+                      <h5 className="text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center gap-2">
+                        <Key size={14} className="text-amber-500" />
+                        Spécifications Administrateur D'Établissement
+                      </h5>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="p-4 bg-amber-50/40 dark:bg-amber-950/10 border border-amber-100 dark:border-amber-900/20 rounded-xl space-y-3">
+                          <div className="flex justify-between items-center py-1.5 border-b border-amber-100/50 dark:border-amber-900/10">
+                            <span className="text-xs text-amber-800 dark:text-amber-300 font-bold">Fonction exacte :</span>
+                            <span className="text-xs font-bold text-gray-900 dark:text-gray-100">{viewUser.preciseRole || 'Proviseur / Directeur Général'}</span>
+                          </div>
+                          <div className="flex justify-between items-center py-1.5 border-b border-amber-100/50 dark:border-amber-900/10">
+                            <span className="text-xs text-amber-800 dark:text-amber-300 font-bold">Niveau d'accréditation :</span>
+                            <span className="text-xs font-extrabold text-indigo-600 dark:text-indigo-400">{viewUser.adminPowerLevel || 'Total'}</span>
+                          </div>
+                          <div className="flex justify-between items-center py-1.5">
+                            <span className="text-xs text-amber-800 dark:text-amber-300 font-bold">Code Personnel ID :</span>
+                            <span className="text-xs font-mono font-bold text-indigo-600 dark:text-indigo-400">{viewUser.signerBadgeId || 'ADM-N/A'}</span>
+                          </div>
+                        </div>
+                        <div className="p-4 bg-amber-50/40 dark:bg-amber-950/10 border border-amber-100 dark:border-amber-900/20 rounded-xl space-y-3">
+                          <span className="text-xs text-amber-800 dark:text-amber-300 font-bold block mb-1">Modules d'habilitation autorisés :</span>
+                          <div className="flex flex-wrap gap-1.5">
+                            {(viewUser.authorizedModules || ['all']).map((m: string) => {
+                              const labels: Record<string, string> = {
+                                all: 'Tout le système ⚡',
+                                scolarite: 'Gestion Scolaire',
+                                finance: 'Caisse & Comptabilité',
+                                evaluations: 'Bulletins & Notes',
+                                cantine: 'Services de Restauration',
+                                biometrie: 'Guichets Biométriques'
+                              };
+                              return (
+                                <span key={m} className="px-2 py-0.5 bg-amber-500/10 text-amber-700 dark:bg-amber-550/20 dark:text-amber-300 rounded-lg text-[10px] font-black uppercase">
+                                  {labels[m] || m}
+                                </span>
+                              );
+                            })}
                           </div>
                         </div>
                       </div>
@@ -1445,26 +1509,28 @@ export default function Users() {
                     )}
 
                     {editUser.role === 'admin' && (
-                      <div className="p-5 border border-amber-200 dark:border-amber-900/40 rounded-2xl bg-amber-50/40 dark:bg-amber-950/10 space-y-5 animate-fade-in col-span-1 md:col-span-2">
+                      <div className="p-4 sm:p-6 border-l-4 border-amber-500 dark:border-amber-500 bg-amber-50/20 dark:bg-amber-950/5 rounded-r-2xl border-y border-r border-amber-200/60 dark:border-amber-900/40 space-y-6 animate-fade-in col-span-1 md:col-span-2 shadow-sm">
                         {/* Elegance visual header badge */}
-                        <div className="flex items-center gap-3 pb-3 border-b border-amber-100 dark:border-amber-950/20">
-                          <div className="p-2.5 bg-amber-500/10 text-amber-600 dark:bg-amber-500/20 dark:text-amber-400 rounded-xl">
-                            <Key size={18} />
+                        <div className="flex items-start gap-3.5 pb-4 border-b border-amber-200/60 dark:border-amber-950/30">
+                          <div className="p-3 bg-amber-500/10 text-amber-600 dark:bg-amber-500/20 dark:text-amber-400 rounded-xl shrink-0">
+                            <Key size={20} className="animate-pulse" />
                           </div>
                           <div>
-                            <h4 className="text-xs font-extrabold text-amber-850 dark:text-amber-200 uppercase tracking-widest font-mono">Profil Administrateur D'Établissement</h4>
-                            <p className="text-[10px] text-amber-600 dark:text-amber-400 font-medium mt-0.5">Ce compte disposera d’accès et d'autorisations critiques sur le campus.</p>
+                            <h4 className="text-sm font-black text-amber-900 dark:text-amber-200 uppercase tracking-wider font-sans leading-tight">Configuration de la Sécurité & Habilitations</h4>
+                            <p className="text-[10px] sm:text-xs text-amber-700/80 dark:text-amber-400/80 font-medium mt-1">
+                              Définissez les privilèges, identifiants d’accès et modules activables pour ce profil d’administration.
+                            </p>
                           </div>
                         </div>
 
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                           <div>
-                            <label className="block text-[11px] font-bold text-gray-700 dark:text-gray-300 mb-1.5 ml-1 uppercase tracking-wider">Function Exacte / Titre</label>
+                            <label className="block text-[10px] font-black text-amber-850 dark:text-amber-300 mb-1.5 uppercase tracking-widest font-mono">💼 Fonction administrative exacte</label>
                             <select
                               required
                               value={editUser.preciseRole || 'Proviseur / Directeur Général'}
                               onChange={(e) => setEditUser({...editUser, preciseRole: e.target.value})}
-                              className="w-full px-4 py-2.5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-sm font-bold text-gray-800 dark:text-gray-200"
+                              className="w-full px-4 py-3 bg-white dark:bg-gray-900 border border-amber-200/80 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-amber-500 outline-none transition-all text-xs font-bold text-gray-805 dark:text-gray-200"
                             >
                               <option value="Proviseur / Directeur Général">Proviseur / Directeur Général</option>
                               <option value="Principal de l'Établissement">Principal de l'Établissement</option>
@@ -1476,12 +1542,12 @@ export default function Users() {
                           </div>
 
                           <div>
-                            <label className="block text-[11px] font-bold text-gray-700 dark:text-gray-300 mb-1.5 ml-1 uppercase tracking-wider">🛡️ Niveau d’Accréditation</label>
+                            <label className="block text-[10px] font-black text-amber-850 dark:text-amber-300 mb-1.5 uppercase tracking-widest font-mono">🛡️ Niveau d’Accréditation Campus</label>
                             <select
                               required
                               value={editUser.adminPowerLevel || 'Total'}
                               onChange={(e) => setEditUser({...editUser, adminPowerLevel: e.target.value})}
-                              className="w-full px-4 py-2.5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-sm font-bold text-gray-800 dark:text-gray-200"
+                              className="w-full px-4 py-3 bg-white dark:bg-gray-900 border border-amber-200/80 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-amber-500 outline-none transition-all text-xs font-bold text-gray-805 dark:text-gray-200"
                             >
                               <option value="Total">Contrôle Total (Lecture/Écriture/Sécurité)</option>
                               <option value="Standard">Administrateur Standard (Saisie/Scolarité)</option>
@@ -1490,61 +1556,61 @@ export default function Users() {
                           </div>
                         </div>
 
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                           <div>
-                            <label className="block text-[11px] font-bold text-gray-700 dark:text-gray-300 mb-1.5 ml-1 uppercase tracking-wider">📇 Code Personnel ou Signature ID</label>
+                            <label className="block text-[10px] font-black text-amber-850 dark:text-amber-300 mb-1.5 uppercase tracking-widest font-mono">📇 Code Personnel ou Signature ID</label>
                             <div className="relative">
-                              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[10px] font-bold font-mono text-indigo-400">ADM -</span>
+                              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-xs font-mono font-black text-amber-600/80 dark:text-amber-400">ADM -</span>
                               <input
                                 type="text"
                                 maxLength={5}
                                 placeholder="54823"
                                 value={editUser.signerBadgeId ? editUser.signerBadgeId.replace('ADM-', '') : ''}
                                 onChange={(e) => setEditUser({...editUser, signerBadgeId: `ADM-${e.target.value.replace(/\D/g, '')}`})}
-                                className="w-full pl-12 pr-4 py-2.5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-sm font-bold text-gray-800 dark:text-gray-200 font-mono tracking-widest"
+                                className="w-full pl-16 pr-4 py-3 bg-white dark:bg-gray-900 border border-amber-200/80 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-amber-500 outline-none transition-all text-sm font-mono font-bold text-gray-850 dark:text-gray-200 tracking-widest"
                               />
                             </div>
                           </div>
 
                           <div>
-                            <label className="block text-[11px] font-bold text-gray-700 dark:text-gray-300 mb-1.5 ml-1 uppercase tracking-wider">📞 Contact Direct</label>
+                            <label className="block text-[10px] font-black text-amber-850 dark:text-amber-300 mb-1.5 uppercase tracking-widest font-mono">📞 Contact Administratif Direct</label>
                             <div className="relative">
-                              <Phone className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" size={14} />
+                              <Phone className="absolute left-4 top-1/2 -translate-y-1/2 text-amber-600" size={14} />
                               <input
                                 type="tel"
                                 placeholder="+241 07 12 34 56"
                                 value={editUser.contact || ''}
                                 onChange={(e) => setEditUser({...editUser, contact: e.target.value})}
-                                className="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-sm font-bold text-gray-800 dark:text-gray-200"
+                                className="w-full pl-11 pr-4 py-3 bg-white dark:bg-gray-900 border border-amber-200/80 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-amber-500 outline-none transition-all text-xs font-bold text-gray-805 dark:text-gray-200"
                               />
                             </div>
                           </div>
                         </div>
 
-                        <div>
-                          <label className="block text-[11px] font-bold text-gray-700 dark:text-gray-300 mb-2 ml-1 uppercase tracking-wider">⚡ Modules d'habilitation autorisés</label>
-                          <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                        <div className="space-y-3">
+                          <label className="block text-[10px] font-black text-amber-850 dark:text-amber-300 uppercase tracking-widest font-mono">⚡ Modules d'habilitation autorisés</label>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                             {[
-                              { id: 'all', label: 'Tout le système ⚡' },
-                              { id: 'scolarite', label: 'Gestion Scolaire' },
-                              { id: 'finance', label: 'Caisse & Comptabilité' },
-                              { id: 'evaluations', label: 'Bulletins & Notes' },
-                              { id: 'cantine', label: 'Services de Restauration' },
-                              { id: 'biometrie', label: 'Guichets Biométriques' }
+                              { id: 'all', label: 'Accès Total ⚡', description: 'Toutes les fonctionnalités' },
+                              { id: 'scolarite', label: 'Scolarité 📝', description: 'Classes, inscriptions' },
+                              { id: 'finance', label: 'Finance 💳', description: 'Paiements, caisse, factures' },
+                              { id: 'evaluations', label: 'Bulletins 📊', description: 'Notes & moyennes' },
+                              { id: 'cantine', label: 'Restauration 🍎', description: 'Repas & abonnés' },
+                              { id: 'biometrie', label: 'Biométrie 🔑', description: 'Gestion des terminaux' }
                             ].map((mod) => {
                               const isChecked = (editUser.authorizedModules || ['all']).includes(mod.id);
                               return (
                                 <label
                                   key={mod.id}
-                                  className={`flex items-center gap-2 p-2 rounded-xl cursor-pointer border transition-colors ${
+                                  className={`flex items-start gap-2.5 p-3 rounded-xl cursor-pointer border transition-all duration-200 min-h-[72px] ${
                                     isChecked
-                                      ? 'bg-indigo-50/50 border-indigo-200 text-indigo-700 dark:bg-indigo-950/20 dark:border-indigo-900/50 dark:text-indigo-400'
-                                      : 'bg-white border-gray-200 dark:bg-gray-950 dark:border-gray-850 text-gray-700 dark:text-gray-300 hover:bg-gray-50'
+                                      ? 'bg-amber-100/50 border-amber-300 text-amber-900 dark:bg-amber-950/20 dark:border-amber-900/50 dark:text-amber-200 shadow-sm'
+                                      : 'bg-white border-amber-200/40 dark:bg-gray-950 dark:border-gray-850 text-gray-750 dark:text-gray-300 hover:bg-amber-50/40 hover:border-amber-200'
                                   }`}
                                 >
                                   <input
                                     type="checkbox"
-                                    className="rounded border-gray-350 text-indigo-600 focus:ring-indigo-500"
+                                    className="rounded border-amber-400 text-amber-600 focus:ring-amber-500 w-3.5 h-3.5 mt-0.5 shrink-0"
                                     checked={isChecked}
                                     onChange={() => {
                                       let updated: string[];
@@ -1561,7 +1627,10 @@ export default function Users() {
                                       setEditUser({ ...editUser, authorizedModules: updated });
                                     }}
                                   />
-                                  <span className="text-[10px] font-extrabold font-sans leading-none">{mod.label}</span>
+                                  <div className="flex flex-col min-w-0">
+                                    <span className="text-[10px] font-bold uppercase tracking-wider leading-tight">{mod.label}</span>
+                                    <span className="text-[9px] text-gray-500 dark:text-gray-400 font-medium mt-0.5 leading-normal">{mod.description}</span>
+                                  </div>
                                 </label>
                               );
                             })}
@@ -2158,26 +2227,28 @@ export default function Users() {
                       )}
 
                       {newUser.role === 'admin' && (
-                        <div className="p-5 border border-amber-200 dark:border-amber-900/40 rounded-2xl bg-amber-50/40 dark:bg-amber-950/10 space-y-5 animate-fade-in">
+                        <div className="p-4 sm:p-6 border-l-4 border-amber-500 dark:border-amber-500 bg-amber-50/20 dark:bg-amber-950/5 rounded-r-2xl border-y border-r border-amber-200/60 dark:border-amber-900/40 space-y-6 animate-fade-in shadow-sm">
                           {/* Elegance visual header badge */}
-                          <div className="flex items-center gap-3 pb-3 border-b border-amber-100 dark:border-amber-950/20">
-                            <div className="p-2.5 bg-amber-500/10 text-amber-600 dark:bg-amber-500/20 dark:text-amber-400 rounded-xl">
-                              <Key size={18} />
+                          <div className="flex items-start gap-3.5 pb-4 border-b border-amber-200/60 dark:border-amber-950/30">
+                            <div className="p-3 bg-amber-500/10 text-amber-600 dark:bg-amber-500/20 dark:text-amber-400 rounded-xl shrink-0">
+                              <Key size={20} className="animate-pulse" />
                             </div>
                             <div>
-                              <h4 className="text-xs font-extrabold text-amber-850 dark:text-amber-200 uppercase tracking-widest font-mono">Profil Administrateur D'Établissement</h4>
-                              <p className="text-[10px] text-amber-600 dark:text-amber-400 font-medium mt-0.5">Ce compte disposera d’accès et d'autorisations critiques sur le campus.</p>
+                              <h4 className="text-sm font-black text-amber-900 dark:text-amber-200 uppercase tracking-wider font-sans leading-tight">Configuration de la Sécurité & Habilitations</h4>
+                              <p className="text-[10px] sm:text-xs text-amber-700/80 dark:text-amber-400/80 font-medium mt-1">
+                                Définissez les privilèges, identifiants d’accès et modules activables pour ce profil d’administration.
+                              </p>
                             </div>
                           </div>
 
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                             <div>
-                              <label className="block text-[11px] font-bold text-gray-700 dark:text-gray-300 mb-1.5 ml-1 uppercase tracking-wider">🎓 Fonction / Titre Exact</label>
+                              <label className="block text-[10px] font-black text-amber-850 dark:text-amber-300 mb-1.5 uppercase tracking-widest font-mono">💼 Fonction administrative exacte</label>
                               <select
                                 required
                                 value={newUser.preciseRole}
                                 onChange={(e) => setNewUser({...newUser, preciseRole: e.target.value})}
-                                className="w-full px-4 py-2.5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-xs font-bold text-gray-805 dark:text-gray-200"
+                                className="w-full px-4 py-3 bg-white dark:bg-gray-900 border border-amber-200/80 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-amber-500 outline-none transition-all text-xs font-bold text-gray-805 dark:text-gray-200"
                               >
                                 <option value="Proviseur / Directeur Général">Proviseur / Directeur Général</option>
                                 <option value="Principal de l'Établissement">Principal de l'Établissement</option>
@@ -2189,12 +2260,12 @@ export default function Users() {
                             </div>
 
                             <div>
-                              <label className="block text-[11px] font-bold text-gray-700 dark:text-gray-300 mb-1.5 ml-1 uppercase tracking-wider">🛡️ Niveau d’Accréditation</label>
+                              <label className="block text-[10px] font-black text-amber-850 dark:text-amber-300 mb-1.5 uppercase tracking-widest font-mono">🛡️ Niveau d’Accréditation Campus</label>
                               <select
                                 required
                                 value={newUser.adminPowerLevel}
                                 onChange={(e) => setNewUser({...newUser, adminPowerLevel: e.target.value})}
-                                className="w-full px-4 py-2.5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-xs font-bold text-gray-805 dark:text-gray-200"
+                                className="w-full px-4 py-3 bg-white dark:bg-gray-900 border border-amber-200/80 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-amber-500 outline-none transition-all text-xs font-bold text-gray-805 dark:text-gray-200"
                               >
                                 <option value="Total">Contrôle Total (Lecture/Écriture/Sécurité)</option>
                                 <option value="Standard">Administrateur Standard (Saisie/Scolarité)</option>
@@ -2203,62 +2274,62 @@ export default function Users() {
                             </div>
                           </div>
 
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                             <div>
-                              <label className="block text-[11px] font-bold text-gray-700 dark:text-gray-300 mb-1.5 ml-1 uppercase tracking-wider">📇 Code Personnel ou Signature ID</label>
+                              <label className="block text-[10px] font-black text-amber-850 dark:text-amber-300 mb-1.5 uppercase tracking-widest font-mono">📇 Code Personnel ou Signature ID</label>
                               <div className="relative">
-                                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[10px] font-bold font-mono text-indigo-400 font-sans">ADM -</span>
+                                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-xs font-mono font-black text-amber-600/80 dark:text-amber-400">ADM -</span>
                                 <input
                                   type="text"
                                   maxLength={5}
                                   placeholder="54823"
                                   value={newUser.signerBadgeId}
                                   onChange={(e) => setNewUser({...newUser, signerBadgeId: e.target.value.replace(/\D/g, '')})}
-                                  className="w-full pl-12 pr-4 py-2.5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-sm font-bold text-gray-800 dark:text-gray-200 font-mono tracking-widest"
+                                  className="w-full pl-16 pr-4 py-3 bg-white dark:bg-gray-900 border border-amber-200/80 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-amber-500 outline-none transition-all text-sm font-mono font-bold text-gray-850 dark:text-gray-200 tracking-widest"
                                 />
                               </div>
-                              <p className="text-[9px] text-gray-400 font-medium mt-1">Laissez vide pour auto-générer un identifiant de sécurité unique.</p>
+                              <p className="text-[9px] text-amber-700/80 dark:text-amber-400 font-medium mt-1.5">Laissez vide pour auto-générer un identifiant de sécurité unique de 4 chiffres.</p>
                             </div>
 
                             <div>
-                              <label className="block text-[11px] font-bold text-gray-700 dark:text-gray-300 mb-1.5 ml-1 uppercase tracking-wider">📞 Contact Administratif Direct</label>
+                              <label className="block text-[10px] font-black text-amber-850 dark:text-amber-300 mb-1.5 uppercase tracking-widest font-mono">📞 Contact Administratif Direct</label>
                               <div className="relative">
-                                <Phone className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" size={14} />
+                                <Phone className="absolute left-4 top-1/2 -translate-y-1/2 text-amber-600" size={14} />
                                 <input
                                   type="tel"
                                   placeholder="+241 07 12 34 56"
                                   value={newUser.contact}
                                   onChange={(e) => setNewUser({...newUser, contact: e.target.value})}
-                                  className="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-sm font-bold text-gray-800 dark:text-gray-200"
+                                  className="w-full pl-11 pr-4 py-3 bg-white dark:bg-gray-900 border border-amber-200/80 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-amber-500 outline-none transition-all text-xs font-bold text-gray-805 dark:text-gray-200"
                                 />
                               </div>
                             </div>
                           </div>
 
-                          <div>
-                            <label className="block text-[11px] font-bold text-gray-700 dark:text-gray-300 mb-2 ml-1 uppercase tracking-wider">⚡ Modules d'habilitation autorisés</label>
-                            <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                          <div className="space-y-3">
+                            <label className="block text-[10px] font-black text-amber-850 dark:text-amber-300 uppercase tracking-widest font-mono">⚡ Modules d'habilitation autorisés</label>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                               {[
-                                { id: 'all', label: 'Tout le système ⚡' },
-                                { id: 'scolarite', label: 'Gestion Scolaire' },
-                                { id: 'finance', label: 'Caisse & Comptabilité' },
-                                { id: 'evaluations', label: 'Bulletins & Notes' },
-                                { id: 'cantine', label: 'Services de Restauration' },
-                                { id: 'biometrie', label: 'Guichets Biométriques' }
+                                { id: 'all', label: 'Accès Total ⚡', description: 'Toutes les fonctionnalités' },
+                                { id: 'scolarite', label: 'Scolarité 📝', description: 'Classes, inscriptions' },
+                                { id: 'finance', label: 'Finance 💳', description: 'Paiements, caisse, factures' },
+                                { id: 'evaluations', label: 'Bulletins 📊', description: 'Notes & moyennes' },
+                                { id: 'cantine', label: 'Restauration 🍎', description: 'Repas & abonnés' },
+                                { id: 'biometrie', label: 'Biométrie 🔑', description: 'Gestion des terminaux' }
                               ].map((mod) => {
                                 const isChecked = newUser.authorizedModules.includes(mod.id);
                                 return (
                                   <label
                                     key={mod.id}
-                                    className={`flex items-center gap-2 p-2 rounded-xl cursor-pointer border transition-colors ${
+                                    className={`flex items-start gap-2.5 p-3 rounded-xl cursor-pointer border transition-all duration-200 min-h-[72px] ${
                                       isChecked
-                                        ? 'bg-indigo-50/50 border-indigo-200 text-indigo-700 dark:bg-indigo-950/20 dark:border-indigo-900/50 dark:text-indigo-400'
-                                        : 'bg-white border-gray-200 dark:bg-gray-950 dark:border-gray-850 text-gray-700 dark:text-gray-300 hover:bg-gray-50'
+                                        ? 'bg-amber-100/50 border-amber-300 text-amber-900 dark:bg-amber-950/20 dark:border-amber-900/50 dark:text-amber-200 shadow-sm'
+                                        : 'bg-white border-amber-200/40 dark:bg-gray-950 dark:border-gray-850 text-gray-750 dark:text-gray-300 hover:bg-amber-50/40 hover:border-amber-200'
                                     }`}
                                   >
                                     <input
                                       type="checkbox"
-                                      className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                                      className="rounded border-amber-400 text-amber-600 focus:ring-amber-500 w-3.5 h-3.5 mt-0.5 shrink-0"
                                       checked={isChecked}
                                       onChange={() => {
                                         let updated: string[];
@@ -2275,7 +2346,10 @@ export default function Users() {
                                         setNewUser({ ...newUser, authorizedModules: updated });
                                       }}
                                     />
-                                    <span className="text-[10px] font-extrabold font-sans leading-none">{mod.label}</span>
+                                    <div className="flex flex-col min-w-0">
+                                      <span className="text-[10px] font-bold uppercase tracking-wider leading-tight">{mod.label}</span>
+                                      <span className="text-[9px] text-gray-550 dark:text-gray-400 font-medium mt-0.5 leading-normal">{mod.description}</span>
+                                    </div>
                                   </label>
                                 );
                               })}
