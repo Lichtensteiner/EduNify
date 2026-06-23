@@ -84,15 +84,40 @@ export default function BiometricRegistration() {
     return () => stopCamera();
   }, [step]);
 
+  useEffect(() => {
+    if (step === 'success') {
+      const timer = setTimeout(() => {
+        window.location.reload();
+      }, 2500);
+      return () => clearTimeout(timer);
+    }
+  }, [step]);
+
   const fallbackRegistration = async () => {
     if (currentUser) {
       try {
         const userRef = doc(db, 'users', currentUser.id);
-        await setDoc(userRef, {
+        const updateData = {
           face_id: `face_${currentUser.id}`,
           fingerprint_id: `print_${currentUser.id}`,
           credential_id: `mock_${currentUser.id}`
-        }, { merge: true });
+        };
+        await setDoc(userRef, updateData, { merge: true });
+        
+        // Also update local storage mock user if it exists!
+        const storedMockUser = localStorage.getItem('mock_admin_user');
+        if (storedMockUser) {
+          try {
+            const parsed = JSON.parse(storedMockUser);
+            if (parsed.id === currentUser.id) {
+              const updatedMock = { ...parsed, ...updateData };
+              localStorage.setItem('mock_admin_user', JSON.stringify(updatedMock));
+            }
+          } catch (e) {
+            console.error("Failed to sync mock user with bio details:", e);
+          }
+        }
+        
         setStep('success');
       } catch (err) {
         console.error(err);
@@ -177,11 +202,27 @@ export default function BiometricRegistration() {
 
         if (credential) {
           const userRef = doc(db, 'users', currentUser.id);
-          await setDoc(userRef, {
+          const updateData = {
             face_id: true,
             fingerprint_id: true,
             credential_id: credential.id // Save the real WebAuthn credential ID
-          }, { merge: true });
+          };
+          await setDoc(userRef, updateData, { merge: true });
+
+          // Also update local storage mock user if it exists!
+          const storedMockUser = localStorage.getItem('mock_admin_user');
+          if (storedMockUser) {
+            try {
+              const parsed = JSON.parse(storedMockUser);
+              if (parsed.id === currentUser.id) {
+                const updatedMock = { ...parsed, ...updateData };
+                localStorage.setItem('mock_admin_user', JSON.stringify(updatedMock));
+              }
+            } catch (e) {
+              console.error("Failed to sync mock user with bio details:", e);
+            }
+          }
+
           setStep('success');
           return;
         }
@@ -205,8 +246,14 @@ export default function BiometricRegistration() {
             <CheckCircle2 size={48} />
           </div>
           <h2 className="text-2xl font-bold text-gray-900 mb-2">Compte créé avec succès</h2>
-          <p className="text-gray-500 mb-8">Les données biométriques ont été enregistrées.</p>
-          <p className="text-sm text-gray-400">Redirection en cours...</p>
+          <p className="text-gray-500 mb-6">Les données biométriques ont été enregistrées.</p>
+          <p className="text-sm text-indigo-600 font-bold animate-pulse mb-6">Redirection automatique en cours...</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-3 px-4 rounded-xl font-bold text-sm transition-all shadow-sm active:scale-95"
+          >
+            Accéder à mon tableau de bord
+          </button>
         </div>
       </div>
     );

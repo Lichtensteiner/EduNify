@@ -209,7 +209,10 @@ export default function Users() {
 
     // Force role to non-admin if not super-admin
     let finalRole = newUser.role;
-    if (finalRole === 'admin' && !isSuperAdmin) {
+    let finalPosition = newUser.role === 'comptable' ? 'comptable' : (newUser.role === 'personnel administratif' ? newUser.position : null);
+    if (finalRole === 'comptable') {
+      finalRole = 'personnel administratif';
+    } else if (finalRole === 'admin' && !isSuperAdmin) {
       finalRole = 'personnel administratif';
     }
 
@@ -253,7 +256,7 @@ export default function Users() {
         experience_years: newUser.experience_years ? parseInt(newUser.experience_years as string) : null,
         age: newUser.age ? parseInt(newUser.age as string) : null,
         house_id: newUser.role === 'élève' && newUser.house_id ? newUser.house_id : null,
-        position: finalRole === 'personnel administratif' ? (newUser.position || null) : null,
+        position: finalPosition,
         department: finalRole === 'personnel administratif' ? 'Administration' : null,
         photo: newUser.photo || null,
         cover: newUser.cover || null,
@@ -1399,6 +1402,23 @@ export default function Users() {
                       </div>
                     )}
 
+                    {/* Establishment confirmation warning box in edit */}
+                    {(() => {
+                      const selectedEstId = isSuperAdmin ? (editUser.etablissement || currentEstablishment?.id || 'EDU-001') : (editUser.etablissement || currentEstablishment?.id || 'EDU-001');
+                      const selectedEstObj = establishments.find(e => e.id === selectedEstId);
+                      const selectedEstName = selectedEstObj ? selectedEstObj.nom : 'Ludo_Consulting';
+                      return (
+                        <div className="p-4 mt-2 rounded-xl border border-dashed border-amber-300 dark:border-amber-800/85 bg-amber-50/10 dark:bg-amber-950/10 text-xs space-y-1 col-span-full">
+                          <div className="flex items-center gap-2 font-black text-amber-800 dark:text-amber-300 uppercase tracking-wider">
+                            <span>🏫 Alerte transfert / Validation d'Établissement</span>
+                          </div>
+                          <p className="text-gray-650 dark:text-gray-400 leading-relaxed font-bold">
+                            Vous modifiez l'affectation ou le rôle de cet utilisateur. Il sera rattaché à l'établissement : <strong className="text-amber-600 dark:text-amber-400 underline">{selectedEstName} ({selectedEstId})</strong>.
+                          </p>
+                        </div>
+                      );
+                    })()}
+
                     {editUser.role === 'élève' && (
                       <div className="grid grid-cols-2 gap-4">
                         <div>
@@ -2086,11 +2106,12 @@ export default function Users() {
                         <select
                           value={newUser.role}
                           onChange={(e) => setNewUser({...newUser, role: e.target.value})}
-                          className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-sm"
+                          className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-sm font-bold"
                         >
                           <option value="élève">{tData('élève')}</option>
                           <option value="enseignant">{tData('enseignant')}</option>
                           <option value="personnel administratif">{tData('personnel administratif')}</option>
+                          <option value="comptable">Comptable (Gestion Financière)</option>
                           <option value="cuisinier">{tData('cuisinier')}</option>
                           {isSuperAdmin && (
                             <option value="admin">Administrateur d'Établissement ({tData('admin')})</option>
@@ -2115,6 +2136,23 @@ export default function Users() {
                         </div>
                       )}
                     </div>
+
+                    {/* Establishment confirmation warning box */}
+                    {(() => {
+                      const selectedEstId = isSuperAdmin ? (newUser.etablissement || currentEstablishment?.id || 'EDU-001') : (currentEstablishment?.id || 'EDU-001');
+                      const selectedEstObj = establishments.find(e => e.id === selectedEstId);
+                      const selectedEstName = selectedEstObj ? selectedEstObj.nom : 'Ludo_Consulting';
+                      return (
+                        <div className="p-4 rounded-xl border border-dashed border-indigo-300 dark:border-indigo-800/80 bg-indigo-50/30 dark:bg-indigo-950/20 text-xs space-y-1">
+                          <div className="flex items-center gap-2 font-black text-indigo-800 dark:text-indigo-300 uppercase tracking-wider">
+                            <span>🏫 Établissement d'Enregistrement Cible</span>
+                          </div>
+                          <p className="text-gray-600 dark:text-gray-400 leading-relaxed font-bold">
+                            Cet utilisateur sera définitivement rattaché à l'établissement : <strong className="text-indigo-600 dark:text-indigo-400 underline">{selectedEstName} ({selectedEstId})</strong>. Il n'aura aucun accès aux autres campus ou écoles du réseau.
+                          </p>
+                        </div>
+                      );
+                    })()}
 
                     <div className="space-y-4">
                       {newUser.role === 'élève' && (

@@ -180,6 +180,13 @@ export default function Sidebar({ activeTab, setActiveTab, isMobileOpen, setIsMo
               if (isSuperAdmin && item.roles.includes('admin')) {
                 return true;
               }
+              if (item.id === 'finance' && (
+                (currentUser?.role as string) === 'comptable' || 
+                (currentUser?.role as string) === 'gestionnaire_comptable' ||
+                (currentUser?.role === 'personnel administratif' && currentUser?.position === 'comptable')
+              )) {
+                return true;
+              }
               return item.roles.includes(currentUser?.role || '');
             });
             if (filteredItems.length === 0) return null;

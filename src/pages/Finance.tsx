@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
+import { useEstablishment } from '../contexts/EstablishmentContext';
 import { usePWA } from '../hooks/usePWA';
 import { db } from '../lib/firebase';
 import { recordAuditLog } from '../services/auditService';
@@ -75,6 +76,7 @@ import {
   Area 
 } from 'recharts';
 import SuccessModal from '../components/SuccessModal';
+import { FinanceExtraModules } from '../components/FinanceExtraModules';
 
 // Cryptographic hash helper simulation for anti-fraud validation
 const generateTransactionHash = (id: string, account_deb: string, account_cred: string, amount: number, dateStr: string) => {
@@ -170,19 +172,22 @@ const DEFAULT_PLAN_COMPTABLE: SYSCOHADAAccount[] = [
 const Finance: React.FC = () => {
   const { currentUser } = useAuth();
   const { t, language, tData } = useLanguage();
+  const { currentEstablishment, isSuperAdmin, establishments } = useEstablishment();
 
   // PWA Support & Install hook
   const { isInstallable, installApp, isStandalone, getOS } = usePWA();
   const [showPwaInstallModal, setShowPwaInstallModal] = useState(false);
 
   // ERP Tab State
-  const [activeTab, setActiveTab2] = useState<'journal' | 'caisse' | 'expenses' | 'accounting_plan' | 'double_entries' | 'balance_sheet' | 'sage_sync' | 'parent_invoice'>('journal');
+  const [activeTab, setActiveTab2] = useState<'journal' | 'caisse' | 'expenses' | 'accounting_plan' | 'double_entries' | 'balance_sheet' | 'sage_sync' | 'parent_invoice' | 'registered_members' | 'payroll' | 'assets' | 'suppliers' | 'discounts'>('journal');
   
   // Storage states
   const [payments, setPayments] = useState<Payment[]>([]);
   const [canteenTransactions, setCanteenTransactions] = useState<any[]>([]);
   const [students, setStudents] = useState<any[]>([]);
   const [teachers, setTeachers] = useState<any[]>([]);
+  const [staff, setStaff] = useState<any[]>([]);
+  const [allClasses, setAllClasses] = useState<any[]>([]);
   const [planComptable, setPlanComptable] = useState<SYSCOHADAAccount[]>(DEFAULT_PLAN_COMPTABLE);
   const [accountingEntries, setAccountingEntries] = useState<DoubleEntry[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
@@ -196,6 +201,8 @@ const Finance: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState('all');
+  const [memberSearch, setMemberSearch] = useState('');
+  const [memberRoleFilter, setMemberRoleFilter] = useState<'all' | 'élève' | 'enseignant' | 'personnel administratif'>('all');
 
   const [showAddModal, setShowAddModal] = useState(false);
   const [showAddExpenseModal, setShowAddExpenseModal] = useState(false);
@@ -284,10 +291,15 @@ const Finance: React.FC = () => {
   });
 
   // Check roles permissions
-  const rolesWithWriteAccess = ['Super Admin', 'Administrateur', 'Responsable Comptable', 'Caissier', 'admin'];
+  const rolesWithWriteAccess = ['Super Admin', 'Administrateur', 'Responsable Comptable', 'Caissier', 'admin', 'comptable', 'gestionnaire_comptable'];
   const isAuthorized = currentUser && (
     rolesWithWriteAccess.includes(currentUser.role as string) || 
-    currentUser.role === 'admin'
+    currentUser.role === 'admin' ||
+    (currentUser.role as string) === 'comptable' ||
+    (currentUser.role as string) === 'gestionnaire_comptable' ||
+    currentUser.position === 'comptable' ||
+    currentUser.position === 'gestionnaire_comptable' ||
+    (currentUser.role === 'personnel administratif' && currentUser.position === 'comptable')
   );
 
   const isParent = currentUser?.role === 'parent';
@@ -374,16 +386,24 @@ const Finance: React.FC = () => {
       setExpenses(expData);
     });
 
-    // Load school users (students, teachers) for association
+    // Load school users (students, teachers, staff, classes) for association
     const fetchSchoolUnits = async () => {
       const studentsQuery = query(collection(db, 'users'), where('role', '==', 'élève'));
       const teachersQuery = query(collection(db, 'users'), where('role', '==', 'enseignant'));
-      const [studentsSnap, teachersSnap] = await Promise.all([
+      const staffQuery = query(collection(db, 'users'), where('role', '==', 'personnel administratif'));
+      const classesQuery = collection(db, 'classes');
+
+      const [studentsSnap, teachersSnap, staffSnap, classesSnap] = await Promise.all([
         getDocs(studentsQuery),
-        getDocs(teachersQuery)
+        getDocs(teachersQuery),
+        getDocs(staffQuery),
+        getDocs(classesQuery)
       ]);
+
       setStudents(studentsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
       setTeachers(teachersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      setStaff(staffSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      setAllClasses(classesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     };
     fetchSchoolUnits();
 
@@ -1318,9 +1338,14 @@ Sceau de sécurité : CS-GAB-${payment.id.substring(0,8).toUpperCase()}-2026
           { id: 'journal', label: 'Journal des Recettes' },
           { id: 'expenses', label: 'Saisie de Dépenses' },
           { id: 'caisse', label: 'Caisse Journalière' },
+          { id: 'registered_members', label: '👥 Inscriptions & Effectifs' },
           { id: 'accounting_plan', label: 'Plan de Comptes OHADA' },
           { id: 'double_entries', label: 'Ledger Double-Entrée' },
           { id: 'balance_sheet', label: 'Balance & Résultats' },
+          { id: 'payroll', label: '💼 Paie & Salaires' },
+          { id: 'assets', label: '🏫 Amortissements & Immo.' },
+          { id: 'suppliers', label: '🤝 Tiers & Fournisseurs' },
+          { id: 'discounts', label: '🎓 Bourses & Remises' },
           { id: 'sage_sync', label: 'Sage Sinc & Export ERP' },
         ].map(tab => (
           <button
@@ -2041,6 +2066,316 @@ Sceau de sécurité : CS-GAB-${payment.id.substring(0,8).toUpperCase()}-2026
             </div>
           </div>
         </div>
+      )}
+
+      {/* 8. REGISTERED MEMBERS TAB - EXQUISITE OVERVIEW */}
+      {activeTab === 'registered_members' && (
+        <div className="space-y-6">
+          {/* Header context info banner */}
+          <div className="bg-gradient-to-r from-indigo-550 to-indigo-750 dark:from-indigo-900/50 dark:to-indigo-950/30 text-white p-6 rounded-3xl shadow-sm space-y-4">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <span className="px-2.5 py-1 bg-white/15 dark:bg-indigo-500/25 rounded-md text-[10px] font-black uppercase tracking-wider">
+                    🏫 Enregistrement Cible Actif
+                  </span>
+                </div>
+                <h2 className="text-xl font-bold tracking-tight">
+                  {currentEstablishment?.nom || 'Ludo_Consulting'} ({currentEstablishment?.id || 'EDU-001'})
+                </h2>
+                <p className="text-xs text-indigo-150 dark:text-indigo-300">
+                  Vue d'ensemble financière des inscriptions, effectifs de classe et statuts de scolarité associés pour ce campus.
+                </p>
+              </div>
+
+              {isSuperAdmin && establishments.length > 1 && (
+                <div className="p-3 bg-white/10 dark:bg-gray-900/40 rounded-2xl border border-white/10 space-y-1.5 w-full md:w-auto">
+                  <label className="block text-[10px] font-black uppercase text-indigo-200">
+                    Changer d'Établissement (Super Admin)
+                  </label>
+                  <select
+                    value={currentEstablishment?.id || ''}
+                    onChange={(e) => {
+                      const { changeActiveEstablishment } = useEstablishment();
+                      if (changeActiveEstablishment) {
+                        changeActiveEstablishment(e.target.value);
+                      }
+                    }}
+                    className="bg-slate-900 text-white text-xs font-bold rounded-lg px-3 py-1.5 outline-none focus:ring-1 focus:ring-indigo-500 border border-white/10"
+                  >
+                    {establishments.map(est => (
+                      <option key={est.id} value={est.id}>{est.nom} ({est.id})</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* KPI Statistics Ribbon */}
+          {(() => {
+            const currentEstId = currentEstablishment?.id || 'EDU-001';
+            
+            // Filter school units by active establishment context
+            const estStudents = students.filter(s => s.etablissement === currentEstId);
+            const estTeachers = teachers.filter(t => t.etablissement === currentEstId);
+            const estStaff = staff.filter(st => st.etablissement === currentEstId);
+            const estPayments = payments.filter(p => {
+              // Find if student of this payment belongs to the current establishment
+              const sObj = students.find(s => s.id === p.studentId);
+              return sObj ? sObj.etablissement === currentEstId : true;
+            });
+
+            const totalTuitionPaid = estPayments
+              .filter(p => p.type === 'tuition' && p.status === 'paid')
+              .reduce((sum, p) => sum + p.amount, 0);
+
+            const totalOtherPaid = estPayments
+              .filter(p => p.type !== 'tuition' && p.status === 'paid')
+              .reduce((sum, p) => sum + p.amount, 0);
+
+            // Filter lists based on memberSearch and memberRoleFilter
+            const allMembers = [
+              ...estStudents.map(s => ({ ...s, derivedRole: 'élève' })),
+              ...estTeachers.map(t => ({ ...t, derivedRole: 'enseignant' })),
+              ...estStaff.map(st => ({ ...st, derivedRole: 'personnel administratif' }))
+            ];
+
+            const filteredMembers = allMembers.filter(m => {
+              const matchesSearch = 
+                `${m.nom || ''} ${m.prenom || ''}`.toLowerCase().includes(memberSearch.toLowerCase()) ||
+                (m.matricule || '').toLowerCase().includes(memberSearch.toLowerCase());
+              
+              const matchesRole = memberRoleFilter === 'all' || m.derivedRole === memberRoleFilter;
+              
+              return matchesSearch && matchesRole;
+            });
+
+            return (
+              <div className="space-y-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                  <div className="bg-white dark:bg-gray-800 p-5 rounded-3xl border border-gray-100 dark:border-gray-750 flex items-center justify-between">
+                    <div>
+                      <p className="text-[10px] uppercase font-black tracking-wider text-gray-400 dark:text-gray-500">Élèves Inscrits</p>
+                      <h3 className="text-2xl font-black text-indigo-650 dark:text-indigo-400 mt-1">{estStudents.length}</h3>
+                      <p className="text-[10px] text-gray-550 dark:text-gray-400 mt-1">Rattachés à ce campus</p>
+                    </div>
+                    <div className="p-3 bg-indigo-50 dark:bg-indigo-950/20 text-indigo-600 dark:text-indigo-400 rounded-2xl">
+                      <Users size={22} />
+                    </div>
+                  </div>
+
+                  <div className="bg-white dark:bg-gray-800 p-5 rounded-3xl border border-gray-100 dark:border-gray-750 flex items-center justify-between">
+                    <div>
+                      <p className="text-[10px] uppercase font-black tracking-wider text-gray-400 dark:text-gray-500">Corps Enseignant</p>
+                      <h3 className="text-2xl font-black text-rose-600 dark:text-rose-450 mt-1">{estTeachers.length}</h3>
+                      <p className="text-[10px] text-gray-555 dark:text-gray-400 mt-1">Professeurs & Formateurs</p>
+                    </div>
+                    <div className="p-3 bg-rose-50 dark:bg-rose-950/25 text-rose-600 dark:text-rose-400 rounded-2xl">
+                      <Briefcase size={22} />
+                    </div>
+                  </div>
+
+                  <div className="bg-white dark:bg-gray-800 p-5 rounded-3xl border border-gray-100 dark:border-gray-750 flex items-center justify-between">
+                    <div>
+                      <p className="text-[10px] uppercase font-black tracking-wider text-gray-400 dark:text-gray-500">Personnel Administratif</p>
+                      <h3 className="text-2xl font-black text-amber-650 dark:text-amber-400 mt-1">{estStaff.length}</h3>
+                      <p className="text-[10px] text-gray-555 dark:text-gray-400 mt-1">Direction, Comptables, Accueil</p>
+                    </div>
+                    <div className="p-3 bg-amber-50 dark:bg-amber-950/20 text-amber-600 dark:text-amber-400 rounded-2xl">
+                      <Building2 size={22} />
+                    </div>
+                  </div>
+
+                  <div className="bg-white dark:bg-gray-800 p-5 rounded-3xl border border-gray-100 dark:border-gray-750 flex items-center justify-between">
+                    <div>
+                      <p className="text-[10px] uppercase font-black tracking-wider text-gray-400 dark:text-gray-500">Scolarités Reçues</p>
+                      <h3 className="text-xl font-black text-emerald-600 dark:text-emerald-452 mt-1">
+                        {totalTuitionPaid.toLocaleString()} FCFA
+                      </h3>
+                      <p className="text-[10px] text-gray-550 dark:text-amber-400 mt-1 font-mono">
+                        Extra : +{totalOtherPaid.toLocaleString()} FCFA
+                      </p>
+                    </div>
+                    <div className="p-3 bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600 dark:text-emerald-450 rounded-2xl">
+                      <Coins size={22} />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Sub-table container */}
+                <div className="bg-white dark:bg-gray-800 p-6 rounded-3xl border border-gray-100 dark:border-gray-750 space-y-4 shadow-sm">
+                  <div className="flex flex-col lg:flex-row gap-4 justify-between items-stretch lg:items-center">
+                    <div>
+                      <h3 className="text-base font-black text-gray-905 dark:text-white uppercase tracking-wider">
+                        Liste Nominative & Situation Financière
+                      </h3>
+                      <p className="text-xs text-gray-500 mt-0.5">
+                        Examinez en temps-réel les montants versés, les arriérés de scolarité et les détails d'inscription.
+                      </p>
+                    </div>
+
+                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
+                      {/* Search */}
+                      <div className="relative">
+                        <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" size={15} />
+                        <input
+                          type="text"
+                          placeholder="Rechercher par nom ou matricule..."
+                          value={memberSearch}
+                          onChange={(e) => setMemberSearch(e.target.value)}
+                          className="w-full sm:w-64 pl-10 pr-4 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-105 dark:border-gray-700 rounded-xl text-xs outline-none focus:ring-1 focus:ring-indigo-500 transition-all font-medium text-gray-700 dark:text-gray-300"
+                        />
+                      </div>
+
+                      {/* Filters */}
+                      <div className="flex bg-gray-50 dark:bg-gray-900 p-1 rounded-xl border border-gray-100 dark:border-gray-700">
+                        {(['all', 'élève', 'enseignant', 'personnel administratif'] as const).map((rl) => (
+                          <button
+                            key={rl}
+                            onClick={() => setMemberRoleFilter(rl)}
+                            className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase transition ${
+                              memberRoleFilter === rl
+                                ? 'bg-indigo-600 text-white shadow-sm'
+                                : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                            }`}
+                          >
+                            {rl === 'all' ? 'Tous' : rl === 'élève' ? 'Élèves' : rl === 'enseignant' ? 'Profs' : 'Staff'}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse">
+                      <thead>
+                        <tr className="border-b border-gray-100 dark:border-gray-700/60 pb-2 text-[10px] font-black uppercase text-gray-400 tracking-wider">
+                          <th className="py-3 px-1">Membre / Profil</th>
+                          <th className="py-3 px-1">Identifiant & Contact</th>
+                          <th className="py-3 px-1">Coordonnées Scolaires</th>
+                          <th className="py-3 px-1 text-right">État Financier (Scolarité)</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100/60 dark:divide-gray-700/60 text-xs text-gray-600 dark:text-gray-300">
+                        {filteredMembers.length === 0 ? (
+                          <tr>
+                            <td colSpan={4} className="py-12 text-center text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider">
+                              Aucun membre trouvé correspondant à vos critères de recherche.
+                            </td>
+                          </tr>
+                        ) : (
+                          filteredMembers.map((member) => {
+                            // Calculate student total versé
+                            const isStudent = member.derivedRole === 'élève';
+                            const studentPayments = estPayments.filter(p => p.studentId === member.id && p.status === 'paid');
+                            const totalPaid = studentPayments.reduce((sum, p) => sum + p.amount, 0);
+
+                            // Typical target total tuition e.g. 450,000 FCFA for demo references, or we can look if there's any setup
+                            const targetTuition = 450000;
+                            const isFullyPaid = totalPaid >= targetTuition;
+                            const remaining = Math.max(0, targetTuition - totalPaid);
+
+                            return (
+                              <tr key={member.id} className="hover:bg-gray-50/50 dark:hover:bg-gray-750/30 transition-all">
+                                <td className="py-4 px-1 flex items-center gap-3">
+                                  <div className="w-9 h-9 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-850 dark:text-slate-100 flex items-center justify-center font-bold font-mono text-xs border border-gray-200 dark:border-gray-700 uppercase">
+                                    {member.prenom?.[0] || ''}{member.nom?.[0] || ''}
+                                  </div>
+                                  <div>
+                                    <h4 className="font-bold text-gray-950 dark:text-white">
+                                      {member.prenom || ''} {member.nom || ''}
+                                    </h4>
+                                    <span className={`inline-block text-[9px] font-black uppercase px-2 py-0.5 rounded-full mt-1 ${
+                                      member.derivedRole === 'élève'
+                                        ? 'bg-indigo-50 dark:bg-indigo-950/30 text-indigo-650 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-900/45'
+                                        : member.derivedRole === 'enseignant'
+                                        ? 'bg-rose-50 dark:bg-rose-950/20 text-rose-650 dark:text-rose-455 border border-rose-150 dark:border-rose-900/35'
+                                        : 'bg-amber-50 dark:bg-amber-950/20 text-amber-650 dark:text-amber-400 border border-amber-100 dark:border-amber-900/30'
+                                    }`}>
+                                      {member.derivedRole === 'personnel administratif' && member.position 
+                                        ? `Staff : ${member.position}`
+                                        : member.derivedRole}
+                                    </span>
+                                  </div>
+                                </td>
+
+                                <td className="py-4 px-1 font-mono">
+                                  <p className="font-bold text-gray-805 dark:text-gray-300">
+                                    ID : <span className="text-gray-600 dark:text-gray-400 text-[11px]">{member.matricule || member.id?.slice(0, 8) || 'N/A'}</span>
+                                  </p>
+                                  <p className="text-[10px] text-gray-400">{member.email || member.contact || 'Aucun contact'}</p>
+                                </td>
+
+                                <td className="py-4 px-1">
+                                  <p className="font-bold">
+                                    {member.derivedRole === 'élève' 
+                                      ? `Classe : ${member.classe || 'Non affecté'}` 
+                                      : member.derivedRole === 'enseignant'
+                                      ? `Matière : ${member.matiere || 'Multitâches'}`
+                                      : `Service : Administration`
+                                    }
+                                  </p>
+                                  <p className="text-[10px] text-gray-450 uppercase tracking-wider">
+                                    Rattaché : {member.etablissement || 'EDU-001'}
+                                  </p>
+                                </td>
+
+                                <td className="py-3 px-1 text-right">
+                                  {isStudent ? (
+                                    <div className="space-y-1">
+                                      <p className="font-black text-gray-900 dark:text-white font-mono">
+                                        {totalPaid.toLocaleString()} FCFA
+                                      </p>
+                                      {isFullyPaid ? (
+                                        <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase text-emerald-600 dark:text-emerald-400">
+                                          ● Solde Réglé
+                                        </span>
+                                      ) : remaining > 0 ? (
+                                        <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase text-amber-600 dark:text-amber-400">
+                                          Reste : {remaining.toLocaleString()} FCFA
+                                        </span>
+                                      ) : (
+                                        <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase text-gray-450">
+                                          Aucun versement
+                                        </span>
+                                      )}
+                                    </div>
+                                  ) : (
+                                    <div className="space-y-0.5">
+                                      <span className="text-[10px] uppercase font-bold text-gray-450 dark:text-gray-500">
+                                        Rémunération :
+                                      </span>
+                                      <p className="text-[11px] font-bold text-gray-800 dark:text-gray-200">
+                                        Fiche budgétaire
+                                      </p>
+                                    </div>
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          })
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+        </div>
+      )}
+
+      {['payroll', 'assets', 'suppliers', 'discounts'].includes(activeTab) && (
+        <FinanceExtraModules
+          activeTab={activeTab}
+          students={students}
+          teachers={teachers}
+          staff={staff}
+          currentEstablishment={currentEstablishment}
+          payments={payments}
+          setPayments={setPayments}
+        />
       )}
 
       {/* Renders financial situation report modal */}

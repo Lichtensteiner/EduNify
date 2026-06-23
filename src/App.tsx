@@ -207,7 +207,7 @@ function AppContent() {
       case 'homework': return <Homework />;
       case 'ludo_ai_plus': return <LudoAIPlus />;
       case 'clubs': return <Clubs />;
-      case 'finance': return isAdmin ? <Finance /> : <Dashboard onNavigate={handleNavigate} />;
+      case 'finance': return (isAdmin || (role as string) === 'comptable' || (role as string) === 'gestionnaire_comptable' || (role === 'personnel administratif' && currentUser?.position === 'comptable')) ? <Finance /> : <Dashboard onNavigate={handleNavigate} />;
       case 'discipline': return (isAdmin || ['enseignant', 'personnel administratif'].includes(role)) ? <Discipline /> : <Dashboard onNavigate={handleNavigate} />;
       case 'audit_logs': return isAdmin ? <AuditLogs /> : <Dashboard onNavigate={handleNavigate} />;
       case 'recent_connections': 
