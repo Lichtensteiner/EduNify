@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { recordAuditLog } from '../services/auditService';
-import { Search, Filter, Plus, Fingerprint, RefreshCw, Eye, EyeOff, Edit2, Trash2, X, AlertCircle, BellRing, Key, Phone, MapPin, User2, Calendar, GraduationCap, History as HistoryIcon, Mail, Lock, Briefcase, User, Hash, Ban, ShieldOff, Camera } from 'lucide-react';
+import { Search, Filter, Plus, Fingerprint, RefreshCw, Eye, EyeOff, Edit2, Trash2, X, AlertCircle, BellRing, Key, Phone, MapPin, User2, Calendar, GraduationCap, History as HistoryIcon, Mail, Lock, Briefcase, User, Hash, Ban, ShieldOff, Camera, Archive } from 'lucide-react';
 import { collection, getDocs, doc, updateDoc, deleteDoc, setDoc, addDoc, onSnapshot, query, where } from 'firebase/firestore';
 import { initializeApp, getApp, getApps, deleteApp } from 'firebase/app';
 import { getAuth, createUserWithEmailAndPassword, signOut } from 'firebase/auth';
@@ -25,12 +25,15 @@ export default function Users() {
   const [houses, setHouses] = useState<any[]>([]);
   const [classes, setClasses] = useState<any[]>([]);
   const [subjects, setSubjects] = useState<any[]>([]);
+  const [feeConfigs, setFeeConfigs] = useState<any[]>([]);
+  const [payments, setPayments] = useState<any[]>([]);
+  const [filterArchive, setFilterArchive] = useState<'active' | 'archived' | 'all'>('active');
   const [loading, setLoading] = useState(true);
 
   // Modals state
   const [viewUser, setViewUser] = useState<any>(null);
   const [userLogs, setUserLogs] = useState<any[]>([]);
-  const [viewTab, setViewTab] = useState<'profile' | 'attendance'>('profile');
+  const [viewTab, setViewTab] = useState<'profile' | 'attendance' | 'finance'>('profile');
   const [editUser, setEditUser] = useState<any>(null);
   const [deleteUser, setDeleteUser] = useState<any>(null);
   const [showAddUserModal, setShowAddUserModal] = useState(false);
@@ -103,11 +106,23 @@ export default function Users() {
       setSubjects(subjectsData.sort((a: any, b: any) => (a.name || '').localeCompare(b.name || '')));
     });
 
+    const unsubscribeFeeConfigs = onSnapshot(collection(db, 'fee_configurations'), (snapshot) => {
+      const configsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setFeeConfigs(configsData);
+    });
+
+    const unsubscribePayments = onSnapshot(collection(db, 'payments'), (snapshot) => {
+      const paymentsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setPayments(paymentsData);
+    });
+
     return () => {
       unsubscribe();
       unsubscribeHouses();
       unsubscribeClasses();
       unsubscribeSubjects();
+      unsubscribeFeeConfigs();
+      unsubscribePayments();
     };
   }, []);
 
@@ -475,12 +490,105 @@ export default function Users() {
     }
   };
 
+  const handleToggleArchiveUser = async (user: any) => {
+    try {
+      const newArchivedState = !user.isArchived;
+      await updateDoc(doc(db, 'users', user.id), {
+        isArchived: newArchivedState
+      });
+      
+      await recordAuditLog({
+        userId: currentUser?.id || 'admin',
+        userName: currentUser ? `${currentUser.prenom} ${currentUser.nom}` : 'Administrateur',
+        userRole: currentUser?.role || 'admin',
+        action: newArchivedState ? "Archivage d'utilisateur" : "Restauration d'utilisateur",
+        details: `Utilisateur: ${user.prenom} ${user.nom}, Rôle: ${user.role}`,
+        category: 'security'
+      });
+
+      notifySuccess(newArchivedState ? "Utilisateur archivé avec succès (Traçabilité)" : "Utilisateur restauré avec succès");
+    } catch (err) {
+      console.error("Error toggling user archive state:", err);
+      notifyError("Une erreur est survenue lors de l'archivage.");
+    }
+  };
+
+  const computeStudentFinance = (student: any) => {
+    if (!student || student.role !== 'élève') return null;
+    
+    const activeEstId = currentEstablishment?.id || currentUser?.etablissement || 'EDU-001';
+    
+    const applicable = feeConfigs.filter(fee => {
+      if (fee.establishmentId !== activeEstId) return false;
+      
+      if (fee.studentId) {
+        return fee.studentId === student.id;
+      }
+      
+      if (fee.niveau && fee.niveau !== 'Toutes') {
+        const studentNiveau = (student.niveau || '').toLowerCase();
+        const feeNiveau = fee.niveau.toLowerCase();
+        if (!studentNiveau.includes(feeNiveau) && !feeNiveau.includes(studentNiveau)) return false;
+      }
+      
+      if (fee.classe && fee.classe !== 'Toutes') {
+        const studentClasse = (student.classe || '').toLowerCase().trim();
+        const feeClasse = fee.classe.toLowerCase().trim();
+        if (studentClasse !== feeClasse) return false;
+      }
+
+      if (fee.filiere && fee.filiere !== 'Toutes') {
+        const studentFiliere = (student.filiere || '').toLowerCase().trim();
+        const feeFiliere = fee.filiere.toLowerCase().trim();
+        if (studentFiliere !== feeFiliere) return false;
+      }
+
+      return true;
+    });
+
+    let totalDu = 0;
+    let totalPaye = 0;
+    const feeDetails = applicable.map(fee => {
+      const feePayments = payments.filter(p => p.studentId === student.id && p.feeConfigId === fee.id);
+      const paid = feePayments.reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
+      totalDu += fee.amount || 0;
+      totalPaye += paid;
+      return {
+        id: fee.id,
+        name: fee.name,
+        category: fee.category,
+        amount: fee.amount,
+        paid: paid,
+        balance: (fee.amount || 0) - paid,
+        payments: feePayments
+      };
+    });
+
+    const balance = totalDu - totalPaye;
+    const percentPaid = totalDu > 0 ? Math.round((totalPaye / totalDu) * 100) : 0;
+
+    return {
+      totalDu,
+      totalPaye,
+      balance,
+      percentPaid,
+      feeDetails,
+      applicableCount: applicable.length
+    };
+  };
+
   const filteredUsers = users.filter(user => {
     // Multi-tenant isolated workspace
     if (!isSuperAdmin) {
       const activeEstId = currentEstablishment?.id || currentUser?.etablissement || 'EDU-001';
       if (user.etablissement !== activeEstId) return false;
     }
+
+    // Archive filter
+    const isUserArchived = !!user.isArchived;
+    if (filterArchive === 'active' && isUserArchived) return false;
+    if (filterArchive === 'archived' && !isUserArchived) return false;
+
     const userNom = (user.nom || '').toLowerCase();
     const userPrenom = (user.prenom || '').toLowerCase();
     const userMatricule = (user.matricule || '').toLowerCase();
@@ -570,20 +678,35 @@ export default function Users() {
             />
           </div>
           
-          <div className="flex items-center gap-2 w-full sm:w-auto">
-            <Filter size={18} className="text-gray-400" />
-            <select 
-              value={filterRole}
-              onChange={(e) => setFilterRole(e.target.value)}
-              className="bg-white border border-gray-200 text-gray-700 text-sm rounded-xl focus:ring-indigo-500 focus:border-indigo-500 block w-full p-2"
-            >
-              <option value="all">{t('all')}</option>
-              <option value="élève">{tData('élève')}</option>
-              <option value="enseignant">{tData('enseignant')}</option>
-              <option value="personnel administratif">{tData('personnel administratif')}</option>
-              <option value="cuisinier">{tData('cuisinier')}</option>
-              <option value="admin">{tData('admin')}</option>
-            </select>
+          <div className="flex flex-wrap items-center gap-2.5 w-full sm:w-auto">
+            <div className="flex items-center gap-1.5 min-w-[150px]">
+              <Filter size={16} className="text-gray-400 shrink-0" />
+              <select 
+                value={filterRole}
+                onChange={(e) => setFilterRole(e.target.value)}
+                className="bg-white border border-gray-250 text-gray-700 text-sm rounded-xl focus:ring-indigo-500 focus:border-indigo-500 block w-full p-2"
+              >
+                <option value="all">{t('all')}</option>
+                <option value="élève">{tData('élève')}</option>
+                <option value="enseignant">{tData('enseignant')}</option>
+                <option value="personnel administratif">{tData('personnel administratif')}</option>
+                <option value="cuisinier">{tData('cuisinier')}</option>
+                <option value="admin">{tData('admin')}</option>
+              </select>
+            </div>
+
+            <div className="flex items-center gap-1.5 min-w-[150px]">
+              <Archive size={16} className="text-indigo-600 shrink-0" />
+              <select 
+                value={filterArchive}
+                onChange={(e) => setFilterArchive(e.target.value as any)}
+                className="bg-white border border-gray-250 text-indigo-750 text-sm rounded-xl focus:ring-indigo-500 focus:border-indigo-500 block w-full p-2"
+              >
+                <option value="active">📂 Actifs uniquement</option>
+                <option value="archived">📦 Archivés (Traçabilité)</option>
+                <option value="all">📁 Tous les profils</option>
+              </select>
+            </div>
           </div>
         </div>
 
@@ -597,6 +720,7 @@ export default function Users() {
                 <th scope="col" className="px-6 py-4 font-semibold">{t('born_on')}</th>
                 <th scope="col" className="px-6 py-4 font-semibold">{t('id_number')}</th>
                 <th scope="col" className="px-6 py-4 font-semibold">{t('role')}</th>
+                <th scope="col" className="px-6 py-4 font-semibold">Situation Financière</th>
                 <th scope="col" className="px-6 py-4 font-semibold">{t('contact')}</th>
                 <th scope="col" className="px-6 py-4 font-semibold font-bold">{t('bio')}</th>
                 <th scope="col" className="px-6 py-4 font-semibold text-right">{t('actions')}</th>
@@ -693,6 +817,42 @@ export default function Users() {
                       </div>
                     </td>
                     <td className="px-6 py-4">
+                      {user.role === 'élève' ? (() => {
+                        const finDetails = computeStudentFinance(user);
+                        if (!finDetails || finDetails.applicableCount === 0) {
+                          return <span className="text-gray-400 italic text-[11px] font-bold">Aucun frais imputé</span>;
+                        }
+                        const { totalDu, totalPaye, balance, percentPaid } = finDetails;
+                        if (balance <= 0) {
+                          return (
+                            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-sm leading-none">
+                              ● À jour
+                            </span>
+                          );
+                        }
+                        if (totalPaye > 0) {
+                          return (
+                            <div className="flex flex-col gap-0.5">
+                              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-50 text-amber-700 border border-amber-200 leading-none self-start">
+                                ● Partiel ({percentPaid}%)
+                              </span>
+                              <span className="text-[10px] text-gray-400 font-bold font-mono">Restant : {balance.toLocaleString()} F</span>
+                            </div>
+                          );
+                        }
+                        return (
+                          <div className="flex flex-col gap-0.5">
+                            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-black bg-rose-50 text-rose-700 border border-rose-200 leading-none self-start">
+                              ● Impayé (0%)
+                            </span>
+                            <span className="text-[10px] text-rose-600 font-bold font-mono">Total : {totalDu.toLocaleString()} F</span>
+                          </div>
+                        );
+                      })() : (
+                        <span className="text-gray-400 text-xs italic">N/A</span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4">
                       <div className="flex flex-col gap-0.5">
                         <div className="text-xs font-medium text-gray-700 flex items-center gap-1">
                           <Phone size={10} className="text-gray-400" />
@@ -745,6 +905,13 @@ export default function Users() {
                           <Eye size={18} />
                         </button>
                         <button 
+                          onClick={() => handleToggleArchiveUser(user)}
+                          className={`p-2 rounded-lg transition-colors ${user.isArchived ? 'text-indigo-700 bg-indigo-50 border border-indigo-150' : 'text-gray-400 hover:text-indigo-600 hover:bg-indigo-50'}`}
+                          title={user.isArchived ? "Désarchiver (rendre Actif)" : "Archiver l'utilisateur (Traçabilité)"}
+                        >
+                          <Archive size={18} />
+                        </button>
+                        <button 
                           onClick={() => setEditUser({...user})}
                           className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                           title={t('edit')}
@@ -793,6 +960,15 @@ export default function Users() {
               >
                 {t('profile')}
               </button>
+              {viewUser.role === 'élève' && (
+                <button 
+                  onClick={() => setViewTab('finance')}
+                  className={`flex-1 py-3 text-sm font-bold transition-all flex items-center justify-center gap-2 ${viewTab === 'finance' ? 'text-indigo-600 border-b-2 border-indigo-600 bg-indigo-50/30' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'}`}
+                >
+                  <Briefcase size={16} />
+                  Situation Financière
+                </button>
+              )}
               <button 
                 onClick={() => setViewTab('attendance')}
                 className={`flex-1 py-3 text-sm font-bold transition-all flex items-center justify-center gap-2 ${viewTab === 'attendance' ? 'text-indigo-600 border-b-2 border-indigo-600 bg-indigo-50/30' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'}`}
@@ -1048,6 +1224,122 @@ export default function Users() {
                     </div>
                   </div>
                 </>
+              ) : viewTab === 'finance' ? (
+                (() => {
+                  const fin = computeStudentFinance(viewUser);
+                  if (!fin) return <p className="text-gray-500 italic text-center py-6">Aucune information financière disponible pour cet utilisateur.</p>;
+                  
+                  return (
+                    <div className="space-y-6 animate-in fade-in duration-200">
+                      {/* Financial status banner summary */}
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div className="bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-800 p-4 rounded-xl text-center shadow-sm">
+                          <p className="text-[10px] uppercase font-black tracking-wider text-gray-400">Total Dû</p>
+                          <p className="text-xl font-black text-slate-800 dark:text-slate-100 mt-1">{(fin.totalDu).toLocaleString()} F</p>
+                        </div>
+                        <div className="bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-100 dark:border-emerald-900/10 p-4 rounded-xl text-center shadow-sm">
+                          <p className="text-[10px] uppercase font-black tracking-wider text-emerald-600">Total Versé</p>
+                          <p className="text-xl font-black text-emerald-700 dark:text-emerald-400 mt-1">{(fin.totalPaye).toLocaleString()} F</p>
+                        </div>
+                        <div className="bg-rose-50 dark:bg-rose-950/20 border border-rose-100 dark:border-rose-900/10 p-4 rounded-xl text-center shadow-sm">
+                          <p className="text-[10px] uppercase font-black tracking-wider text-rose-600">Solde Restante</p>
+                          <p className="text-xl font-black text-rose-700 dark:text-rose-400 mt-1">{(fin.balance).toLocaleString()} F</p>
+                        </div>
+                      </div>
+
+                      {/* Payment progress */}
+                      <div className="p-4 bg-white dark:bg-slate-900 border border-gray-100 dark:border-gray-800 rounded-xl space-y-2 shadow-sm">
+                        <div className="flex justify-between text-xs font-bold text-gray-500">
+                          <span>Niveau d'acquittement global</span>
+                          <span className="text-indigo-600 font-extrabold">{fin.percentPaid}%</span>
+                        </div>
+                        <div className="w-full bg-gray-100 dark:bg-gray-700 h-2 rounded-full overflow-hidden">
+                          <div 
+                            className="bg-indigo-600 h-full transition-all duration-500" 
+                            style={{ width: `${Math.min(fin.percentPaid, 100)}%` }}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Tarifs Configuration assigned */}
+                      <div className="space-y-3">
+                        <h4 className="text-xs font-black uppercase text-gray-400 tracking-wider flex items-center gap-1.5">
+                          <GraduationCap size={14} className="text-indigo-500" />
+                          Configuration & Catégories de Frais Imputés
+                        </h4>
+                        <div className="overflow-hidden border border-gray-100 dark:border-gray-700 rounded-xl divide-y dark:divide-gray-700 bg-white dark:bg-slate-900">
+                          {fin.feeDetails.length === 0 ? (
+                            <p className="p-4 text-center text-xs text-gray-405 italic">Aucun frais spécifié pour cet élève.</p>
+                          ) : (
+                            fin.feeDetails.map(f => (
+                              <div key={f.id} className="p-4 flex items-center justify-between text-sm hover:bg-gray-50/50 dark:hover:bg-gray-800/20 transition-colors">
+                                <div>
+                                  <p className="font-bold text-gray-900 dark:text-white capitalize">{f.name}</p>
+                                  <p className="text-xs text-gray-400 font-medium">Catégorie: <span className="text-indigo-650 bg-indigo-50 dark:bg-indigo-950/20 px-1.5 py-0.5 rounded font-bold uppercase text-[9px]">{f.category}</span></p>
+                                </div>
+                                <div className="text-right">
+                                  <p className="font-black font-mono text-gray-900 dark:text-white">{(f.amount || 0).toLocaleString()} F</p>
+                                  <span className={`inline-block px-2 py-0.5 mt-1 rounded text-[10px] font-bold ${
+                                    f.balance <= 0 ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' :
+                                    f.paid > 0 ? 'bg-amber-100/60 text-amber-800' :
+                                    'bg-rose-50 text-rose-700 border border-rose-100'
+                                  }`}>
+                                    {f.balance <= 0 ? '✓ Soldé' : f.paid > 0 ? `Partiel: ${f.paid.toLocaleString()} F` : 'Non Payé'}
+                                  </span>
+                                </div>
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Payment History */}
+                      <div className="space-y-3">
+                        <h4 className="text-xs font-black uppercase text-gray-400 tracking-wider flex items-center gap-1.5">
+                          <HistoryIcon size={14} className="text-indigo-500" />
+                          Historique Nominal des Reçus de Caisse
+                        </h4>
+                        <div className="overflow-hidden border border-gray-100 dark:border-gray-700 rounded-xl bg-white dark:bg-slate-900">
+                          <table className="w-full text-xs text-left">
+                            <thead className="bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400 uppercase font-black text-[9px] border-b dark:border-gray-700">
+                              <tr>
+                                <th className="p-3">Numéro / Date</th>
+                                <th className="p-3">Mode de paiement</th>
+                                <th className="p-3 text-right">Montant appliqué</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y dark:divide-gray-700 font-medium">
+                              {(() => {
+                                const studentPayments = payments.filter(p => p.studentId === viewUser.id);
+                                if (studentPayments.length === 0) {
+                                  return (
+                                    <tr>
+                                      <td colSpan={3} className="p-4 text-center text-gray-400 italic">Aucune transaction de caisse pour cet élève cette année.</td>
+                                    </tr>
+                                  );
+                                }
+                                return studentPayments.map(p => (
+                                  <tr key={p.id} className="hover:bg-gray-50/50 dark:hover:bg-gray-800/10 transition-colors">
+                                    <td className="p-3">
+                                      <p className="font-bold text-gray-900 dark:text-white">#{p.reference || p.id?.substring(0, 8)}</p>
+                                      <p className="text-[10px] text-gray-405">{p.date ? new Date(p.date).toLocaleDateString('fr-FR', {day: '2-digit', month: 'long', year: 'numeric'}) : '-'}</p>
+                                    </td>
+                                    <td className="p-3">
+                                      <span className="px-2 py-0.5 bg-indigo-50 text-indigo-700 border border-indigo-150 rounded text-[9px] uppercase font-bold">{p.method || 'Caisse'}</span>
+                                    </td>
+                                    <td className="p-3 font-mono font-black text-right text-indigo-650 dark:text-indigo-400">
+                                      {(parseFloat(p.amount) || 0).toLocaleString()} F
+                                    </td>
+                                  </tr>
+                                ));
+                              })()}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()
               ) : (
                 <div className="space-y-4">
                   <div className="flex justify-between items-center">

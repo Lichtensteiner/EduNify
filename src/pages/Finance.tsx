@@ -77,6 +77,7 @@ import {
 } from 'recharts';
 import SuccessModal from '../components/SuccessModal';
 import { FinanceExtraModules } from '../components/FinanceExtraModules';
+import { StudentFeesMgmt } from '../components/StudentFeesMgmt';
 
 // Cryptographic hash helper simulation for anti-fraud validation
 const generateTransactionHash = (id: string, account_deb: string, account_cred: string, amount: number, dateStr: string) => {
@@ -179,7 +180,7 @@ const Finance: React.FC = () => {
   const [showPwaInstallModal, setShowPwaInstallModal] = useState(false);
 
   // ERP Tab State
-  const [activeTab, setActiveTab2] = useState<'journal' | 'caisse' | 'expenses' | 'accounting_plan' | 'double_entries' | 'balance_sheet' | 'sage_sync' | 'parent_invoice' | 'registered_members' | 'payroll' | 'assets' | 'suppliers' | 'discounts'>('journal');
+  const [activeTab, setActiveTab2] = useState<'journal' | 'caisse' | 'expenses' | 'accounting_plan' | 'double_entries' | 'balance_sheet' | 'sage_sync' | 'parent_invoice' | 'registered_members' | 'payroll' | 'assets' | 'suppliers' | 'discounts' | 'fees_mgmt'>('journal');
   
   // Storage states
   const [payments, setPayments] = useState<Payment[]>([]);
@@ -1339,6 +1340,7 @@ Sceau de sécurité : CS-GAB-${payment.id.substring(0,8).toUpperCase()}-2026
           { id: 'expenses', label: 'Saisie de Dépenses' },
           { id: 'caisse', label: 'Caisse Journalière' },
           { id: 'registered_members', label: '👥 Inscriptions & Effectifs' },
+          { id: 'fees_mgmt', label: '💰 Gestion des Frais Scolaires' },
           { id: 'accounting_plan', label: 'Plan de Comptes OHADA' },
           { id: 'double_entries', label: 'Ledger Double-Entrée' },
           { id: 'balance_sheet', label: 'Balance & Résultats' },
@@ -2364,6 +2366,16 @@ Sceau de sécurité : CS-GAB-${payment.id.substring(0,8).toUpperCase()}-2026
             );
           })()}
         </div>
+      )}
+
+      {activeTab === 'fees_mgmt' && (
+        <StudentFeesMgmt
+          students={students}
+          allClasses={allClasses}
+          currentEstablishment={currentEstablishment}
+          payments={payments}
+          setPayments={setPayments}
+        />
       )}
 
       {['payroll', 'assets', 'suppliers', 'discounts'].includes(activeTab) && (

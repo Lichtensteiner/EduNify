@@ -157,6 +157,7 @@ function AppContent() {
   const renderContent = () => {
     const role = currentUser?.role || '';
     const isAdmin = role === 'admin' || isSuperAdmin;
+    const isComptable = role === 'comptable' || role === 'gestionnaire_comptable' || (role === 'personnel administratif' && currentUser?.position === 'comptable');
     
     switch (activeTab) {
       case 'kiosk':
@@ -172,7 +173,7 @@ function AppContent() {
       case 'student_card': 
         return role === 'élève' ? <StudentCard /> : <Dashboard onNavigate={handleNavigate} />;
       case 'users': 
-        return isAdmin ? <Users /> : <Dashboard onNavigate={handleNavigate} />;
+        return (isAdmin || isComptable) ? <Users /> : <Dashboard onNavigate={handleNavigate} />;
       case 'attendance': 
         return (isAdmin || ['enseignant', 'personnel administratif'].includes(role)) ? <Attendance /> : <StudentDashboard onNavigate={handleNavigate} />;
       case 'reports': 
