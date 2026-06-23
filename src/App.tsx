@@ -155,7 +155,7 @@ function AppContent() {
   }
 
   const renderContent = () => {
-    const role = currentUser?.role || '';
+    const role = (currentUser?.role || '') as string;
     const isAdmin = role === 'admin' || isSuperAdmin;
     const isComptable = role === 'comptable' || role === 'gestionnaire_comptable' || (role === 'personnel administratif' && currentUser?.position === 'comptable');
     

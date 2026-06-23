@@ -524,6 +524,11 @@ export default function Users() {
       if (fee.studentId) {
         return fee.studentId === student.id;
       }
+
+      if (fee.houseId && fee.houseId !== 'Toutes') {
+        const studentHouse = student.house_id || student.houseId;
+        if (studentHouse !== fee.houseId) return false;
+      }
       
       if (fee.niveau && fee.niveau !== 'Toutes') {
         const studentNiveau = (student.niveau || '').toLowerCase();

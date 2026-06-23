@@ -24,7 +24,9 @@ service cloud.firestore {
       return isAuthenticated() && (
         (request.auth.token.email == "martinienmvezogo@gmail.com") ||
         (hasUserData() && getUserData().get('role', '') == 'admin') ||
-        (hasUserData() && getUserData().get('role', '') == 'personnel administratif')
+        (hasUserData() && getUserData().get('role', '') == 'personnel administratif') ||
+        (hasUserData() && getUserData().get('role', '') == 'comptable') ||
+        (hasUserData() && getUserData().get('role', '') == 'gestionnaire_comptable')
       );
     }
     

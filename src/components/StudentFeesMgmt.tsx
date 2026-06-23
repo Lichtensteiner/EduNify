@@ -52,6 +52,8 @@ interface FeeConfig {
   filiere: string; // "Toutes" or Branch
   establishmentId: string;
   deadlines: { label: string; dueDate: string; amount: number }[];
+  studentId?: string;
+  houseId?: string;
   createdAt?: any;
 }
 
@@ -72,6 +74,10 @@ export const StudentFeesMgmt: React.FC<StudentFeesMgmtProps> = ({
 }) => {
   const { currentUser } = useAuth();
   const currentEstId = currentEstablishment?.id || 'EDU-001';
+
+  // Real-time DB classes and houses
+  const [dbClasses, setDbClasses] = useState<any[]>(allClasses || []);
+  const [dbHouses, setDbHouses] = useState<any[]>([]);
 
   // --- STATE ---
   const [feeConfigs, setFeeConfigs] = useState<FeeConfig[]>([]);
@@ -98,6 +104,8 @@ export const StudentFeesMgmt: React.FC<StudentFeesMgmtProps> = ({
     classe: 'Toutes',
     niveau: 'Toutes',
     filiere: 'Toutes',
+    studentId: '',
+    houseId: 'Toutes',
   });
   const [customDeadlines, setCustomDeadlines] = useState<{ label: string; dueDate: string; amount: number }[]>([
     { label: 'Tranche 1 (Acompte)', dueDate: '2026-10-15', amount: 0 },
@@ -201,6 +209,36 @@ export const StudentFeesMgmt: React.FC<StudentFeesMgmtProps> = ({
     return () => unsubscribe();
   }, [currentEstId]);
 
+  // Synchronize and load classes & houses collections in real-time
+  useEffect(() => {
+    if (allClasses && allClasses.length > 0) {
+      setDbClasses(allClasses);
+    }
+  }, [allClasses]);
+
+  useEffect(() => {
+    const unsubscribeClasses = onSnapshot(collection(db, 'classes'), (snap) => {
+      const classesData = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      if (classesData.length > 0) {
+        setDbClasses(classesData);
+      }
+    }, (err) => {
+      console.warn("Restricted loading classes inside StudentFeesMgmt, leveraging prop instead", err);
+    });
+
+    const unsubscribeHouses = onSnapshot(collection(db, 'houses'), (snap) => {
+      const housesData = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setDbHouses(housesData);
+    }, (err) => {
+      console.warn("Restricted loading houses inside StudentFeesMgmt", err);
+    });
+
+    return () => {
+      unsubscribeClasses();
+      unsubscribeHouses();
+    };
+  }, []);
+
   // Handle custom dynamic deadline splitting
   useEffect(() => {
     const amt = parseFloat(newConfig.amount) || 0;
@@ -257,7 +295,9 @@ export const StudentFeesMgmt: React.FC<StudentFeesMgmtProps> = ({
         niveau: newConfig.niveau,
         filiere: newConfig.filiere,
         establishmentId: currentEstId,
-        deadlines: customDeadlines
+        deadlines: customDeadlines,
+        ...(newConfig.studentId ? { studentId: newConfig.studentId } : {}),
+        ...(newConfig.houseId && newConfig.houseId !== 'Toutes' ? { houseId: newConfig.houseId } : {}),
       };
 
       // Add to Firestore
@@ -277,6 +317,8 @@ export const StudentFeesMgmt: React.FC<StudentFeesMgmtProps> = ({
         classe: 'Toutes',
         niveau: 'Toutes',
         filiere: 'Toutes',
+        studentId: '',
+        houseId: 'Toutes',
       });
       setShowConfigModal(false);
       alert("Configuration de frais créée et imputée avec succès !");
@@ -284,7 +326,21 @@ export const StudentFeesMgmt: React.FC<StudentFeesMgmtProps> = ({
       console.error("Error creating fee config in Firestore:", err);
       // Fallback local save
       const localId = `local-${Date.now()}`;
-      const updated = [...feeConfigs, { id: localId, name: newConfig.name, category: newConfig.category, amount: amtNum, periodType: newConfig.periodType, periodValue: newConfig.periodValue, classe: newConfig.classe, niveau: newConfig.niveau, filiere: newConfig.filiere, establishmentId: currentEstId, deadlines: customDeadlines }];
+      const confDataLocal: any = {
+        name: newConfig.name,
+        category: newConfig.category,
+        amount: amtNum,
+        periodType: newConfig.periodType,
+        periodValue: newConfig.periodValue,
+        classe: newConfig.classe,
+        niveau: newConfig.niveau,
+        filiere: newConfig.filiere,
+        establishmentId: currentEstId,
+        deadlines: customDeadlines,
+        ...(newConfig.studentId ? { studentId: newConfig.studentId } : {}),
+        ...(newConfig.houseId && newConfig.houseId !== 'Toutes' ? { houseId: newConfig.houseId } : {}),
+      };
+      const updated = [...feeConfigs, { id: localId, ...confDataLocal }];
       setFeeConfigs(updated);
       localStorage.setItem(`fee_configs_${currentEstId}`, JSON.stringify(updated));
       setShowConfigModal(false);
@@ -388,6 +444,17 @@ export const StudentFeesMgmt: React.FC<StudentFeesMgmtProps> = ({
     return feeConfigs.filter(fee => {
       // Must match establishment
       if (fee.establishmentId !== currentEstId) return false;
+      
+      // If fee is linked to a specific student
+      if (fee.studentId) {
+        return fee.studentId === student.id;
+      }
+
+      // Check specific house filter
+      if (fee.houseId && fee.houseId !== 'Toutes') {
+        const studentHouse = student.house_id || student.houseId;
+        if (studentHouse !== fee.houseId) return false;
+      }
       
       // Check level filter
       if (fee.niveau !== 'Toutes') {
@@ -640,7 +707,12 @@ export const StudentFeesMgmt: React.FC<StudentFeesMgmtProps> = ({
                           <p className="font-extrabold text-slate-800 dark:text-slate-100 uppercase">{s.prenom || ''} {s.nom || ''}</p>
                           <p className="text-[10px] text-gray-400 font-mono">Matricule : {s.matricule || 'Non assigné'}</p>
                         </div>
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          {s.house_id && dbHouses.find(h => h.id === s.house_id) && (
+                            <span className="bg-amber-500/10 text-amber-600 dark:text-amber-400 text-[10px] font-black px-2 py-0.5 rounded uppercase">
+                              {dbHouses.find(h => h.id === s.house_id)?.nom_maison || dbHouses.find(h => h.id === s.house_id)?.nom}
+                            </span>
+                          )}
                           {s.classe && (
                             <span className="bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 text-[10px] font-black px-2 py-0.5 rounded uppercase">
                               {s.classe}
@@ -872,7 +944,7 @@ export const StudentFeesMgmt: React.FC<StudentFeesMgmtProps> = ({
               >
                 <option value="all">Toutes Classes</option>
                 <option value="Toutes">Globale / Toutes Classes</option>
-                {allClasses.map(c => (
+                {dbClasses.map(c => (
                   <option key={c.id} value={c.nom || c.id}>{c.nom || c.id}</option>
                 ))}
               </select>
@@ -991,7 +1063,15 @@ export const StudentFeesMgmt: React.FC<StudentFeesMgmtProps> = ({
                         <tr key={`${student.id}-${fee.id}`} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
                           <td className="px-5 py-3">
                             <p className="font-extrabold text-slate-800 dark:text-gray-100 uppercase">{student.prenom} {student.nom}</p>
-                            <p className="text-[9.5px] text-gray-400 font-mono">Classe : <span className="font-bold text-indigo-500">{student.classe || 'N/A'}</span></p>
+                            <div className="flex gap-2 text-[9.5px] text-gray-400 font-mono mt-0.5 flex-wrap">
+                              <span>Classe : <span className="font-bold text-indigo-500">{student.classe || 'N/A'}</span></span>
+                              {student.house_id && dbHouses.find(h => h.id === student.house_id) && (
+                                <span className="text-gray-300">|</span>
+                              )}
+                              {student.house_id && dbHouses.find(h => h.id === student.house_id) && (
+                                <span>Maison : <span className="font-bold text-amber-500">{dbHouses.find(h => h.id === student.house_id)?.nom_maison || dbHouses.find(h => h.id === student.house_id)?.nom}</span></span>
+                              )}
+                            </div>
                           </td>
                           <td className="px-5 py-3">
                             <span className="font-bold text-gray-700 dark:text-gray-350">{fee.name}</span>
@@ -1157,9 +1237,43 @@ export const StudentFeesMgmt: React.FC<StudentFeesMgmtProps> = ({
                   required
                   placeholder="EX: Scolarité Terminale S1, Inscription Maternelle..."
                   value={newConfig.name}
-                  onChange={(e) => setNewConfig({ ...newConfig, name: e.target.value })}
+                  onChange={(e) => setNewConfig({ ...newConfig, name: e.target.value, studentId: e.target.value === '' ? '' : newConfig.studentId })}
                   className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 py-2.5 px-3 focus:ring-2 focus:ring-indigo-500 outline-none text-gray-900 dark:text-white"
                 />
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Assigner nommément à un élève (Optionnel)</label>
+                <select
+                  value={newConfig.studentId || ''}
+                  onChange={(e) => {
+                    const studentId = e.target.value;
+                    if (!studentId) {
+                      setNewConfig({ ...newConfig, studentId: '', name: '' });
+                    } else {
+                      const student = students.find(s => s.id === studentId);
+                      if (student) {
+                        const sName = `${student.prenom || ''} ${student.nom || ''}`.trim();
+                        setNewConfig({
+                          ...newConfig,
+                          studentId: studentId,
+                          name: `Scolarité Individualisée - ${sName}`,
+                          classe: student.classe || 'Toutes',
+                          niveau: 'Toutes',
+                          filiere: 'Toutes'
+                        });
+                      }
+                    }
+                  }}
+                  className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 py-2.5 px-3 focus:ring-2 focus:ring-indigo-500 outline-none"
+                >
+                  <option value="">-- Tarif Collectif / Toutes Classes --</option>
+                  {students.map(s => (
+                    <option key={s.id} value={s.id}>
+                      {s.prenom} {s.nom} ({s.classe || 'Sans classe'}) - Matricule : {s.matricule || 'N/A'}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -1295,7 +1409,7 @@ export const StudentFeesMgmt: React.FC<StudentFeesMgmtProps> = ({
               </div>
 
               {/* Advanced rules targets tags filter */}
-              <div className="grid grid-cols-3 gap-2.5 border-t border-gray-100 dark:border-gray-750 pt-3">
+              <div className="grid grid-cols-2 gap-2.5 border-t border-gray-100 dark:border-gray-750 pt-3">
                 <div>
                   <label className="block text-[9px] font-bold text-gray-400 uppercase mb-0.5">Classe Cible</label>
                   <select
@@ -1304,8 +1418,22 @@ export const StudentFeesMgmt: React.FC<StudentFeesMgmtProps> = ({
                     className="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 py-1.5 px-2"
                   >
                     <option value="Toutes">Toutes</option>
-                    {allClasses.map(c => (
+                    {dbClasses.map(c => (
                       <option key={c.id} value={c.nom || c.id}>{c.nom || c.id}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[9px] font-bold text-gray-400 uppercase mb-0.5">Maison Cible (Optionnel)</label>
+                  <select
+                    value={newConfig.houseId || 'Toutes'}
+                    onChange={(e) => setNewConfig({ ...newConfig, houseId: e.target.value })}
+                    className="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 py-1.5 px-2"
+                  >
+                    <option value="Toutes">Toutes les Maisons</option>
+                    {dbHouses.map(h => (
+                      <option key={h.id} value={h.id}>{h.nom_maison || h.nom || h.id}</option>
                     ))}
                   </select>
                 </div>
