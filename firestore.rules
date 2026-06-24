@@ -503,5 +503,17 @@ service cloud.firestore {
         (exists(/databases/$(database)/documents/bulletin_rights/$(request.auth.uid)) && get(/databases/$(database)/documents/bulletin_rights/$(request.auth.uid)).data.canPublish == true)
       );
     }
+
+    // Advanced RH collections
+    match /rh_staff/{id} {
+      allow read, write: if isAdmin();
+    }
+    match /rh_advances/{id} {
+      allow read, write: if isAdmin();
+    }
+    match /rh_bulletin_config/{id} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
   }
 }

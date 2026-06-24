@@ -13,6 +13,7 @@ import SuccessModal from '../components/SuccessModal';
 import { useNotification } from '../contexts/NotificationContext';
 import { useEstablishment } from '../contexts/EstablishmentContext';
 import { motion, AnimatePresence } from 'motion/react';
+import RHManagement from '../components/RHManagement';
 
 export default function Users() {
   const { currentUser } = useAuth();
@@ -33,6 +34,7 @@ export default function Users() {
   // Super Admin view states
   const [superAdminView, setSuperAdminView] = useState<'admins' | 'all'>('admins');
   const [inspectedEstId, setInspectedEstId] = useState<string | null>(null);
+  const [adminTab, setAdminTab] = useState<'users' | 'rh'>('users');
 
   // Modals state
   const [viewUser, setViewUser] = useState<any>(null);
@@ -736,6 +738,31 @@ export default function Users() {
         </div>
       )}
 
+      {(!isSuperAdmin && ['admin', 'comptable', 'personnel administratif', 'gestionnaire_comptable', "Administrateur d'établissement", 'Comptable'].includes(currentUser?.role as any)) && (
+        <div className="flex border-b border-gray-200 pb-px gap-4 bg-gray-50/50 p-3 rounded-2xl border border-gray-100 mb-6">
+          <button
+            onClick={() => setAdminTab('users')}
+            className={`px-4 py-2 text-xs font-black rounded-xl transition-all flex items-center gap-2 ${
+              adminTab === 'users'
+                ? 'bg-indigo-600 text-white shadow-sm'
+                : 'bg-white hover:bg-gray-100 text-gray-600 hover:text-gray-900 border border-gray-200 shadow-xs'
+            }`}
+          >
+            🌐 Vue Globale (Utilisateurs)
+          </button>
+          <button
+            onClick={() => setAdminTab('rh')}
+            className={`px-4 py-2 text-xs font-black rounded-xl transition-all flex items-center gap-2 ${
+              adminTab === 'rh'
+                ? 'bg-indigo-600 text-white shadow-sm'
+                : 'bg-white hover:bg-gray-100 text-gray-600 hover:text-gray-900 border border-gray-200 shadow-xs'
+            }`}
+          >
+            💼 Gestion RH (Personnel)
+          </button>
+        </div>
+      )}
+
       {isSuperAdmin && superAdminView === 'admins' && !inspectedEstId ? (
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden space-y-4">
           <div className="p-5 border-b border-gray-100 bg-gray-50/50 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -1102,6 +1129,8 @@ export default function Users() {
             </div>
           </div>
         </div>
+      ) : adminTab === 'rh' ? (
+        <RHManagement />
       ) : (
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
           <div className="p-4 border-b border-gray-100 flex flex-col sm:flex-row gap-4 justify-between items-center bg-gray-50/50">

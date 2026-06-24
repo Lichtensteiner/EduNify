@@ -493,6 +493,52 @@
         "publishedAt": { "type": "string", "format": "date-time" }
       },
       "required": ["studentId", "studentName", "period", "generalAverage", "isPublished"]
+    },
+    "rh_staff": {
+      "title": "Staff RH Profiles",
+      "description": "Information dossiers for administrative and academic staff.",
+      "type": "object",
+      "properties": {
+        "nom": { "type": "string" },
+        "prenom": { "type": "string" },
+        "sexe": { "type": "string" },
+        "matricule": { "type": "string" },
+        "poste": { "type": "string" },
+        "departement": { "type": "string" },
+        "typeContrat": { "type": "string" },
+        "dateEntree": { "type": "string" },
+        "statut": { "type": "string" },
+        "tarifHoraire": { "type": "number" },
+        "heuresEffectuees": { "type": "number" },
+        "etablissement": { "type": "string" }
+      }
+    },
+    "rh_advances": {
+      "title": "Salary Advances",
+      "description": "Advance requests and payments for the staff.",
+      "type": "object",
+      "properties": {
+        "staffId": { "type": "string" },
+        "staffName": { "type": "string" },
+        "montant": { "type": "number" },
+        "motif": { "type": "string" },
+        "status": { "type": "string" },
+        "date": { "type": "string" }
+      }
+    },
+    "rh_bulletin_config": {
+      "title": "School Bulletin Styling Config",
+      "description": "Official layout settings, colors, signatures and logos for custom report cards.",
+      "type": "object",
+      "properties": {
+        "nomEtablissement": { "type": "string" },
+        "devise": { "type": "string" },
+        "couleurPrimaire": { "type": "string" },
+        "couleurSecondaire": { "type": "string" },
+        "signatureDirecteur": { "type": "string" },
+        "signatureResponsable": { "type": "string" },
+        "format": { "type": "string" }
+      }
     }
   },
   "firestore": {
@@ -530,6 +576,9 @@
     "/resp_it_tickets/{ticketId}": { "schema": "resp_it_tickets", "description": "IT defect tickets." },
     "/access_requests/{reqId}": { "schema": "access_requests", "description": "Access requests and public registrations pending admin validation." },
     "/bulletin_rights/{userId}": { "schema": "bulletin_rights", "description": "Delegated bulletin publishing permissions mapping." },
-    "/bulletins/{bulletinId}": { "schema": "bulletins", "description": "Structured quarterly report cards." }
+    "/bulletins/{bulletinId}": { "schema": "bulletins", "description": "Structured quarterly report cards." },
+    "/rh_staff/{id}": { "schema": "rh_staff", "description": "Staff RH Profiles" },
+    "/rh_advances/{id}": { "schema": "rh_advances", "description": "Salary Advances" },
+    "/rh_bulletin_config/{id}": { "schema": "rh_bulletin_config", "description": "School Bulletin Config" }
   }
 }
