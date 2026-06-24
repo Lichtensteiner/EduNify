@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { recordAuditLog } from '../services/auditService';
-import { Search, Filter, Plus, Fingerprint, RefreshCw, Eye, EyeOff, Edit2, Trash2, X, AlertCircle, BellRing, Key, Phone, MapPin, User2, Calendar, GraduationCap, History as HistoryIcon, Mail, Lock, Briefcase, User, Hash, Ban, ShieldOff, Camera, Archive } from 'lucide-react';
+import { Search, Filter, Plus, Fingerprint, RefreshCw, Eye, EyeOff, Edit2, Trash2, X, AlertCircle, BellRing, Key, Phone, MapPin, User2, Calendar, GraduationCap, History as HistoryIcon, Mail, Lock, Briefcase, User, Hash, Ban, ShieldOff, Camera, Archive, ChevronRight } from 'lucide-react';
 import { collection, getDocs, doc, updateDoc, deleteDoc, setDoc, addDoc, onSnapshot, query, where } from 'firebase/firestore';
 import { initializeApp, getApp, getApps, deleteApp } from 'firebase/app';
 import { getAuth, createUserWithEmailAndPassword, signOut } from 'firebase/auth';
@@ -29,6 +29,10 @@ export default function Users() {
   const [payments, setPayments] = useState<any[]>([]);
   const [filterArchive, setFilterArchive] = useState<'active' | 'archived' | 'all'>('active');
   const [loading, setLoading] = useState(true);
+
+  // Super Admin view states
+  const [superAdminView, setSuperAdminView] = useState<'admins' | 'all'>('admins');
+  const [inspectedEstId, setInspectedEstId] = useState<string | null>(null);
 
   // Modals state
   const [viewUser, setViewUser] = useState<any>(null);
@@ -645,6 +649,32 @@ export default function Users() {
     }
   };
 
+  const establishmentAdmins = users.filter(u => u.role === 'admin');
+  const inspectedUsers = users.filter(user => user.etablissement === inspectedEstId);
+  const filteredInspectedUsers = inspectedUsers.filter(user => {
+    // Archive filter
+    const isUserArchived = !!user.isArchived;
+    if (filterArchive === 'active' && isUserArchived) return false;
+    if (filterArchive === 'archived' && !isUserArchived) return false;
+
+    const userNom = (user.nom || '').toLowerCase();
+    const userPrenom = (user.prenom || '').toLowerCase();
+    const userMatricule = (user.matricule || '').toLowerCase();
+    const userEmail = (user.email || '').toLowerCase();
+    const term = searchTerm.toLowerCase();
+
+    const matchesSearch = userNom.includes(term) || 
+                          userPrenom.includes(term) || 
+                          userMatricule.includes(term) ||
+                          userEmail.includes(term);
+    const matchesRole = filterRole === 'all' || user.role === filterRole;
+    return matchesSearch && matchesRole;
+  }).sort((a, b) => {
+    const nameA = `${a.nom || ''} ${a.prenom || ''}`.trim().toLowerCase();
+    const nameB = `${b.nom || ''} ${b.prenom || ''}`.trim().toLowerCase();
+    return nameA.localeCompare(nameB);
+  });
+
   return (
     <div className="space-y-6 relative">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4">
@@ -670,276 +700,680 @@ export default function Users() {
         </div>
       </div>
 
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-        <div className="p-4 border-b border-gray-100 flex flex-col sm:flex-row gap-4 justify-between items-center bg-gray-50/50">
-          <div className="relative w-full sm:w-72">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-            <input 
-              type="text" 
-              placeholder={t('search_placeholder')} 
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all text-sm"
-            />
-          </div>
-          
-          <div className="flex flex-wrap items-center gap-2.5 w-full sm:w-auto">
-            <div className="flex items-center gap-1.5 min-w-[150px]">
-              <Filter size={16} className="text-gray-400 shrink-0" />
-              <select 
-                value={filterRole}
-                onChange={(e) => setFilterRole(e.target.value)}
-                className="bg-white border border-gray-250 text-gray-700 text-sm rounded-xl focus:ring-indigo-500 focus:border-indigo-500 block w-full p-2"
-              >
-                <option value="all">{t('all')}</option>
-                <option value="élève">{tData('élève')}</option>
-                <option value="enseignant">{tData('enseignant')}</option>
-                <option value="personnel administratif">{tData('personnel administratif')}</option>
-                <option value="cuisinier">{tData('cuisinier')}</option>
-                <option value="admin">{tData('admin')}</option>
-              </select>
+      {isSuperAdmin && (
+        <div className="flex border-b border-gray-200 pb-px gap-4 bg-gray-50/50 p-3 rounded-2xl border border-gray-100">
+          <button
+            onClick={() => {
+              setSuperAdminView('admins');
+              setInspectedEstId(null);
+            }}
+            className={`px-4 py-2 text-xs font-black rounded-xl transition-all flex items-center gap-2 ${
+              superAdminView === 'admins' && !inspectedEstId
+                ? 'bg-indigo-600 text-white shadow-sm'
+                : 'bg-white hover:bg-gray-100 text-gray-600 hover:text-gray-900 border border-gray-200 shadow-xs'
+            }`}
+          >
+            🏫 Admins d'Établissements ({establishmentAdmins.length})
+          </button>
+          <button
+            onClick={() => {
+              setSuperAdminView('all');
+              setInspectedEstId(null);
+            }}
+            className={`px-4 py-2 text-xs font-black rounded-xl transition-all flex items-center gap-2 ${
+              superAdminView === 'all' && !inspectedEstId
+                ? 'bg-indigo-600 text-white shadow-sm'
+                : 'bg-white hover:bg-gray-100 text-gray-600 hover:text-gray-900 border border-gray-200 shadow-xs'
+            }`}
+          >
+            🌐 Vue Globale (Tous)
+          </button>
+          {inspectedEstId && (
+            <div className="ml-auto px-4 py-2 text-xs font-black rounded-xl bg-amber-50 text-amber-850 border border-amber-200 shadow-xs flex items-center gap-2">
+              <span>🔍 Inspecté: {establishments.find(e => e.id === inspectedEstId)?.nom || inspectedEstId}</span>
             </div>
-
-            <div className="flex items-center gap-1.5 min-w-[150px]">
-              <Archive size={16} className="text-indigo-600 shrink-0" />
-              <select 
-                value={filterArchive}
-                onChange={(e) => setFilterArchive(e.target.value as any)}
-                className="bg-white border border-gray-250 text-indigo-750 text-sm rounded-xl focus:ring-indigo-500 focus:border-indigo-500 block w-full p-2"
-              >
-                <option value="active">📂 Actifs uniquement</option>
-                <option value="archived">📦 Archivés (Traçabilité)</option>
-                <option value="all">📁 Tous les profils</option>
-              </select>
-            </div>
-          </div>
+          )}
         </div>
+      )}
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm text-left text-gray-500 min-w-[800px]">
-            <thead className="text-xs text-gray-700 uppercase bg-gray-50">
-              <tr>
-                <th scope="col" className="px-6 py-4 font-semibold">{t('name')} & {t('firstname')}</th>
-                <th scope="col" className="px-6 py-4 font-semibold">{t('class')}</th>
-                <th scope="col" className="px-6 py-4 font-semibold">{t('principal_teacher')}</th>
-                <th scope="col" className="px-6 py-4 font-semibold">{t('born_on')}</th>
-                <th scope="col" className="px-6 py-4 font-semibold">{t('id_number')}</th>
-                <th scope="col" className="px-6 py-4 font-semibold">{t('role')}</th>
-                <th scope="col" className="px-6 py-4 font-semibold">Situation Financière</th>
-                <th scope="col" className="px-6 py-4 font-semibold">{t('contact')}</th>
-                <th scope="col" className="px-6 py-4 font-semibold font-bold">{t('bio')}</th>
-                <th scope="col" className="px-6 py-4 font-semibold text-right">{t('actions')}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading ? (
+      {isSuperAdmin && superAdminView === 'admins' && !inspectedEstId ? (
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden space-y-4">
+          <div className="p-5 border-b border-gray-100 bg-gray-50/50 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+            <div>
+              <h2 className="text-base font-black text-slate-800 uppercase tracking-tight">Supervision des Admins & Effectifs</h2>
+              <p className="text-xs text-gray-500">Vue globale des administrateurs par campus et répartition en temps réel de la population scolaire.</p>
+            </div>
+            <div className="flex gap-4">
+              <div className="bg-indigo-50/50 px-4 py-2 rounded-xl border border-indigo-100/50">
+                <span className="text-[10px] font-bold text-indigo-500 block uppercase">Total Établissements</span>
+                <span className="text-lg font-black text-indigo-700">{establishments.length}</span>
+              </div>
+              <div className="bg-emerald-50/50 px-4 py-2 rounded-xl border border-emerald-100/50">
+                <span className="text-[10px] font-bold text-emerald-500 block uppercase">Total Élèves (Global)</span>
+                <span className="text-lg font-black text-emerald-700">
+                  {users.filter(u => u.role === 'élève').length}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm text-left text-gray-500 min-w-[900px]">
+              <thead className="text-xs text-gray-700 uppercase bg-gray-50">
                 <tr>
-                  <td colSpan={8} className="px-6 py-12 text-center">
-                    <RefreshCw className="animate-spin mx-auto text-indigo-600 mb-2" size={24} />
-                    <p className="text-gray-500">{t('loading_users')}</p>
-                  </td>
+                  <th scope="col" className="px-6 py-4 font-black">Établissement / Campus</th>
+                  <th scope="col" className="px-6 py-4 font-black">Administrateur rattaché</th>
+                  <th scope="col" className="px-6 py-4 font-black">Contact & Email</th>
+                  <th scope="col" className="px-6 py-4 font-black text-center">Effectif Élèves</th>
+                  <th scope="col" className="px-6 py-4 font-black text-center">Enseignants</th>
+                  <th scope="col" className="px-6 py-4 font-black text-center">Personnel / Cuisiniers</th>
+                  <th scope="col" className="px-6 py-4 font-black text-right">Actions</th>
                 </tr>
-              ) : filteredUsers.length === 0 ? (
-                <tr>
-                  <td colSpan={8} className="px-6 py-12 text-center text-gray-500">
-                    {t('no_users_found')} {!isFirebaseConfigured && t('configure_firebase')}
-                  </td>
-                </tr>
-              ) : (
-                filteredUsers.map((user) => {
-                  const userClass = classes.find(c => c.nom === user.classe);
-                  const teacher = userClass && userClass.professeur_principal_id ? users.find(u => u.id === userClass.professeur_principal_id) : null;
-                  const teacherName = teacher ? `${teacher.prenom || ''} ${teacher.nom || ''}`.trim() : 'N/A';
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {establishments.map((est) => {
+                  const estAdmins = users.filter(u => u.etablissement === est.id && u.role === 'admin');
+                  const estStudents = users.filter(u => u.etablissement === est.id && u.role === 'élève');
+                  const estTeachers = users.filter(u => u.etablissement === est.id && u.role === 'enseignant');
+                  const estStaff = users.filter(u => u.etablissement === est.id && ['personnel administratif', 'cuisinier'].includes(u.role));
+                  
+                  const primaryAdmin = estAdmins[0] || null;
 
                   return (
-                  <tr key={user.id} className="bg-white border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-3">
-                        {user.photo ? (
-                          <img src={user.photo} alt="" className="w-8 h-8 rounded-full object-cover shadow-sm bg-gray-100" referrerPolicy="no-referrer" />
-                        ) : (
-                          <div className="w-8 h-8 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center font-bold text-[10px] uppercase">
-                            {user.prenom?.[0] || user.email?.[0] || 'U'}
+                    <tr key={est.id} className="hover:bg-gray-50/40 transition-colors border-b">
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-3">
+                          {est.logo ? (
+                            <img src={est.logo} alt="" className="w-9 h-9 rounded-xl object-cover border border-gray-100 shadow-sm" referrerPolicy="no-referrer" />
+                          ) : (
+                            <div className="w-9 h-9 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center font-black text-xs uppercase">
+                              {est.nom?.[0] || 'E'}
+                            </div>
+                          )}
+                          <div>
+                            <div className="font-bold text-gray-900 leading-tight">{est.nom}</div>
+                            <div className="text-[10px] text-gray-400 font-mono mt-0.5">{est.id}</div>
                           </div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        {primaryAdmin ? (
+                          <div className="flex items-center gap-2.5">
+                            {primaryAdmin.photo ? (
+                              <img src={primaryAdmin.photo} alt="" className="w-7 h-7 rounded-full object-cover" referrerPolicy="no-referrer" />
+                            ) : (
+                              <div className="w-7 h-7 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center font-bold text-[9px] uppercase border border-gray-200">
+                                {primaryAdmin.prenom?.[0] || 'A'}
+                              </div>
+                            )}
+                            <div>
+                              <div className="font-semibold text-gray-950">
+                                {primaryAdmin.nom || ''} {primaryAdmin.prenom || ''}
+                              </div>
+                              <div className="text-[10px] text-amber-600 font-black tracking-wider uppercase">
+                                {primaryAdmin.preciseRole || "Admin Principal"}
+                              </div>
+                            </div>
+                          </div>
+                        ) : (
+                          <span className="text-xs text-rose-500 font-black italic">Aucun administrateur</span>
                         )}
-                        <div>
-                          <div className="font-bold text-gray-900 group-hover:text-indigo-600 transition-colors">
-                            {user.nom || user.prenom ? `${user.nom || ''} ${user.prenom || ''}`.trim() : user.email?.split('@')[0] || t('user')}
+                      </td>
+                      <td className="px-6 py-4">
+                        {primaryAdmin ? (
+                          <div className="text-xs space-y-0.5">
+                            <div className="font-medium text-gray-800">{primaryAdmin.email}</div>
+                            {primaryAdmin.contact && (
+                              <div className="text-gray-400 font-mono text-[10px] flex items-center gap-1">
+                                <Phone size={10} /> {primaryAdmin.contact}
+                              </div>
+                            )}
                           </div>
-                          <div className="text-[10px] text-gray-400 font-medium lowercase italic">{user.email}</div>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      {user.role === 'élève' ? (
-                        user.classe ? (
-                          <div className="text-sm font-bold text-indigo-600">{user.classe}</div>
                         ) : (
-                          <select 
-                            onChange={(e) => handleQuickAssignClass(user.id, e.target.value)}
-                            className="text-[10px] p-1.5 bg-amber-50 text-amber-700 border border-amber-200 rounded-lg outline-none focus:ring-2 focus:ring-amber-500 transition-all font-bold"
-                          >
-                            <option value="">{t('assign_class')}</option>
-                            {classes.map(cls => (
-                              <option key={cls.id} value={cls.nom}>{cls.nom}</option>
-                            ))}
-                          </select>
-                        )
-                      ) : (
-                        <span className="text-gray-400 italic text-xs">N/A</span>
-                      )}
-                    </td>
-                    <td className="px-6 py-4">
-                      {user.role === 'élève' ? (
-                        <div className="text-xs text-gray-600 font-medium whitespace-nowrap">
-                          {teacherName}
-                        </div>
-                      ) : (
-                        <span className="text-gray-400 italic text-xs">N/A</span>
-                      )}
-                    </td>
-                    <td className="px-6 py-4 text-xs text-gray-600 font-medium whitespace-nowrap">
-                      {user.dateNaissance || '-'}
-                    </td>
-                    <td className="px-6 py-4 font-mono text-xs text-gray-600">
-                      {user.matricule || '-'}
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex flex-col gap-1 items-start">
-                        <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                          user.role === 'élève' ? 'bg-blue-100 text-blue-700' :
-                          user.role === 'enseignant' ? 'bg-purple-100 text-purple-700' :
-                          user.role === 'admin' ? 'bg-red-100 text-red-700 border border-red-200' :
-                          'bg-slate-100 text-slate-700'
-                        }`}>
-                          {tData(user.role)}
+                          <span className="text-xs text-gray-400 italic">-</span>
+                        )}
+                      </td>
+                      <td className="px-6 py-4 text-center">
+                        <span className="inline-flex items-center justify-center bg-blue-50 text-blue-700 text-xs font-black px-3 py-1 rounded-full border border-blue-100 shadow-sm min-w-[45px]">
+                          {estStudents.length} élèves
                         </span>
-                        {user.role === 'admin' && user.preciseRole && (
-                          <span className="text-[10px] font-extrabold text-amber-600 dark:text-amber-400 font-mono tracking-tight bg-amber-50 dark:bg-amber-950/20 px-1.5 py-0.5 rounded-md mt-1 border border-amber-100 dark:border-amber-900/10">
-                            {user.preciseRole}
-                          </span>
-                        )}
+                      </td>
+                      <td className="px-6 py-4 text-center">
+                        <span className="inline-flex items-center justify-center bg-purple-50 text-purple-700 text-xs font-black px-3 py-1 rounded-full border border-purple-100 shadow-sm min-w-[45px]">
+                          {estTeachers.length} profs
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-center text-xs font-semibold text-gray-600">
+                        {estStaff.length} agents
+                      </td>
+                      <td className="px-6 py-4 text-right">
+                        <button
+                          onClick={() => setInspectedEstId(est.id)}
+                          className="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-extrabold px-3 py-1.5 rounded-xl border border-indigo-100 transition-colors inline-flex items-center gap-1.5 shadow-sm"
+                        >
+                          <span>Inspecter</span>
+                          <ChevronRight size={14} />
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ) : isSuperAdmin && inspectedEstId ? (
+        <div className="space-y-6">
+          <div className="bg-gradient-to-r from-indigo-900 to-indigo-800 text-white rounded-2xl p-6 shadow-sm border border-indigo-950 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+            <div>
+              <div className="flex items-center gap-2 text-indigo-200 text-xs font-bold uppercase tracking-wider">
+                <span>Établissement Inspecté</span>
+                <span>•</span>
+                <span>ID: {inspectedEstId}</span>
+              </div>
+              <h2 className="text-xl font-extrabold tracking-tight mt-1">
+                {establishments.find(e => e.id === inspectedEstId)?.nom || inspectedEstId}
+              </h2>
+              <p className="text-indigo-200 text-xs mt-1">
+                {establishments.find(e => e.id === inspectedEstId)?.adresse || 'Campus Principal'}
+              </p>
+            </div>
+            <button
+              onClick={() => setInspectedEstId(null)}
+              className="bg-white/10 hover:bg-white/20 text-white text-xs font-bold px-4 py-2.5 rounded-xl transition-all flex items-center gap-1.5 border border-white/10 self-stretch md:self-auto justify-center"
+            >
+              ← Retour aux Admins
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-1 bg-white rounded-2xl border border-gray-100 p-5 shadow-sm space-y-4">
+              <div>
+                <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider">Effectifs par Classe</h3>
+                <p className="text-[11px] text-gray-500">Distribution en temps réel des élèves rattachés.</p>
+              </div>
+              <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+                {(() => {
+                  const estStudents = users.filter(u => u.etablissement === inspectedEstId && u.role === 'élève');
+                  const counts: { [key: string]: number } = {};
+                  estStudents.forEach(s => {
+                    const cName = s.classe || 'Sans Classe';
+                    counts[cName] = (counts[cName] || 0) + 1;
+                  });
+
+                  if (Object.keys(counts).length === 0) {
+                    return <p className="text-xs text-gray-400 italic py-4">Aucun élève enregistré dans ce campus.</p>;
+                  }
+
+                  return Object.entries(counts)
+                    .sort((a, b) => b[1] - a[1])
+                    .map(([cName, count]) => (
+                      <div key={cName} className="flex justify-between items-center p-2.5 bg-gray-50/50 hover:bg-gray-50 rounded-xl border border-gray-100 transition-colors">
+                        <span className="text-xs font-black text-slate-700">{cName}</span>
+                        <span className="bg-indigo-50 text-indigo-750 text-[10px] font-black px-2.5 py-1 rounded-full border border-indigo-100">
+                          {count} élèves
+                        </span>
                       </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      {user.role === 'élève' ? (() => {
-                        const finDetails = computeStudentFinance(user);
-                        if (!finDetails || finDetails.applicableCount === 0) {
-                          return <span className="text-gray-400 italic text-[11px] font-bold">Aucun frais imputé</span>;
-                        }
-                        const { totalDu, totalPaye, balance, percentPaid } = finDetails;
-                        if (balance <= 0) {
-                          return (
-                            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-sm leading-none">
-                              ● À jour
-                            </span>
-                          );
-                        }
-                        if (totalPaye > 0) {
-                          return (
-                            <div className="flex flex-col gap-0.5">
-                              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-50 text-amber-700 border border-amber-200 leading-none self-start">
-                                ● Partiel ({percentPaid}%)
-                              </span>
-                              <span className="text-[10px] text-gray-400 font-bold font-mono">Restant : {balance.toLocaleString()} F</span>
+                    ));
+                })()}
+              </div>
+            </div>
+
+            <div className="lg:col-span-2 grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm flex flex-col justify-between">
+                <div className="flex justify-between items-start">
+                  <span className="text-xs font-black text-blue-500 uppercase tracking-widest">Élèves</span>
+                  <span className="p-2 bg-blue-50 text-blue-600 rounded-xl"><GraduationCap size={18} /></span>
+                </div>
+                <div className="mt-4">
+                  <span className="text-3xl font-black text-slate-800">
+                    {users.filter(u => u.etablissement === inspectedEstId && u.role === 'élève').length}
+                  </span>
+                  <span className="text-xs text-gray-400 block mt-1">Total effectif inscrit</span>
+                </div>
+              </div>
+
+              <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm flex flex-col justify-between">
+                <div className="flex justify-between items-start">
+                  <span className="text-xs font-black text-purple-500 uppercase tracking-widest">Enseignants</span>
+                  <span className="p-2 bg-purple-50 text-purple-600 rounded-xl"><User size={18} /></span>
+                </div>
+                <div className="mt-4">
+                  <span className="text-3xl font-black text-slate-800">
+                    {users.filter(u => u.etablissement === inspectedEstId && u.role === 'enseignant').length}
+                  </span>
+                  <span className="text-xs text-gray-400 block mt-1">Professeurs actifs</span>
+                </div>
+              </div>
+
+              <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm flex flex-col justify-between">
+                <div className="flex justify-between items-start">
+                  <span className="text-xs font-black text-amber-500 uppercase tracking-widest">Staff & Agents</span>
+                  <span className="p-2 bg-amber-50 text-amber-600 rounded-xl"><Briefcase size={18} /></span>
+                </div>
+                <div className="mt-4">
+                  <span className="text-3xl font-black text-slate-800">
+                    {users.filter(u => u.etablissement === inspectedEstId && ['personnel administratif', 'cuisinier'].includes(u.role)).length}
+                  </span>
+                  <span className="text-xs text-gray-400 block mt-1">Personnel de service</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+            <div className="p-4 border-b border-gray-100 flex flex-col sm:flex-row gap-4 justify-between items-center bg-gray-50/50">
+              <div className="relative w-full sm:w-72">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                <input 
+                  type="text" 
+                  placeholder="Rechercher un utilisateur..." 
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-sm"
+                />
+              </div>
+              
+              <div className="flex items-center gap-2.5 w-full sm:w-auto">
+                <Filter size={16} className="text-gray-400 shrink-0" />
+                <select 
+                  value={filterRole}
+                  onChange={(e) => setFilterRole(e.target.value)}
+                  className="bg-white border border-gray-200 text-gray-700 text-sm rounded-xl focus:ring-2 focus:ring-indigo-500 p-2 outline-none"
+                >
+                  <option value="all">Tous les rôles</option>
+                  <option value="élève">Élèves uniquement</option>
+                  <option value="enseignant">Enseignants uniquement</option>
+                  <option value="personnel administratif">Personnel Administratif</option>
+                  <option value="cuisinier">Cuisiniers</option>
+                  <option value="admin">Administrateurs</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm text-left text-gray-500 min-w-[800px]">
+                <thead className="text-xs text-gray-700 uppercase bg-gray-50 border-b">
+                  <tr>
+                    <th scope="col" className="px-6 py-4 font-extrabold text-slate-800">Nom & Prénom</th>
+                    <th scope="col" className="px-6 py-4 font-extrabold text-slate-800">E-mail</th>
+                    <th scope="col" className="px-6 py-4 font-extrabold text-slate-800">Rôle</th>
+                    <th scope="col" className="px-6 py-4 font-extrabold text-slate-800">Contact / Téléphone</th>
+                    <th scope="col" className="px-6 py-4 font-extrabold text-slate-800 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {filteredInspectedUsers.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="px-6 py-12 text-center text-gray-400 italic">
+                        Aucun utilisateur trouvé pour cette sélection.
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredInspectedUsers.map((user) => (
+                      <tr key={user.id} className="hover:bg-gray-50/50 transition-colors border-b">
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-3">
+                            {user.photo ? (
+                              <img src={user.photo} alt="" className="w-8 h-8 rounded-full object-cover shadow-sm bg-gray-100" referrerPolicy="no-referrer" />
+                            ) : (
+                              <div className="w-8 h-8 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold text-[10px] uppercase border">
+                                {user.prenom?.[0] || 'U'}
+                              </div>
+                            )}
+                            <div>
+                              <div className="font-bold text-gray-900">
+                                {user.nom || ''} {user.prenom || ''}
+                              </div>
+                              <div className="text-[10px] text-gray-400 font-mono mt-0.5">
+                                {user.matricule ? `Matricule: ${user.matricule}` : `ID: ${user.id.substring(0, 8)}`}
+                              </div>
                             </div>
-                          );
-                        }
-                        return (
-                          <div className="flex flex-col gap-0.5">
-                            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-black bg-rose-50 text-rose-700 border border-rose-200 leading-none self-start">
-                              ● Impayé (0%)
-                            </span>
-                            <span className="text-[10px] text-rose-600 font-bold font-mono">Total : {totalDu.toLocaleString()} F</span>
                           </div>
-                        );
-                      })() : (
-                        <span className="text-gray-400 text-xs italic">N/A</span>
-                      )}
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex flex-col gap-0.5">
-                        <div className="text-xs font-medium text-gray-700 flex items-center gap-1">
-                          <Phone size={10} className="text-gray-400" />
-                          {user.contact || '-'}
-                        </div>
-                        <div className="text-[10px] text-gray-400 truncate max-w-[120px]" title={user.address}>
-                          {user.address || '-'}
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      {user.face_id || user.fingerprint_id ? (
-                        <div className="flex -space-x-1">
-                          {user.face_id && (
-                            <div className="p-1 bg-emerald-100 text-emerald-600 rounded-full border-2 border-white" title={t('face_registered')}>
-                              <User2 size={10} />
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className="text-xs font-semibold text-slate-700 lowercase bg-gray-50 px-2 py-1 rounded border border-gray-100">
+                            {user.email || '-'}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="flex flex-col gap-1 items-start">
+                            <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider ${
+                              user.role === 'élève' ? 'bg-blue-50 text-blue-700 border border-blue-200' :
+                              user.role === 'enseignant' ? 'bg-purple-50 text-purple-700 border border-purple-200' :
+                              user.role === 'admin' ? 'bg-red-50 text-red-700 border border-red-200' :
+                              'bg-slate-50 text-slate-700 border border-slate-200'
+                            }`}>
+                              {user.role}
+                            </span>
+                            {user.role === 'admin' && user.preciseRole && (
+                              <span className="text-[9px] font-extrabold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-100">
+                                {user.preciseRole}
+                              </span>
+                            )}
+                            {user.role === 'élève' && user.classe && (
+                              <span className="text-[9px] font-extrabold text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-100">
+                                Classe: {user.classe}
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
+                            <Phone size={12} className="text-gray-400" />
+                            {user.contact || 'Non renseigné'}
+                          </div>
+                          {user.address && (
+                            <div className="text-[10px] text-gray-400 font-medium truncate max-w-[150px] mt-0.5" title={user.address}>
+                              {user.address}
                             </div>
                           )}
-                          {user.fingerprint_id && (
-                            <div className="p-1 bg-blue-100 text-blue-600 rounded-full border-2 border-white" title={t('fingerprint_registered')}>
-                              <Fingerprint size={10} />
-                            </div>
-                          )}
-                        </div>
-                      ) : (
-                        <div className="text-[10px] text-amber-500 font-bold uppercase">{t('not_configured')}</div>
-                      )}
-                    </td>
-                    <td className="px-6 py-4 text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <button 
-                          onClick={() => handleToggleChatBlock(user)}
-                          className={`p-2 rounded-lg transition-colors ${user.chatBlocked ? 'text-red-600 bg-red-50' : 'text-gray-400 hover:text-amber-600 hover:bg-amber-50'}`}
-                          title={user.chatBlocked ? t('unblock_messaging') : t('block_messaging')}
-                        >
-                          <Ban size={18} />
-                        </button>
-                        <button 
-                          onClick={() => handleToggleAccessBlock(user)}
-                          className={`p-2 rounded-lg transition-colors ${user.accessBlocked ? 'text-red-600 bg-red-50' : 'text-gray-400 hover:text-red-600 hover:bg-red-50'}`}
-                          title={user.accessBlocked ? t('unblock_access') : t('block_access')}
-                        >
-                          <ShieldOff size={18} />
-                        </button>
-                        <button 
-                          onClick={() => setViewUser(user)}
-                          className="p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
-                          title={t('view_details')}
-                        >
-                          <Eye size={18} />
-                        </button>
-                        <button 
-                          onClick={() => handleToggleArchiveUser(user)}
-                          className={`p-2 rounded-lg transition-colors ${user.isArchived ? 'text-indigo-700 bg-indigo-50 border border-indigo-150' : 'text-gray-400 hover:text-indigo-600 hover:bg-indigo-50'}`}
-                          title={user.isArchived ? "Désarchiver (rendre Actif)" : "Archiver l'utilisateur (Traçabilité)"}
-                        >
-                          <Archive size={18} />
-                        </button>
-                        <button 
-                          onClick={() => setEditUser({...user})}
-                          className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                          title={t('edit')}
-                        >
-                          <Edit2 size={18} />
-                        </button>
-                        <button 
-                          onClick={() => setDeleteUser(user)}
-                          className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                          title={t('delete')}
-                        >
-                          <Trash2 size={18} />
-                        </button>
-                      </div>
+                        </td>
+                        <td className="px-6 py-4 text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            <button
+                              onClick={() => setViewUser(user)}
+                              className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                              title="Détails"
+                            >
+                              <Eye size={16} />
+                            </button>
+                            <button
+                              onClick={() => setEditUser(user)}
+                              className="p-1.5 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors"
+                              title="Modifier"
+                            >
+                              <Edit2 size={16} />
+                            </button>
+                            <button
+                              onClick={() => setDeleteUser(user)}
+                              className="p-1.5 text-gray-400 hover:text-red-650 hover:bg-red-50 rounded-lg transition-colors"
+                              title="Supprimer"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+          <div className="p-4 border-b border-gray-100 flex flex-col sm:flex-row gap-4 justify-between items-center bg-gray-50/50">
+            <div className="relative w-full sm:w-72">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+              <input 
+                type="text" 
+                placeholder={t('search_placeholder')} 
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all text-sm"
+              />
+            </div>
+            
+            <div className="flex flex-wrap items-center gap-2.5 w-full sm:w-auto">
+              <div className="flex items-center gap-1.5 min-w-[150px]">
+                <Filter size={16} className="text-gray-400 shrink-0" />
+                <select 
+                  value={filterRole}
+                  onChange={(e) => setFilterRole(e.target.value)}
+                  className="bg-white border border-gray-250 text-gray-700 text-sm rounded-xl focus:ring-indigo-500 focus:border-indigo-500 block w-full p-2"
+                >
+                  <option value="all">{t('all')}</option>
+                  <option value="élève">{tData('élève')}</option>
+                  <option value="enseignant">{tData('enseignant')}</option>
+                  <option value="personnel administratif">{tData('personnel administratif')}</option>
+                  <option value="cuisinier">{tData('cuisinier')}</option>
+                  <option value="admin">{tData('admin')}</option>
+                </select>
+              </div>
+
+              <div className="flex items-center gap-1.5 min-w-[150px]">
+                <Archive size={16} className="text-indigo-600 shrink-0" />
+                <select 
+                  value={filterArchive}
+                  onChange={(e) => setFilterArchive(e.target.value as any)}
+                  className="bg-white border border-gray-250 text-indigo-750 text-sm rounded-xl focus:ring-indigo-500 focus:border-indigo-500 block w-full p-2"
+                >
+                  <option value="active">📂 Actifs uniquement</option>
+                  <option value="archived">📦 Archivés (Traçabilité)</option>
+                  <option value="all">📁 Tous les profils</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm text-left text-gray-500 min-w-[800px]">
+              <thead className="text-xs text-gray-700 uppercase bg-gray-55/40 border-b">
+                <tr>
+                  <th scope="col" className="px-6 py-4 font-semibold">{t('name')} & {t('firstname')}</th>
+                  <th scope="col" className="px-6 py-4 font-semibold">{t('class')}</th>
+                  <th scope="col" className="px-6 py-4 font-semibold">{t('principal_teacher')}</th>
+                  <th scope="col" className="px-6 py-4 font-semibold">{t('born_on')}</th>
+                  <th scope="col" className="px-6 py-4 font-semibold">{t('id_number')}</th>
+                  <th scope="col" className="px-6 py-4 font-semibold">{t('role')}</th>
+                  <th scope="col" className="px-6 py-4 font-semibold">Situation Financière</th>
+                  <th scope="col" className="px-6 py-4 font-semibold">{t('contact')}</th>
+                  <th scope="col" className="px-6 py-4 font-semibold font-bold">{t('bio')}</th>
+                  <th scope="col" className="px-6 py-4 font-semibold text-right">{t('actions')}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {loading ? (
+                  <tr>
+                    <td colSpan={10} className="px-6 py-12 text-center">
+                      <RefreshCw className="animate-spin mx-auto text-indigo-600 mb-2" size={24} />
+                      <p className="text-gray-500">{t('loading_users')}</p>
                     </td>
                   </tr>
-                );
-              })
-            )}
-          </tbody>
-          </table>
+                ) : filteredUsers.length === 0 ? (
+                  <tr>
+                    <td colSpan={10} className="px-6 py-12 text-center text-gray-500">
+                      {t('no_users_found')} {!isFirebaseConfigured && t('configure_firebase')}
+                    </td>
+                  </tr>
+                ) : (
+                  filteredUsers.map((user) => {
+                    const userClass = classes.find(c => c.nom === user.classe);
+                    const teacher = userClass && userClass.professeur_principal_id ? users.find(u => u.id === userClass.professeur_principal_id) : null;
+                    const teacherName = teacher ? `${teacher.prenom || ''} ${teacher.nom || ''}`.trim() : 'N/A';
+
+                    return (
+                    <tr key={user.id} className="bg-white border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-3">
+                          {user.photo ? (
+                            <img src={user.photo} alt="" className="w-8 h-8 rounded-full object-cover shadow-sm bg-gray-100" referrerPolicy="no-referrer" />
+                          ) : (
+                            <div className="w-8 h-8 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center font-bold text-[10px] uppercase">
+                              {user.prenom?.[0] || user.email?.[0] || 'U'}
+                            </div>
+                          )}
+                          <div>
+                            <div className="font-bold text-gray-900 group-hover:text-indigo-600 transition-colors">
+                              {user.nom || user.prenom ? `${user.nom || ''} ${user.prenom || ''}`.trim() : user.email?.split('@')[0] || t('user')}
+                            </div>
+                            <div className="text-[10px] text-gray-400 font-medium lowercase italic">{user.email}</div>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        {user.role === 'élève' ? (
+                          user.classe ? (
+                            <div className="text-sm font-bold text-indigo-600">{user.classe}</div>
+                          ) : (
+                            <select 
+                              onChange={(e) => handleQuickAssignClass(user.id, e.target.value)}
+                              className="text-[10px] p-1.5 bg-amber-50 text-amber-700 border border-amber-200 rounded-lg outline-none focus:ring-2 focus:ring-amber-500 transition-all font-bold"
+                            >
+                              <option value="">{t('assign_class')}</option>
+                              {classes.map(cls => (
+                                <option key={cls.id} value={cls.nom}>{cls.nom}</option>
+                              ))}
+                            </select>
+                          )
+                        ) : (
+                          <span className="text-gray-400 italic text-xs">N/A</span>
+                        )}
+                      </td>
+                      <td className="px-6 py-4">
+                        {user.role === 'élève' ? (
+                          <div className="text-xs text-gray-600 font-medium whitespace-nowrap">
+                            {teacherName}
+                          </div>
+                        ) : (
+                          <span className="text-gray-400 italic text-xs">N/A</span>
+                        )}
+                      </td>
+                      <td className="px-6 py-4 text-xs text-gray-600 font-medium whitespace-nowrap">
+                        {user.dateNaissance || '-'}
+                      </td>
+                      <td className="px-6 py-4 font-mono text-xs text-gray-600">
+                        {user.matricule || '-'}
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex flex-col gap-1 items-start">
+                          <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                            user.role === 'élève' ? 'bg-blue-100 text-blue-700' :
+                            user.role === 'enseignant' ? 'bg-purple-100 text-purple-700' :
+                            user.role === 'admin' ? 'bg-red-100 text-red-700 border border-red-200' :
+                            'bg-slate-100 text-slate-700'
+                          }`}>
+                            {tData(user.role)}
+                          </span>
+                          {user.role === 'admin' && user.preciseRole && (
+                            <span className="text-[10px] font-extrabold text-amber-600 dark:text-amber-400 font-mono tracking-tight bg-amber-50 dark:bg-amber-950/20 px-1.5 py-0.5 rounded-md mt-1 border border-amber-100 dark:border-amber-900/10">
+                              {user.preciseRole}
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        {user.role === 'élève' ? (() => {
+                          const finDetails = computeStudentFinance(user);
+                          if (!finDetails || finDetails.applicableCount === 0) {
+                            return <span className="text-gray-400 italic text-[11px] font-bold">Aucun frais imputé</span>;
+                          }
+                          const { totalDu, totalPaye, balance, percentPaid } = finDetails;
+                          if (balance <= 0) {
+                            return (
+                              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-sm leading-none">
+                                ● À jour
+                              </span>
+                            );
+                          }
+                          if (totalPaye > 0) {
+                            return (
+                              <div className="flex flex-col gap-0.5">
+                                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-50 text-amber-700 border border-amber-200 leading-none self-start">
+                                  ● Partiel ({percentPaid}%)
+                                </span>
+                                <span className="text-[10px] text-gray-400 font-bold font-mono">Restant : {balance.toLocaleString()} F</span>
+                              </div>
+                            );
+                          }
+                          return (
+                            <div className="flex flex-col gap-0.5">
+                              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-black bg-rose-50 text-rose-700 border border-rose-200 leading-none self-start">
+                                ● Impayé (0%)
+                              </span>
+                              <span className="text-[10px] text-rose-600 font-bold font-mono">Total : {totalDu.toLocaleString()} F</span>
+                            </div>
+                          );
+                        })() : (
+                          <span className="text-gray-400 text-xs italic">N/A</span>
+                        )}
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex flex-col gap-0.5">
+                          <div className="text-xs font-medium text-gray-700 flex items-center gap-1">
+                            <Phone size={10} className="text-gray-400" />
+                            {user.contact || '-'}
+                          </div>
+                          <div className="text-[10px] text-gray-400 truncate max-w-[120px]" title={user.address}>
+                            {user.address || '-'}
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        {user.face_id || user.fingerprint_id ? (
+                          <div className="flex -space-x-1">
+                            {user.face_id && (
+                              <div className="p-1 bg-emerald-100 text-emerald-600 rounded-full border-2 border-white" title={t('face_registered')}>
+                                <User2 size={10} />
+                              </div>
+                            )}
+                            {user.fingerprint_id && (
+                              <div className="p-1 bg-blue-100 text-blue-600 rounded-full border-2 border-white" title={t('fingerprint_registered')}>
+                                <Fingerprint size={10} />
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="text-[10px] text-amber-500 font-bold uppercase">{t('not_configured')}</div>
+                        )}
+                      </td>
+                      <td className="px-6 py-4 text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          <button 
+                            onClick={() => handleToggleChatBlock(user)}
+                            className={`p-2 rounded-lg transition-colors ${user.chatBlocked ? 'text-red-600 bg-red-50' : 'text-gray-400 hover:text-amber-600 hover:bg-amber-50'}`}
+                            title={user.chatBlocked ? t('unblock_messaging') : t('block_messaging')}
+                          >
+                            <Ban size={18} />
+                          </button>
+                          <button 
+                            onClick={() => handleToggleAccessBlock(user)}
+                            className={`p-2 rounded-lg transition-colors ${user.accessBlocked ? 'text-red-600 bg-red-50' : 'text-gray-400 hover:text-red-600 hover:bg-red-50'}`}
+                            title={user.accessBlocked ? t('unblock_access') : t('block_access')}
+                          >
+                            <ShieldOff size={18} />
+                          </button>
+                          <button 
+                            onClick={() => setViewUser(user)}
+                            className="p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                            title={t('view_details')}
+                          >
+                            <Eye size={18} />
+                          </button>
+                          <button 
+                            onClick={() => handleToggleArchiveUser(user)}
+                            className={`p-2 rounded-lg transition-colors ${user.isArchived ? 'text-indigo-700 bg-indigo-50 border border-indigo-150' : 'text-gray-400 hover:text-indigo-600 hover:bg-indigo-50'}`}
+                            title={user.isArchived ? "Désarchiver (rendre Actif)" : "Archiver l'utilisateur (Traçabilité)"}
+                          >
+                            <Archive size={18} />
+                          </button>
+                          <button 
+                            onClick={() => setEditUser({...user})}
+                            className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                            title={t('edit')}
+                          >
+                            <Edit2 size={18} />
+                          </button>
+                          <button 
+                            onClick={() => setDeleteUser(user)}
+                            className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                            title={t('delete')}
+                          >
+                            <Trash2 size={18} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+            </table>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* View Modal */}
       {viewUser && (

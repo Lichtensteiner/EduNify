@@ -4,9 +4,15 @@ import { collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot } from 'fireb
 import { db, isFirebaseConfigured } from '../lib/firebase';
 import { useNotification } from '../contexts/NotificationContext';
 import ClassDetailsView from '../components/ClassDetailsView';
+import { useAuth } from '../contexts/AuthContext';
+import { useEstablishment } from '../contexts/EstablishmentContext';
 
 export default function Classes() {
   const { notifyError } = useNotification();
+  const { currentUser } = useAuth();
+  const { currentEstablishment, isSuperAdmin } = useEstablishment();
+  const activeEstId = currentEstablishment?.id || currentUser?.etablissement || 'EDU-001';
+
   const [classes, setClasses] = useState<any[]>([]);
   const [teachers, setTeachers] = useState<any[]>([]);
   const [students, setStudents] = useState<any[]>([]);
@@ -33,19 +39,22 @@ export default function Classes() {
       return;
     }
 
-    // Fetch classes
+    // Fetch classes filtered by active establishment ID
     const unsubscribeClasses = onSnapshot(collection(db, 'classes'), (snap) => {
-      const classesData = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      let classesData = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      classesData = classesData.filter((c: any) => c.etablissement === activeEstId);
       setClasses(classesData);
     });
 
-    // Fetch users (teachers and students)
+    // Fetch users (teachers and students) filtered by active establishment ID
     const unsubscribeUsers = onSnapshot(collection(db, 'users'), (snap) => {
       const usersData: any[] = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setTeachers(usersData
+      const filteredUsers = usersData.filter((u: any) => u.etablissement === activeEstId);
+      
+      setTeachers(filteredUsers
         .filter(u => u.role === 'enseignant')
         .sort((a, b) => `${a.nom || ''} ${a.prenom || ''}`.trim().localeCompare(`${b.nom || ''} ${b.prenom || ''}`.trim())));
-      setStudents(usersData
+      setStudents(filteredUsers
         .filter(u => u.role === 'élève')
         .sort((a, b) => `${a.nom || ''} ${a.prenom || ''}`.trim().localeCompare(`${b.nom || ''} ${b.prenom || ''}`.trim())));
       setLoading(false);
@@ -55,7 +64,7 @@ export default function Classes() {
       unsubscribeClasses();
       unsubscribeUsers();
     };
-  }, []);
+  }, [activeEstId]);
 
   useEffect(() => {
     const handlePopState = (event: PopStateEvent) => {
@@ -116,6 +125,7 @@ export default function Classes() {
       if (modalMode === 'create') {
         const docRef = await addDoc(collection(db, 'classes'), {
           ...formData,
+          etablissement: activeEstId,
           timestamp: new Date().toISOString()
         });
         
@@ -405,7 +415,10 @@ export default function Classes() {
               </div>
             );
           })}
-           {/* Modal Create/Edit */}
+        </div>
+      )}
+
+      {/* Modal Create/Edit */}
       {isModalOpen && (modalMode === 'create' || modalMode === 'edit') && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white dark:bg-gray-800 rounded-3xl shadow-2xl w-full max-w-lg max-h-[92vh] sm:max-h-[88vh] overflow-hidden flex flex-col border border-gray-100 dark:border-gray-750/70 transition-colors duration-200 animate-in fade-in zoom-in-95 duration-200">
@@ -557,8 +570,6 @@ export default function Classes() {
               </div>
             </form>
           </div>
-        </div>
-      )}
         </div>
       )}
 
