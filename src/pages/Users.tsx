@@ -715,7 +715,7 @@ export default function Users() {
                 : 'bg-white hover:bg-gray-100 text-gray-600 hover:text-gray-900 border border-gray-200 shadow-xs'
             }`}
           >
-            🏫 Admins d'Établissements ({establishmentAdmins.length})
+            <GraduationCap size={15} /> Admins d'Établissements ({establishmentAdmins.length})
           </button>
           <button
             onClick={() => {
@@ -728,7 +728,7 @@ export default function Users() {
                 : 'bg-white hover:bg-gray-100 text-gray-600 hover:text-gray-900 border border-gray-200 shadow-xs'
             }`}
           >
-            🌐 Vue Globale (Tous)
+            <User2 size={15} /> Vue Globale (Tous)
           </button>
           {inspectedEstId && (
             <div className="ml-auto px-4 py-2 text-xs font-black rounded-xl bg-amber-50 text-amber-850 border border-amber-200 shadow-xs flex items-center gap-2">
@@ -748,7 +748,7 @@ export default function Users() {
                 : 'bg-white hover:bg-gray-100 text-gray-600 hover:text-gray-900 border border-gray-200 shadow-xs'
             }`}
           >
-            🌐 Vue Globale (Utilisateurs)
+            <User size={15} /> Vue Globale (Utilisateurs)
           </button>
           <button
             onClick={() => setAdminTab('rh')}
@@ -758,7 +758,7 @@ export default function Users() {
                 : 'bg-white hover:bg-gray-100 text-gray-600 hover:text-gray-900 border border-gray-200 shadow-xs'
             }`}
           >
-            💼 Gestion RH (Personnel)
+            <Briefcase size={15} /> Gestion RH (Personnel)
           </button>
         </div>
       )}

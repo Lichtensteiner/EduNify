@@ -14,7 +14,7 @@ export default function RHManagement() {
   const establishmentId = currentEstablishment?.id || 'EDU-001';
 
   // Sub-navigation inside RH
-  const [activeSubTab, setActiveSubTab] = useState<'dashboard' | 'dossiers' | 'vacataires' | 'avances' | 'evaluation' | 'bulletins' | 'rapports'>('dashboard');
+  const [activeSubTab, setActiveSubTab] = useState<'dashboard' | 'dossiers' | 'vacataires' | 'avances' | 'rapports'>('dashboard');
 
   // Firestore states
   const [staffList, setStaffList] = useState<any[]>([]);
@@ -104,99 +104,6 @@ export default function RHManagement() {
     behavior: 'Très discipliné, poli et attentif en classe, participe bien.'
   });
 
-  // Default initial mock staff (used if db is empty)
-  const defaultMockStaff = [
-    {
-      id: 'staff-1',
-      nom: 'KOFFI',
-      prenom: 'Jean-Pierre',
-      sexe: 'Masculin',
-      dateNaissance: '1984-05-12',
-      lieuNaissance: 'Abidjan',
-      nationalite: 'Ivoirienne',
-      situationMatrimoniale: 'Marié(e)',
-      adresse: 'Cocody Angré, Abidjan',
-      contactPrincipal: '+225 07 48 12 34 56',
-      contactSecondaire: '+225 05 02 11 22 33',
-      email: 'jp.koffi@edu-nify.ci',
-      photo: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150',
-      matricule: 'RH-2023-001',
-      poste: 'Directeur d\'établissement',
-      departement: 'Direction',
-      service: 'Administratif',
-      typeContrat: 'Permanent',
-      dateEntree: '2023-09-01',
-      dateFinContrat: '',
-      statut: 'Actif',
-      tarifHoraire: 10000,
-      tarifJour: 80000,
-      baseCalcul: 'jour',
-      heuresEffectuees: 0,
-      joursEffectues: 22,
-      etablissement: establishmentId
-    },
-    {
-      id: 'staff-2',
-      nom: 'DIOMANDÉ',
-      prenom: 'Mariam',
-      sexe: 'Féminin',
-      dateNaissance: '1990-11-23',
-      lieuNaissance: 'Bouaké',
-      nationalite: 'Ivoirienne',
-      situationMatrimoniale: 'Célibataire',
-      adresse: 'Riviera Palmeraie, Abidjan',
-      contactPrincipal: '+225 07 89 45 61 23',
-      contactSecondaire: '',
-      email: 'm.diomande@edu-nify.ci',
-      photo: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150',
-      matricule: 'RH-2023-002',
-      poste: 'Enseignant vacataire',
-      departement: 'Enseignement',
-      service: 'Académique',
-      classeAttribuee: 'Tle D',
-      matiereEnseignee: 'Physique-Chimie',
-      typeContrat: 'Vacataire',
-      dateEntree: '2023-10-01',
-      dateFinContrat: '2026-06-30',
-      statut: 'Actif',
-      tarifHoraire: 5000,
-      tarifJour: 40000,
-      baseCalcul: 'heure',
-      heuresEffectuees: 42,
-      joursEffectues: 0,
-      etablissement: establishmentId
-    },
-    {
-      id: 'staff-3',
-      nom: 'TRAORÉ',
-      prenom: 'Souleymane',
-      sexe: 'Masculin',
-      dateNaissance: '1988-02-15',
-      lieuNaissance: 'Yamoussoukro',
-      nationalite: 'Ivoirienne',
-      situationMatrimoniale: 'Marié(e)',
-      adresse: 'Yopougon Maroc, Abidjan',
-      contactPrincipal: '+225 01 02 03 04 05',
-      contactSecondaire: '',
-      email: 's.traore@edu-nify.ci',
-      photo: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150',
-      matricule: 'RH-2023-003',
-      poste: 'Surveillant général',
-      departement: 'Surveillance',
-      service: 'Académique',
-      typeContrat: 'Permanent',
-      dateEntree: '2024-01-10',
-      dateFinContrat: '',
-      statut: 'Actif',
-      tarifHoraire: 4000,
-      tarifJour: 30000,
-      baseCalcul: 'heure',
-      heuresEffectuees: 160,
-      joursEffectues: 0,
-      etablissement: establishmentId
-    }
-  ];
-
   // Load and subscribe to collections
   useEffect(() => {
     setLoading(true);
@@ -205,14 +112,10 @@ export default function RHManagement() {
     const unsubStaff = onSnapshot(collection(db, 'rh_staff'), (snapshot) => {
       const items = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       const currentEstStaff = items.filter((s: any) => s.etablissement === establishmentId);
-      if (currentEstStaff.length === 0 && items.length === 0) {
-        setStaffList(defaultMockStaff);
-      } else {
-        setStaffList(currentEstStaff.length > 0 ? currentEstStaff : items);
-      }
+      setStaffList(currentEstStaff);
     }, (error) => {
       console.error("Error loading rh_staff:", error);
-      setStaffList(defaultMockStaff);
+      setStaffList([]);
     });
 
     // 2. Advances subscribe
@@ -535,12 +438,6 @@ export default function RHManagement() {
         <button onClick={() => setActiveSubTab('avances')} className={getSubTabClass('avances')}>
           <CreditCard size={16} /> Avances sur Salaire
         </button>
-        <button onClick={() => setActiveSubTab('evaluation')} className={getSubTabClass('evaluation')}>
-          <Sparkles size={16} /> Évaluation par IA
-        </button>
-        <button onClick={() => setActiveSubTab('bulletins')} className={getSubTabClass('bulletins')}>
-          <Layers size={16} /> Configuration Bulletins & IA
-        </button>
         <button onClick={() => setActiveSubTab('rapports')} className={getSubTabClass('rapports')}>
           <FileText size={16} /> Rapports & Documents
         </button>
@@ -606,23 +503,23 @@ export default function RHManagement() {
             <div className="bg-gradient-to-br from-indigo-900 to-slate-900 text-white p-6 rounded-2xl shadow-sm relative overflow-hidden">
               <div className="relative z-10 space-y-4">
                 <span className="px-3 py-1 bg-indigo-600/30 border border-indigo-500/30 rounded-full text-[10px] font-bold uppercase tracking-wider text-indigo-200">
-                  IA & Décision RH Avancée
+                  Gestion RH Opérationnelle
                 </span>
-                <h2 className="text-xl font-black">Pilotez votre capital humain avec intelligence</h2>
+                <h2 className="text-xl font-black">Pilotez votre capital humain avec simplicité</h2>
                 <p className="text-xs text-indigo-100/80 leading-relaxed max-w-md">
-                  Le module RH d'Edu-Nify vous donne un accès total aux dossiers, calculs de paye automatiques pour enseignants vacataires, avances financières, et à une puissante évaluation analytique de performance alimentée par l'Intelligence Artificielle de Google Gemini.
+                  Le module RH d'Edu-Nify vous donne un accès total aux dossiers du personnel, calculs de paye automatiques pour enseignants vacataires, avances financières, et éditions de contrats officiels.
                 </p>
                 <div className="flex gap-2">
-                  <button onClick={() => setActiveSubTab('evaluation')} className="bg-white hover:bg-gray-100 text-indigo-950 font-black text-xs px-4 py-2.5 rounded-xl transition-all flex items-center gap-2">
-                    <Sparkles size={14} className="text-indigo-600" /> Évaluer un membre par IA
+                  <button onClick={() => { setActiveSubTab('dossiers'); setShowAddStaffModal(true); }} className="bg-white hover:bg-gray-100 text-indigo-950 font-black text-xs px-4 py-2.5 rounded-xl transition-all flex items-center gap-2">
+                    <Plus size={14} className="text-indigo-600" /> Ajouter un Employé
                   </button>
-                  <button onClick={() => setActiveSubTab('bulletins')} className="bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs px-4 py-2.5 rounded-xl transition-all flex items-center gap-2">
-                    <Settings size={14} /> Configurer Bulletins
+                  <button onClick={() => setActiveSubTab('avances')} className="bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs px-4 py-2.5 rounded-xl transition-all flex items-center gap-2">
+                    <CreditCard size={14} /> Demander une Avance
                   </button>
                 </div>
               </div>
               <div className="absolute right-0 bottom-0 translate-y-1/4 translate-x-1/4 opacity-10">
-                <Sparkles size={250} />
+                <Briefcase size={250} />
               </div>
             </div>
 
@@ -1035,361 +932,6 @@ export default function RHManagement() {
                 </tbody>
               </table>
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* ==================================== */}
-      {/* 5. IA PERFORMANCE APPRAISAL TAB     */}
-      {/* ==================================== */}
-      {activeSubTab === 'evaluation' && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm space-y-4">
-            <h3 className="font-black text-sm text-gray-800 uppercase flex items-center gap-1.5">
-              <Sparkles size={16} className="text-indigo-600" /> Évaluation IA
-            </h3>
-            <p className="text-xs text-gray-500 leading-relaxed">
-              Sélectionnez un membre de votre équipe pédagogique ou administrative. L'Intelligence Artificielle analysera sa fiche, sa fonction et rédigera un rapport d'évaluation personnalisé complet.
-            </p>
-
-            <div className="space-y-3">
-              <label className="block text-xs font-bold text-gray-500 uppercase">Choisir l'employé</label>
-              <select
-                onChange={(e) => {
-                  const staff = staffList.find(s => s.id === e.target.value);
-                  setSelectedAppraisalStaff(staff);
-                }}
-                className="w-full bg-white border border-gray-250 text-xs font-semibold rounded-xl p-2.5"
-              >
-                <option value="">-- Sélectionner un membre --</option>
-                {staffList.map(s => (
-                  <option key={s.id} value={s.id}>{s.nom} {s.prenom} ({s.poste})</option>
-                ))}
-              </select>
-
-              <button
-                onClick={generateAIPerformanceAppraisal}
-                disabled={generatingAppraisal || !selectedAppraisalStaff}
-                className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 disabled:opacity-50 text-white font-black text-xs py-3 rounded-xl transition-all shadow-md flex items-center justify-center gap-2"
-              >
-                {generatingAppraisal ? (
-                  <>
-                    <RefreshCw size={15} className="animate-spin" /> Analyse IA en cours...
-                  </>
-                ) : (
-                  <>
-                    <Sparkles size={15} /> Générer le Rapport par IA
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
-
-          <div className="lg:col-span-2 bg-slate-50 border border-slate-200 rounded-2xl p-6 shadow-xs min-h-[300px] flex flex-col justify-between">
-            {appraisalResult ? (
-              <div className="space-y-5">
-                <div className="flex justify-between items-start border-b border-gray-200 pb-3">
-                  <div>
-                    <h2 className="text-base font-black text-slate-800">Rapport d'Évaluation Individuel</h2>
-                    <p className="text-xs text-gray-400 font-bold uppercase mt-0.5">
-                      Rédigé pour {selectedAppraisalStaff?.prenom} {selectedAppraisalStaff?.nom}
-                    </p>
-                  </div>
-                  <div className="px-3.5 py-1.5 bg-indigo-600 text-white rounded-xl font-mono text-lg font-black shadow-xs">
-                    Score IA : {appraisalResult.globalRating || 'A'}
-                  </div>
-                </div>
-
-                <div className="space-y-4">
-                  <div>
-                    <h4 className="text-xs font-black text-indigo-700 uppercase tracking-tight flex items-center gap-1.5">
-                      <CheckCircle size={14} /> Points Forts & Réussites Majeures
-                    </h4>
-                    <ul className="list-disc pl-5 text-xs text-gray-600 mt-1.5 space-y-1">
-                      {appraisalResult.strengths?.map((str: string, i: number) => (
-                        <li key={i}>{str}</li>
-                      ))}
-                    </ul>
-                  </div>
-
-                  <div>
-                    <h4 className="text-xs font-black text-amber-700 uppercase tracking-tight flex items-center gap-1.5">
-                      <ShieldAlert size={14} /> Points Faibles & Axes de Progression
-                    </h4>
-                    <ul className="list-disc pl-5 text-xs text-gray-600 mt-1.5 space-y-1">
-                      {appraisalResult.weaknesses?.map((wk: string, i: number) => (
-                        <li key={i}>{wk}</li>
-                      ))}
-                    </ul>
-                  </div>
-
-                  <div>
-                    <h4 className="text-xs font-black text-slate-800 uppercase tracking-tight flex items-center gap-1.5">
-                      <Award size={14} /> Objectifs Individuels Assignés
-                    </h4>
-                    <ul className="list-disc pl-5 text-xs text-gray-600 mt-1.5 space-y-1">
-                      {appraisalResult.objectives?.map((obj: string, i: number) => (
-                        <li key={i}>{obj}</li>
-                      ))}
-                    </ul>
-                  </div>
-
-                  <div className="bg-indigo-50/50 p-3 rounded-xl border border-indigo-100/50">
-                    <h4 className="text-xs font-black text-indigo-900 uppercase">Plan de Formation Suggéré</h4>
-                    <p className="text-xs text-indigo-950 mt-1 italic">"{appraisalResult.trainingPlan}"</p>
-                  </div>
-
-                  <div>
-                    <h4 className="text-xs font-black text-slate-400 uppercase">Synthèse Générale de l'IA</h4>
-                    <p className="text-xs text-gray-500 mt-1 leading-relaxed">
-                      {appraisalResult.aiSummary}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex gap-2 pt-3 border-t border-gray-200">
-                  <button onClick={() => window.print()} className="bg-white border border-gray-250 hover:bg-gray-50 text-gray-700 font-bold text-xs px-3.5 py-2 rounded-xl transition-all flex items-center gap-1.5">
-                    <Printer size={13} /> Imprimer Rapport
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div className="flex-1 flex flex-col items-center justify-center text-center p-8 text-gray-400">
-                <Sparkles size={45} className="text-indigo-400 animate-pulse mb-3" />
-                <h4 className="font-bold text-gray-500">Aucune évaluation générée</h4>
-                <p className="text-xs max-w-sm mt-1">
-                  Veuillez choisir un employé à gauche et lancer la génération automatique IA de l'évaluation de performance.
-                </p>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* ==================================== */}
-      {/* 6. BULLETIN PERSONALIZATION & IA    */}
-      {/* ==================================== */}
-      {activeSubTab === 'bulletins' && (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          
-          {/* Customizer config form (4 cols) */}
-          <div className="lg:col-span-5 bg-white border border-gray-100 rounded-2xl p-5 shadow-sm space-y-4">
-            <h3 className="font-black text-xs text-slate-800 uppercase border-b border-gray-100 pb-2">
-              Configuration Officielle du Bulletin
-            </h3>
-
-            <form onSubmit={handleSaveBulletinConfig} className="space-y-4 text-xs">
-              <div>
-                <label className="block font-bold text-gray-500 uppercase mb-1">Nom de l'établissement</label>
-                <input
-                  type="text"
-                  value={bulletinForm.nomEtablissement}
-                  onChange={(e) => setBulletinForm({ ...bulletinForm, nomEtablissement: e.target.value })}
-                  className="w-full bg-gray-50 border border-gray-200 rounded-xl p-2"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-bold text-gray-500 uppercase mb-1">Couleur Primaire</label>
-                  <div className="flex gap-2 items-center">
-                    <input
-                      type="color"
-                      value={bulletinForm.couleurPrimaire}
-                      onChange={(e) => setBulletinForm({ ...bulletinForm, couleurPrimaire: e.target.value })}
-                      className="w-8 h-8 rounded border border-gray-200 cursor-pointer"
-                    />
-                    <span className="font-mono">{bulletinForm.couleurPrimaire}</span>
-                  </div>
-                </div>
-                <div>
-                  <label className="block font-bold text-gray-500 uppercase mb-1">Couleur Secondaire</label>
-                  <div className="flex gap-2 items-center">
-                    <input
-                      type="color"
-                      value={bulletinForm.couleurSecondaire}
-                      onChange={(e) => setBulletinForm({ ...bulletinForm, couleurSecondaire: e.target.value })}
-                      className="w-8 h-8 rounded border border-gray-200 cursor-pointer"
-                    />
-                    <span className="font-mono">{bulletinForm.couleurSecondaire}</span>
-                  </div>
-                </div>
-              </div>
-
-              <div>
-                <label className="block font-bold text-gray-500 uppercase mb-1">Devise de l'école</label>
-                <input
-                  type="text"
-                  value={bulletinForm.devise}
-                  onChange={(e) => setBulletinForm({ ...bulletinForm, devise: e.target.value })}
-                  className="w-full bg-gray-50 border border-gray-200 rounded-xl p-2"
-                />
-              </div>
-
-              <div>
-                <label className="block font-bold text-gray-500 uppercase mb-1">Signature du Directeur</label>
-                <input
-                  type="text"
-                  value={bulletinForm.signatureDirecteur}
-                  onChange={(e) => setBulletinForm({ ...bulletinForm, signatureDirecteur: e.target.value })}
-                  className="w-full bg-gray-50 border border-gray-200 rounded-xl p-2"
-                />
-              </div>
-
-              <div>
-                <label className="block font-bold text-gray-500 uppercase mb-1">Signature Responsable Pédagogique</label>
-                <input
-                  type="text"
-                  value={bulletinForm.signatureResponsable}
-                  onChange={(e) => setBulletinForm({ ...bulletinForm, signatureResponsable: e.target.value })}
-                  className="w-full bg-gray-50 border border-gray-200 rounded-xl p-2"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-bold text-gray-500 uppercase mb-1">Format de Bulletin</label>
-                  <select
-                    value={bulletinForm.format}
-                    onChange={(e) => setBulletinForm({ ...bulletinForm, format: e.target.value })}
-                    className="w-full bg-gray-50 border border-gray-200 rounded-xl p-2"
-                  >
-                    <option value="maternelle">Maternelle</option>
-                    <option value="primaire">Primaire</option>
-                    <option value="college">Collège</option>
-                    <option value="lycee">Lycée</option>
-                    <option value="technique">Enseignement Technique</option>
-                    <option value="universitaire">Universitaire</option>
-                  </select>
-                </div>
-                <div className="flex flex-col justify-end gap-1 font-bold">
-                  <label className="flex items-center gap-1.5">
-                    <input
-                      type="checkbox"
-                      checked={bulletinForm.showQrCode}
-                      onChange={(e) => setBulletinForm({ ...bulletinForm, showQrCode: e.target.checked })}
-                    />
-                    <span>QR Code de vérif.</span>
-                  </label>
-                  <label className="flex items-center gap-1.5">
-                    <input
-                      type="checkbox"
-                      checked={bulletinForm.showProgressionChart}
-                      onChange={(e) => setBulletinForm({ ...bulletinForm, showProgressionChart: e.target.checked })}
-                    />
-                    <span>Graphique de prog.</span>
-                  </label>
-                </div>
-              </div>
-
-              <button
-                type="submit"
-                className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-black py-2.5 rounded-xl transition-all shadow-sm uppercase tracking-wide"
-              >
-                Sauvegarder Maquettes
-              </button>
-            </form>
-          </div>
-
-          {/* AI Generator side (7 cols) */}
-          <div className="lg:col-span-7 bg-slate-50 border border-slate-200 rounded-2xl p-5 shadow-xs space-y-4">
-            <h3 className="font-black text-xs text-indigo-950 uppercase flex items-center gap-1.5">
-              <Sparkles size={16} className="text-indigo-600 animate-pulse" /> IA : Appréciations & Synthèse Automatique de Bulletins
-            </h3>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-              <div className="space-y-3">
-                <div>
-                  <label className="block font-bold text-gray-500 mb-1">Nom de l'élève</label>
-                  <input
-                    type="text"
-                    value={studentForm.studentName}
-                    onChange={(e) => setStudentForm({ ...studentForm, studentName: e.target.value })}
-                    className="w-full bg-white border border-gray-200 rounded-xl p-2"
-                  />
-                </div>
-                <div>
-                  <label className="block font-bold text-gray-500 mb-1">Période d'évaluation</label>
-                  <input
-                    type="text"
-                    value={studentForm.period}
-                    onChange={(e) => setStudentForm({ ...studentForm, period: e.target.value })}
-                    className="w-full bg-white border border-gray-200 rounded-xl p-2"
-                  />
-                </div>
-                <div>
-                  <label className="block font-bold text-gray-500 mb-1">Absences & Retards</label>
-                  <div className="grid grid-cols-2 gap-2">
-                    <input
-                      type="text"
-                      value={studentForm.absencesCount}
-                      onChange={(e) => setStudentForm({ ...studentForm, absencesCount: e.target.value })}
-                      className="w-full bg-white border border-gray-200 rounded-xl p-2"
-                      placeholder="Ex: 2 absences"
-                    />
-                    <input
-                      type="text"
-                      value={studentForm.latenessesCount}
-                      onChange={(e) => setStudentForm({ ...studentForm, latenessesCount: e.target.value })}
-                      className="w-full bg-white border border-gray-200 rounded-xl p-2"
-                      placeholder="Ex: 1 retard"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="space-y-3">
-                <div>
-                  <label className="block font-bold text-gray-500 mb-1">Notes & Moyennes Scolaires</label>
-                  <textarea
-                    rows={2}
-                    value={studentForm.gradesSummary}
-                    onChange={(e) => setStudentForm({ ...studentForm, gradesSummary: e.target.value })}
-                    className="w-full bg-white border border-gray-200 rounded-xl p-2 text-[11px]"
-                  />
-                </div>
-                <div>
-                  <label className="block font-bold text-gray-500 mb-1">Comportement & Rigueur</label>
-                  <textarea
-                    rows={2}
-                    value={studentForm.behavior}
-                    onChange={(e) => setStudentForm({ ...studentForm, behavior: e.target.value })}
-                    className="w-full bg-white border border-gray-200 rounded-xl p-2 text-[11px]"
-                  />
-                </div>
-              </div>
-            </div>
-
-            <button
-              onClick={generateAIStudentAppreciation}
-              disabled={generatingAppreciations}
-              className="w-full bg-gradient-to-r from-indigo-900 to-indigo-700 hover:from-black hover:to-indigo-900 text-white font-black text-xs py-2.5 rounded-xl transition-all shadow-md flex items-center justify-center gap-2"
-            >
-              {generatingAppreciations ? (
-                <>
-                  <RefreshCw size={14} className="animate-spin" /> Synthèse IA en cours...
-                </>
-              ) : (
-                <>
-                  <Sparkles size={14} /> Lancer l'Analyse & Générer Appréciations
-                </>
-              )}
-            </button>
-
-            {studentAppreciationsResult && (
-              <div className="bg-white border border-gray-150 p-4 rounded-xl space-y-3 text-xs shadow-sm">
-                <div className="border-b border-gray-100 pb-2">
-                  <span className="text-[10px] font-black text-indigo-600 uppercase block">Appréciation Conseillée de l'Enseignant</span>
-                  <p className="text-gray-800 font-extrabold mt-1">"{studentAppreciationsResult.teacherAppreciation}"</p>
-                </div>
-                <div>
-                  <span className="text-[10px] font-black text-purple-600 uppercase block">Synthèse Pédagogique Globale (IA)</span>
-                  <p className="text-gray-600 mt-1 leading-relaxed">
-                    {studentAppreciationsResult.pedagogicalSynthesis}
-                  </p>
-                </div>
-              </div>
-            )}
           </div>
         </div>
       )}
