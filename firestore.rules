@@ -515,5 +515,9 @@ service cloud.firestore {
       allow read: if isAuthenticated();
       allow write: if isAdmin();
     }
+    match /finance_settings/{settingId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin() || hasResponsibility('gestionnaire_comptable');
+    }
   }
 }

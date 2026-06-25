@@ -4,7 +4,7 @@ import {
   Wallet, TrendingUp, TrendingDown, Users, AlertCircle, CheckCircle2, 
   Clock, DollarSign, ArrowUpRight, ArrowDownRight, RefreshCw, Sparkles, 
   FileText, ShieldCheck, Activity, Landmark, ArrowRight, CheckSquare, ListFilter,
-  Check, PlaySquare, Calendar, Building, ChevronRight, Scale, ShieldAlert, BookOpen
+  Check, PlaySquare, Calendar, Building, ChevronRight, Scale, ShieldAlert, BookOpen, Sliders, Save
 } from 'lucide-react';
 import { 
   PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, 
@@ -53,6 +53,7 @@ export const AccountantDashboard: React.FC<AccountantDashboardProps> = ({
   const [aiPredictions, setAiPredictions] = useState<any>(null);
   const [localEstablishments, setLocalEstablishments] = useState<any[]>(establishments || []);
   const [selectedEstablishmentFilter, setSelectedEstablishmentFilter] = useState<string>('');
+  const [selectedTreasuryJustification, setSelectedTreasuryJustification] = useState<'none' | 'caisse' | 'banque' | 'momo' | 'global'>('none');
 
   const currentEstId = currentEstablishment?.id || 'EDU-001';
 
@@ -113,18 +114,113 @@ export const AccountantDashboard: React.FC<AccountantDashboardProps> = ({
 
   const { estStudents, estPayments, estExpenses, estSlips, estEntries, estId } = getFilteredData();
 
+  // Real-time parameters configurable by accountant, persisted to Firestore
+  const [finSettings, setFinSettings] = useState({
+    id: '',
+    initialCash: 1250000,
+    initialBank: 18450000,
+    initialMomo: 950000,
+    defaultRequiredFee: 320000
+  });
+  const [isEditingSettings, setIsEditingSettings] = useState(false);
+  const [settingsForm, setSettingsForm] = useState({
+    initialCash: '1250000',
+    initialBank: '18450000',
+    initialMomo: '950000',
+    defaultRequiredFee: '320000'
+  });
+  const [isSavingSettings, setIsSavingSettings] = useState(false);
+
+  useEffect(() => {
+    const fetchSettings = async () => {
+      if (!estId) return;
+      try {
+        const q = query(collection(db, 'finance_settings'), where('establishmentId', '==', estId));
+        const snap = await getDocs(q);
+        if (!snap.empty) {
+          const docData = snap.docs[0].data();
+          const loaded = {
+            id: snap.docs[0].id,
+            initialCash: Number(docData.initialCash ?? 0),
+            initialBank: Number(docData.initialBank ?? 0),
+            initialMomo: Number(docData.initialMomo ?? 0),
+            defaultRequiredFee: Number(docData.defaultRequiredFee ?? 320000)
+          };
+          setFinSettings(loaded);
+          setSettingsForm({
+            initialCash: String(loaded.initialCash),
+            initialBank: String(loaded.initialBank),
+            initialMomo: String(loaded.initialMomo),
+            defaultRequiredFee: String(loaded.defaultRequiredFee)
+          });
+        } else {
+          const def = {
+            id: '',
+            initialCash: 1250000,
+            initialBank: 18450000,
+            initialMomo: 950000,
+            defaultRequiredFee: 320000
+          };
+          setFinSettings(def);
+          setSettingsForm({
+            initialCash: '1250000',
+            initialBank: '18450000',
+            initialMomo: '950000',
+            defaultRequiredFee: '320000'
+          });
+        }
+      } catch (err) {
+        console.error("Error loading finance settings:", err);
+      }
+    };
+    fetchSettings();
+  }, [estId]);
+
+  const handleSaveSettings = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!estId) return;
+    setIsSavingSettings(true);
+    try {
+      const payload = {
+        establishmentId: estId,
+        initialCash: Number(settingsForm.initialCash) || 0,
+        initialBank: Number(settingsForm.initialBank) || 0,
+        initialMomo: Number(settingsForm.initialMomo) || 0,
+        defaultRequiredFee: Number(settingsForm.defaultRequiredFee) || 320000,
+        lastUpdated: new Date().toISOString(),
+        updatedBy: currentUser?.id || 'anonymous'
+      };
+
+      if (finSettings.id) {
+        const docRef = doc(db, 'finance_settings', finSettings.id);
+        await updateDoc(docRef, payload);
+        setFinSettings({ ...payload, id: finSettings.id });
+      } else {
+        const { addDoc } = await import('firebase/firestore');
+        const docRef = await addDoc(collection(db, 'finance_settings'), payload);
+        setFinSettings({ ...payload, id: docRef.id });
+      }
+      setIsEditingSettings(false);
+    } catch (err) {
+      console.error("Error saving finance settings:", err);
+      alert("Erreur lors de l'enregistrement des paramètres financiers.");
+    } finally {
+      setIsSavingSettings(false);
+    }
+  };
+
   // --- 1. TREASURY BALANCES ---
   const totalCashIn = estPayments.filter(p => p.method === 'cash').reduce((sum, p) => sum + p.amount, 0);
   const totalCashOut = estExpenses.filter(e => e.creditAccount === '521000' || e.category === 'cash' || e.category === 'salaires').reduce((sum, e) => sum + e.amount, 0);
-  const soldeCaisse = 1250000 + totalCashIn - totalCashOut;
+  const soldeCaisse = finSettings.initialCash + totalCashIn - totalCashOut;
 
   const totalBankIn = estPayments.filter(p => p.method === 'card' || p.method === 'transfer').reduce((sum, p) => sum + p.amount, 0);
   const totalBankOut = estExpenses.filter(e => e.creditAccount === '512000' || e.category === 'bank').reduce((sum, e) => sum + e.amount, 0);
-  const soldeBanque = 18450000 + totalBankIn - totalBankOut;
+  const soldeBanque = finSettings.initialBank + totalBankIn - totalBankOut;
 
   const totalMoMoIn = estPayments.filter(p => ['airtel', 'moov', 'mtn', 'orange'].includes(p.method)).reduce((sum, p) => sum + p.amount, 0);
   const totalMoMoOut = estExpenses.filter(e => e.creditAccount === '521100' || e.category === 'momo').reduce((sum, e) => sum + e.amount, 0);
-  const soldeMomo = 950000 + totalMoMoIn - totalMoMoOut;
+  const soldeMomo = finSettings.initialMomo + totalMoMoIn - totalMoMoOut;
 
   const soldeGlobal = soldeCaisse + soldeBanque + soldeMomo;
 
@@ -172,7 +268,7 @@ export const AccountantDashboard: React.FC<AccountantDashboardProps> = ({
 
     if (studentFees.length === 0) {
       // presetted standard values
-      const required = 320000;
+      const required = finSettings.defaultRequiredFee;
       totalRequired += required;
       const paid = estPayments.filter(p => p.studentId === student.id).reduce((sum, p) => sum + p.amount, 0);
       totalCollected += paid;
@@ -213,19 +309,19 @@ export const AccountantDashboard: React.FC<AccountantDashboardProps> = ({
     }
   });
 
-  const tauxRecouvrement = totalRequired > 0 ? (totalCollected / totalRequired) * 100 : 92.4;
+  const tauxRecouvrement = totalRequired > 0 ? (totalCollected / totalRequired) * 100 : 0;
 
   // --- 4. SALARY MANAGEMENT ---
-  const masseSalariale = estSlips.reduce((sum, s) => sum + s.baseSalary + (s.primes || 0) + ((s.heuresSup || 0) * (s.tauxHeureSup || 0)), 0) || 4500000;
-  const salairesPayes = estSlips.filter(s => s.status === 'paid' || s.status === 'valide').reduce((sum, s) => sum + s.baseSalary + (s.primes || 0) + ((s.heuresSup || 0) * (s.tauxHeureSup || 0)) - (s.avances || 0), 0) || 3200000;
+  const masseSalariale = estSlips.reduce((sum, s) => sum + s.baseSalary + (s.primes || 0) + ((s.heuresSup || 0) * (s.tauxHeureSup || 0)), 0) || 0;
+  const salairesPayes = estSlips.filter(s => s.status === 'paid' || s.status === 'valide').reduce((sum, s) => sum + s.baseSalary + (s.primes || 0) + ((s.heuresSup || 0) * (s.tauxHeureSup || 0)) - (s.avances || 0), 0) || 0;
   const salairesEnAttente = Math.max(0, masseSalariale - salairesPayes);
-  const avancesSalaires = estSlips.reduce((sum, s) => sum + (s.avances || 0), 0) || 400000;
+  const avancesSalaires = estSlips.reduce((sum, s) => sum + (s.avances || 0), 0) || 0;
   const soldeRestantPaie = salairesEnAttente;
 
   // --- 5. SMART ALERTS RULE ENGINE ---
   const smartAlerts = [];
   
-  if (recettesMois < depensesMois) {
+  if (recettesMois < depensesMois && depensesMois > 0) {
     smartAlerts.push({
       type: 'financial',
       level: 'high',
@@ -233,7 +329,7 @@ export const AccountantDashboard: React.FC<AccountantDashboardProps> = ({
       desc: 'Les dépenses mensuelles dépassent les recettes perçues. Risque de rupture de trésorerie.'
     });
   }
-  if (depensesMois > depensesAnnee / 12 * 1.25) {
+  if (depensesAnnee > 0 && depensesMois > depensesAnnee / 12 * 1.25) {
     smartAlerts.push({
       type: 'financial',
       level: 'medium',
@@ -241,7 +337,7 @@ export const AccountantDashboard: React.FC<AccountantDashboardProps> = ({
       desc: 'Les charges de ce mois ont bondi de 25% par rapport à la moyenne annuelle.'
     });
   }
-  if (soldeGlobal < 4000000) {
+  if (soldeGlobal < 4000000 && soldeGlobal > 0) {
     smartAlerts.push({
       type: 'financial',
       level: 'high',
@@ -315,8 +411,9 @@ export const AccountantDashboard: React.FC<AccountantDashboardProps> = ({
 
   const chartDataCategories = Object.keys(categoriesMap).map(k => ({
     name: k.charAt(0).toUpperCase() + k.slice(1),
-    value: categoriesMap[k] === 0 ? Math.floor(Math.random() * 500000) + 100000 : categoriesMap[k]
+    value: categoriesMap[k]
   }));
+  const hasCategoriesData = Object.values(categoriesMap).some(v => v > 0);
 
   // Recettes par classe
   const classMap: { [key: string]: number } = {};
@@ -334,16 +431,6 @@ export const AccountantDashboard: React.FC<AccountantDashboardProps> = ({
     montant: classMap[k]
   })).sort((a,b) => b.montant - a.montant).slice(0, 6);
 
-  if (chartDataClasses.length === 0) {
-    chartDataClasses.push(
-      { class: '6ème A', montant: 1450000 },
-      { class: '3ème B', montant: 1890000 },
-      { class: 'Terminale D', montant: 2100000 },
-      { class: 'CM2', montant: 1250000 },
-      { class: '1ère C', montant: 950000 }
-    );
-  }
-
   // Recettes par période
   const monthlyRecettes: { [key: string]: number } = {
     'Jan': 0, 'Fév': 0, 'Mar': 0, 'Avr': 0, 'Mai': 0, 'Juin': 0,
@@ -358,8 +445,9 @@ export const AccountantDashboard: React.FC<AccountantDashboardProps> = ({
 
   const chartDataPeriods = Object.keys(monthlyRecettes).map(k => ({
     name: k,
-    recettes: monthlyRecettes[k] === 0 ? Math.floor(Math.random() * 2000000) + 800000 : monthlyRecettes[k]
+    recettes: monthlyRecettes[k]
   }));
+  const hasPeriodsData = Object.values(monthlyRecettes).some(v => v > 0);
 
   // Dépenses par catégorie
   const expensesMap: { [key: string]: number } = {
@@ -387,8 +475,9 @@ export const AccountantDashboard: React.FC<AccountantDashboardProps> = ({
 
   const chartDataExpenses = Object.keys(expensesMap).map(k => ({
     name: k,
-    montant: expensesMap[k] === 0 ? Math.floor(Math.random() * 400000) + 200000 : expensesMap[k]
+    montant: expensesMap[k]
   })).sort((a,b) => b.montant - a.montant);
+  const hasExpensesData = Object.values(expensesMap).some(v => v > 0);
 
   // Classification automatique des plus grosses dépenses
   const topExpenses = [...estExpenses]
@@ -467,12 +556,12 @@ export const AccountantDashboard: React.FC<AccountantDashboardProps> = ({
       const { generateAIContent } = await import('../services/aiService');
       
       const payload = {
-        prompt: `En tant qu'Expert Financier Principal EDU-NIFY agréé CEMAC, analysez et synthétisez la situation financière réelle de cet établissement d'enseignement :
+        contents: `En tant qu'Expert Financier Principal EDU-NIFY agréé CEMAC, analysez et synthétisez la situation financière réelle de cet établissement d'enseignement :
         - Établissement : ${currentEstablishment?.nom || 'Ludo_Consulting Campus'}
         - Trésorerie Globale : ${soldeGlobal} FCFA (Caisse: ${soldeCaisse}, Banque: ${soldeBanque}, Mobile Money: ${soldeMomo})
         - Recettes Annuelles : ${recettesAnnee} FCFA, Recettes de ce mois : ${recettesMois} FCFA
         - Dépenses Annuelles : ${depensesAnnee} FCFA, Dépenses de ce mois : ${depensesMois} FCFA
-        - Taux de Recouvrement Scolaire : ${tauxRecouvrement.toFixed(1)}% (Inscriptions en cours: ${totalStudents} élèves, Impayés totaux: ${totalImpayes} FCFA)
+        - Taux de Recouvrement Scolaire : ${tauxRecouvrement.toFixed(1)}% (Inscriptions en cours: ${estStudents.length} élèves, Impayés totaux: ${totalImpayes} FCFA)
         - Masse Salariale Mensuelle : ${masseSalariale} FCFA, Avances actives : ${avancesSalaires} FCFA
 
         Préparez :
@@ -497,7 +586,9 @@ export const AccountantDashboard: React.FC<AccountantDashboardProps> = ({
             "Recommandation 3 : ..."
           ]
         }`,
-        temperature: 0.2
+        config: {
+          temperature: 0.2
+        }
       };
 
       const res = await generateAIContent(payload);
@@ -527,6 +618,105 @@ export const AccountantDashboard: React.FC<AccountantDashboardProps> = ({
       setIsGeneratingPredictions(false);
     }
   };
+
+  // --- Justification Lists Calculations ---
+  const caisseReceipts = estPayments.filter(p => p.method === 'cash').map(p => ({
+    date: getPaymentDate(p),
+    type: 'recette',
+    label: p.ref ? `Frais Scolarité (Reçu Réf ${p.ref})` : `Paiement Scolarité (Espèces)`,
+    studentName: students.find(s => s.id === p.studentId)?.nom || p.studentName || 'Élève inconnu',
+    ref: p.ref || p.id?.substring(0, 8) || 'N/A',
+    amount: p.amount
+  }));
+
+  const caisseExpenses = estExpenses.filter(e => e.creditAccount === '521000' || e.category === 'cash' || e.category === 'salaires').map(e => ({
+    date: getExpenseDate(e),
+    type: 'depense',
+    label: e.description || e.label || `Dépense de caisse (${e.category || 'N/A'})`,
+    studentName: e.beneficiaire || e.recipient || 'N/A',
+    ref: e.ref || e.id?.substring(0, 8) || 'N/A',
+    amount: e.amount
+  }));
+
+  const banqueReceipts = estPayments.filter(p => p.method === 'card' || p.method === 'transfer').map(p => ({
+    date: getPaymentDate(p),
+    type: 'recette',
+    label: p.ref ? `Virement/Carte (Réf ${p.ref})` : `Paiement Scolarité (Banque)`,
+    studentName: students.find(s => s.id === p.studentId)?.nom || p.studentName || 'Élève inconnu',
+    ref: p.ref || p.id?.substring(0, 8) || 'N/A',
+    amount: p.amount
+  }));
+
+  const banqueExpenses = estExpenses.filter(e => e.creditAccount === '512000' || e.category === 'bank').map(e => ({
+    date: getExpenseDate(e),
+    type: 'depense',
+    label: e.description || e.label || `Dépense banque (${e.category || 'N/A'})`,
+    studentName: e.beneficiaire || e.recipient || 'N/A',
+    ref: e.ref || e.id?.substring(0, 8) || 'N/A',
+    amount: e.amount
+  }));
+
+  const momoReceipts = estPayments.filter(p => ['airtel', 'moov', 'mtn', 'orange'].includes(p.method)).map(p => ({
+    date: getPaymentDate(p),
+    type: 'recette',
+    label: `Mobile Money (${(p.method || '').toUpperCase()}) - Réf ${p.ref || 'N/A'}`,
+    studentName: students.find(s => s.id === p.studentId)?.nom || p.studentName || 'Élève inconnu',
+    ref: p.ref || p.id?.substring(0, 8) || 'N/A',
+    amount: p.amount
+  }));
+
+  const momoExpenses = estExpenses.filter(e => e.creditAccount === '521100' || e.category === 'momo').map(e => ({
+    date: getExpenseDate(e),
+    type: 'depense',
+    label: e.description || e.label || `Dépense Mobile Money (${e.category || 'N/A'})`,
+    studentName: e.beneficiaire || e.recipient || 'N/A',
+    ref: e.ref || e.id?.substring(0, 8) || 'N/A',
+    amount: e.amount
+  }));
+
+  let justificationTitle = '';
+  let initialBalance = 0;
+  let totalReceiptsAmt = 0;
+  let totalExpensesAmt = 0;
+  let currentSolde = 0;
+  let combinedList: any[] = [];
+
+  if (selectedTreasuryJustification === 'caisse') {
+    justificationTitle = "Justificatif Détaillé du Solde Caisse";
+    initialBalance = finSettings.initialCash;
+    totalReceiptsAmt = totalCashIn;
+    totalExpensesAmt = totalCashOut;
+    currentSolde = soldeCaisse;
+    combinedList = [...caisseReceipts, ...caisseExpenses].sort((a, b) => b.date.getTime() - a.date.getTime());
+  } else if (selectedTreasuryJustification === 'banque') {
+    justificationTitle = "Justificatif Détaillé du Solde Banque";
+    initialBalance = finSettings.initialBank;
+    totalReceiptsAmt = totalBankIn;
+    totalExpensesAmt = totalBankOut;
+    currentSolde = soldeBanque;
+    combinedList = [...banqueReceipts, ...banqueExpenses].sort((a, b) => b.date.getTime() - a.date.getTime());
+  } else if (selectedTreasuryJustification === 'momo') {
+    justificationTitle = "Justificatif Détaillé du Solde Mobile Money";
+    initialBalance = finSettings.initialMomo;
+    totalReceiptsAmt = totalMoMoIn;
+    totalExpensesAmt = totalMoMoOut;
+    currentSolde = soldeMomo;
+    combinedList = [...momoReceipts, ...momoExpenses].sort((a, b) => b.date.getTime() - a.date.getTime());
+  } else if (selectedTreasuryJustification === 'global') {
+    justificationTitle = "Justificatif de la Trésorerie Globale Disponible";
+    initialBalance = finSettings.initialCash + finSettings.initialBank + finSettings.initialMomo;
+    totalReceiptsAmt = totalCashIn + totalBankIn + totalMoMoIn;
+    totalExpensesAmt = totalCashOut + totalBankOut + totalMoMoOut;
+    currentSolde = soldeGlobal;
+    combinedList = [
+      ...caisseReceipts.map(r => ({ ...r, source: 'Caisse' })), 
+      ...caisseExpenses.map(e => ({ ...e, source: 'Caisse' })),
+      ...banqueReceipts.map(r => ({ ...r, source: 'Banque' })), 
+      ...banqueExpenses.map(e => ({ ...e, source: 'Banque' })),
+      ...momoReceipts.map(r => ({ ...r, source: 'MoMo' })), 
+      ...momoExpenses.map(e => ({ ...e, source: 'MoMo' }))
+    ].sort((a, b) => b.date.getTime() - a.date.getTime());
+  }
 
   return (
     <div className="space-y-6">
@@ -583,6 +773,14 @@ export const AccountantDashboard: React.FC<AccountantDashboardProps> = ({
           )}
 
           <button 
+            onClick={() => setIsEditingSettings(!isEditingSettings)}
+            className="px-4 py-2.5 bg-gray-50 hover:bg-gray-100 dark:bg-gray-900 dark:hover:bg-gray-800 text-gray-800 dark:text-gray-200 border border-gray-200 dark:border-gray-700 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center justify-center gap-2 active:scale-95 duration-100"
+          >
+            <Sliders size={16} className="text-indigo-500" />
+            <span>Paramètres de Caisse</span>
+          </button>
+
+          <button 
             onClick={() => handleGenerateAIDiagnostic()}
             className="px-4 py-2.5 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center justify-center gap-2 shadow-md shadow-indigo-600/10 active:scale-95 duration-100"
           >
@@ -592,11 +790,115 @@ export const AccountantDashboard: React.FC<AccountantDashboardProps> = ({
         </div>
       </div>
 
+      {/* REAL-TIME SETTINGS ACCORDION */}
+      <AnimatePresence>
+        {isEditingSettings && (
+          <motion.div 
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            className="overflow-hidden bg-gradient-to-r from-gray-50 to-indigo-50/20 dark:from-gray-800 dark:to-indigo-950/10 p-6 rounded-3xl border border-indigo-100 dark:border-indigo-900/40 shadow-sm space-y-4 mb-6"
+          >
+            <div className="flex justify-between items-center pb-2 border-b border-indigo-100/60 dark:border-indigo-900/30">
+              <div>
+                <h2 className="text-sm font-black uppercase text-indigo-900 dark:text-indigo-300 flex items-center gap-2">
+                  <Sliders size={16} />
+                  <span>Ajustement des Soldes de Départ Réels & Paramètres</span>
+                </h2>
+                <p className="text-[11px] text-gray-500">Configurez les fonds d'origine disponibles sur vos comptes. Le système calculera les flux comptables réels à partir de ces soldes.</p>
+              </div>
+              <button 
+                type="button"
+                onClick={() => setIsEditingSettings(false)}
+                className="text-xs font-bold text-gray-400 hover:text-gray-600 uppercase"
+              >
+                Fermer
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveSettings} className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+              <div className="space-y-1">
+                <label className="text-[10px] font-black uppercase text-gray-400">Solde Initial Caisse (FCFA)</label>
+                <input 
+                  type="number"
+                  value={settingsForm.initialCash}
+                  onChange={(e) => setSettingsForm({ ...settingsForm, initialCash: e.target.value })}
+                  className="w-full bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2 text-xs font-bold outline-none focus:border-indigo-500"
+                  required
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-black uppercase text-gray-400">Solde Initial Banque (FCFA)</label>
+                <input 
+                  type="number"
+                  value={settingsForm.initialBank}
+                  onChange={(e) => setSettingsForm({ ...settingsForm, initialBank: e.target.value })}
+                  className="w-full bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2 text-xs font-bold outline-none focus:border-indigo-500"
+                  required
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-black uppercase text-gray-400">Solde Initial Mobile Money (FCFA)</label>
+                <input 
+                  type="number"
+                  value={settingsForm.initialMomo}
+                  onChange={(e) => setSettingsForm({ ...settingsForm, initialMomo: e.target.value })}
+                  className="w-full bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2 text-xs font-bold outline-none focus:border-indigo-500"
+                  required
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-black uppercase text-gray-400">Frais Scolarité par Défaut (FCFA)</label>
+                <input 
+                  type="number"
+                  value={settingsForm.defaultRequiredFee}
+                  onChange={(e) => setSettingsForm({ ...settingsForm, defaultRequiredFee: e.target.value })}
+                  className="w-full bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2 text-xs font-bold outline-none focus:border-indigo-500"
+                  required
+                />
+              </div>
+
+              <div className="md:col-span-4 flex justify-end gap-2 pt-2">
+                <button 
+                  type="button"
+                  onClick={() => setIsEditingSettings(false)}
+                  className="px-3 py-2 text-xs font-black uppercase text-gray-500 hover:text-gray-700"
+                >
+                  Annuler
+                </button>
+                <button 
+                  type="submit"
+                  disabled={isSavingSettings}
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black uppercase flex items-center gap-1.5 shadow-md shadow-indigo-600/15 disabled:opacity-50"
+                >
+                  <Save size={14} />
+                  <span>{isSavingSettings ? 'Enregistrement...' : 'Enregistrer les paramètres'}</span>
+                </button>
+              </div>
+            </form>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* 1. TRESORERIE BALANCE SHEET ROW */}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5">
-        <div className="bg-white dark:bg-gray-800 p-5 rounded-3xl border border-gray-150 dark:border-gray-750 shadow-sm relative overflow-hidden">
+        {/* CAISSE */}
+        <div 
+          onClick={() => setSelectedTreasuryJustification(selectedTreasuryJustification === 'caisse' ? 'none' : 'caisse')}
+          className={`cursor-pointer transition-all duration-200 p-5 rounded-3xl border relative overflow-hidden select-none active:scale-[0.98] ${
+            selectedTreasuryJustification === 'caisse' 
+              ? 'bg-indigo-50/50 dark:bg-indigo-950/20 border-indigo-500 shadow-md ring-2 ring-indigo-500/20' 
+              : 'bg-white dark:bg-gray-800 border-gray-150 dark:border-gray-750 shadow-sm hover:border-indigo-300 dark:hover:border-indigo-800'
+          }`}
+        >
           <div className="absolute right-0 top-0 h-16 w-16 bg-indigo-500/5 rounded-full -mr-4 -mt-4" />
-          <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Solde Caisse Centrale</p>
+          <div className="flex justify-between items-start">
+            <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Solde Caisse Centrale</p>
+            <span className="text-[9px] font-extrabold text-indigo-500 dark:text-indigo-400 bg-indigo-100/40 dark:bg-indigo-950/60 px-1.5 py-0.5 rounded uppercase">Justifier</span>
+          </div>
           <div className="flex items-baseline justify-between mt-3">
             <h3 className="text-2xl font-black text-gray-900 dark:text-white tracking-tight">{formatCurrency(soldeCaisse)}</h3>
             <span className="text-[10px] font-mono bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 px-2 py-0.5 rounded-md font-bold uppercase">Caisse</span>
@@ -607,9 +909,20 @@ export const AccountantDashboard: React.FC<AccountantDashboardProps> = ({
           </div>
         </div>
 
-        <div className="bg-white dark:bg-gray-800 p-5 rounded-3xl border border-gray-150 dark:border-gray-750 shadow-sm relative overflow-hidden">
+        {/* BANQUE */}
+        <div 
+          onClick={() => setSelectedTreasuryJustification(selectedTreasuryJustification === 'banque' ? 'none' : 'banque')}
+          className={`cursor-pointer transition-all duration-200 p-5 rounded-3xl border relative overflow-hidden select-none active:scale-[0.98] ${
+            selectedTreasuryJustification === 'banque' 
+              ? 'bg-emerald-50/50 dark:bg-emerald-950/20 border-emerald-500 shadow-md ring-2 ring-emerald-500/20' 
+              : 'bg-white dark:bg-gray-800 border-gray-150 dark:border-gray-750 shadow-sm hover:border-emerald-300 dark:hover:border-emerald-800'
+          }`}
+        >
           <div className="absolute right-0 top-0 h-16 w-16 bg-emerald-500/5 rounded-full -mr-4 -mt-4" />
-          <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Solde Comptes Bancaires</p>
+          <div className="flex justify-between items-start">
+            <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Solde Comptes Bancaires</p>
+            <span className="text-[9px] font-extrabold text-emerald-500 dark:text-emerald-400 bg-emerald-100/40 dark:bg-emerald-950/60 px-1.5 py-0.5 rounded uppercase">Justifier</span>
+          </div>
           <div className="flex items-baseline justify-between mt-3">
             <h3 className="text-2xl font-black text-gray-900 dark:text-white tracking-tight">{formatCurrency(soldeBanque)}</h3>
             <span className="text-[10px] font-mono bg-emerald-50 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400 px-2 py-0.5 rounded-md font-bold uppercase">Banque</span>
@@ -620,9 +933,20 @@ export const AccountantDashboard: React.FC<AccountantDashboardProps> = ({
           </div>
         </div>
 
-        <div className="bg-white dark:bg-gray-800 p-5 rounded-3xl border border-gray-150 dark:border-gray-750 shadow-sm relative overflow-hidden">
+        {/* MOMO */}
+        <div 
+          onClick={() => setSelectedTreasuryJustification(selectedTreasuryJustification === 'momo' ? 'none' : 'momo')}
+          className={`cursor-pointer transition-all duration-200 p-5 rounded-3xl border relative overflow-hidden select-none active:scale-[0.98] ${
+            selectedTreasuryJustification === 'momo' 
+              ? 'bg-amber-50/50 dark:bg-amber-950/20 border-amber-500 shadow-md ring-2 ring-amber-500/20' 
+              : 'bg-white dark:bg-gray-800 border-gray-150 dark:border-gray-750 shadow-sm hover:border-amber-300 dark:hover:border-amber-800'
+          }`}
+        >
           <div className="absolute right-0 top-0 h-16 w-16 bg-amber-500/5 rounded-full -mr-4 -mt-4" />
-          <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Solde Mobile Money</p>
+          <div className="flex justify-between items-start">
+            <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Solde Mobile Money</p>
+            <span className="text-[9px] font-extrabold text-amber-500 dark:text-amber-400 bg-amber-100/40 dark:bg-amber-950/60 px-1.5 py-0.5 rounded uppercase">Justifier</span>
+          </div>
           <div className="flex items-baseline justify-between mt-3">
             <h3 className="text-2xl font-black text-gray-900 dark:text-white tracking-tight">{formatCurrency(soldeMomo)}</h3>
             <span className="text-[10px] font-mono bg-amber-50 dark:bg-amber-950 text-amber-600 dark:text-amber-400 px-2 py-0.5 rounded-md font-bold uppercase">MoMo</span>
@@ -633,9 +957,20 @@ export const AccountantDashboard: React.FC<AccountantDashboardProps> = ({
           </div>
         </div>
 
-        <div className="bg-gradient-to-br from-indigo-900 to-slate-900 p-5 rounded-3xl text-white shadow-xl relative overflow-hidden">
+        {/* GLOBAL */}
+        <div 
+          onClick={() => setSelectedTreasuryJustification(selectedTreasuryJustification === 'global' ? 'none' : 'global')}
+          className={`cursor-pointer transition-all duration-200 p-5 rounded-3xl text-white shadow-xl relative overflow-hidden select-none active:scale-[0.98] ${
+            selectedTreasuryJustification === 'global' 
+              ? 'bg-indigo-950 border-emerald-500 shadow-md ring-2 ring-emerald-500/30' 
+              : 'bg-gradient-to-br from-indigo-900 to-slate-900 hover:brightness-110'
+          }`}
+        >
           <div className="absolute right-0 bottom-0 h-24 w-24 bg-white/5 rounded-full -mr-6 -mb-6" />
-          <p className="text-xs font-bold text-indigo-200 uppercase tracking-widest">Trésorerie Globale Disponible</p>
+          <div className="flex justify-between items-start">
+            <p className="text-xs font-bold text-indigo-200 uppercase tracking-widest">Trésorerie Globale Disponible</p>
+            <span className="text-[9px] font-extrabold text-emerald-300 bg-white/10 px-1.5 py-0.5 rounded uppercase">Justifier Tout</span>
+          </div>
           <div className="flex items-baseline justify-between mt-3">
             <h3 className="text-2xl font-black text-emerald-400 tracking-tight">{formatCurrency(soldeGlobal)}</h3>
             <span className="text-[10px] font-black bg-emerald-500 text-slate-950 px-2.5 py-0.5 rounded-full uppercase">Total</span>
@@ -646,6 +981,117 @@ export const AccountantDashboard: React.FC<AccountantDashboardProps> = ({
           </div>
         </div>
       </div>
+
+      {/* BALANCE JUSTIFICATION DETAILED VIEW */}
+      <AnimatePresence>
+        {selectedTreasuryJustification !== 'none' && (
+          <motion.div
+            initial={{ opacity: 0, y: -15 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -15 }}
+            className="bg-white dark:bg-gray-800 p-6 rounded-3xl border border-indigo-100 dark:border-indigo-950 shadow-sm space-y-5"
+          >
+            {/* Header / Math explanation */}
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 pb-4 border-b border-gray-100 dark:border-gray-750">
+              <div>
+                <h3 className="text-sm font-black uppercase text-indigo-900 dark:text-indigo-400 flex items-center gap-2">
+                  <Landmark className="text-indigo-500" size={18} />
+                  <span>{justificationTitle}</span>
+                </h3>
+                <p className="text-[11px] text-gray-500 mt-1">Équation de Trésorerie : Solde Initial (A) + Recettes Réelles (B) - Dépenses Réelles (C) = Solde Actuel</p>
+              </div>
+              <button
+                onClick={() => setSelectedTreasuryJustification('none')}
+                className="px-3 py-1 bg-gray-50 hover:bg-gray-100 dark:bg-gray-900 dark:hover:bg-gray-800 text-gray-500 hover:text-gray-700 rounded-lg text-xs font-bold uppercase"
+              >
+                Fermer
+              </button>
+            </div>
+
+            {/* Arithmetic Summary Bar */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 p-4 bg-gray-50 dark:bg-gray-900/50 rounded-2xl border border-gray-100 dark:border-gray-750 font-mono">
+              <div className="space-y-1">
+                <span className="text-[9.5px] font-sans font-bold uppercase text-gray-400">Solde de Départ (A)</span>
+                <p className="text-sm font-bold text-gray-600 dark:text-gray-300">{formatCurrency(initialBalance)}</p>
+              </div>
+              <div className="space-y-1">
+                <span className="text-[9.5px] font-sans font-bold uppercase text-emerald-500">(+) Total Recettes (B)</span>
+                <p className="text-sm font-bold text-emerald-600 dark:text-emerald-400">+{formatCurrency(totalReceiptsAmt)}</p>
+              </div>
+              <div className="space-y-1">
+                <span className="text-[9.5px] font-sans font-bold uppercase text-rose-500">(-) Total Dépenses (C)</span>
+                <p className="text-sm font-bold text-rose-600 dark:text-rose-400">-{formatCurrency(totalExpensesAmt)}</p>
+              </div>
+              <div className="space-y-1 bg-indigo-50/50 dark:bg-indigo-950/20 p-2.5 rounded-xl border border-indigo-100/50 dark:border-indigo-900/30">
+                <span className="text-[9.5px] font-sans font-bold uppercase text-indigo-600 dark:text-indigo-400">(=) Solde Calculé</span>
+                <p className="text-sm font-black text-indigo-700 dark:text-indigo-300">{formatCurrency(currentSolde)}</p>
+              </div>
+            </div>
+
+            {/* Live Ledger Transactions list */}
+            <div className="space-y-3">
+              <div className="flex justify-between items-center">
+                <span className="text-[10px] font-extrabold uppercase text-gray-400 tracking-wider">Écritures et justificatifs comptables réels</span>
+                <span className="text-[10px] font-mono text-gray-400">{combinedList.length} écriture(s) trouvée(s)</span>
+              </div>
+
+              {combinedList.length === 0 ? (
+                <div className="p-8 text-center border border-dashed border-gray-100 dark:border-gray-750 rounded-2xl text-gray-400">
+                  <CheckCircle2 size={32} className="mx-auto mb-2 text-emerald-500/40" />
+                  <p className="text-xs font-bold uppercase">Aucune transaction saisie n'a modifié ce compte.</p>
+                  <p className="text-[11px] text-gray-500 mt-1">Le solde est composé à 100% du solde initial déclaré.</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto max-h-80 overflow-y-auto border border-gray-50 dark:border-gray-750 rounded-2xl scrollbar-thin">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="bg-gray-50 dark:bg-gray-900 text-[10px] font-black uppercase text-gray-400 border-b border-gray-100 dark:border-gray-750">
+                        <th className="p-3">Date</th>
+                        <th className="p-3">Libellé écriture / Elève / Tiers</th>
+                        <th className="p-3">Réf / Pièce</th>
+                        {selectedTreasuryJustification === 'global' && <th className="p-3">Compte</th>}
+                        <th className="p-3 text-right">Montant (FCFA)</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-50 dark:divide-gray-750 text-xs font-medium text-gray-700 dark:text-gray-300">
+                      {combinedList.map((tx, idx) => (
+                        <tr key={idx} className="hover:bg-gray-50/50 dark:hover:bg-gray-800/30 transition-colors">
+                          <td className="p-3 font-mono text-[11px] text-gray-500">
+                            {tx.date.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                          </td>
+                          <td className="p-3">
+                            <div className="font-bold">{tx.label}</div>
+                            {tx.studentName && tx.studentName !== 'N/A' && (
+                              <div className="text-[10px] text-gray-400 mt-0.5">Tiers: {tx.studentName}</div>
+                            )}
+                          </td>
+                          <td className="p-3 font-mono text-[11px] text-gray-500">{tx.ref}</td>
+                          {selectedTreasuryJustification === 'global' && (
+                            <td className="p-3">
+                              <span className={`text-[9px] font-extrabold uppercase px-2 py-0.5 rounded-full ${
+                                tx.source === 'Caisse' ? 'bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400' :
+                                tx.source === 'Banque' ? 'bg-emerald-50 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400' :
+                                'bg-amber-50 dark:bg-amber-950 text-amber-600 dark:text-amber-400'
+                              }`}>
+                                {tx.source}
+                              </span>
+                            </td>
+                          )}
+                          <td className={`p-3 text-right font-bold font-mono text-xs ${
+                            tx.type === 'recette' ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'
+                          }`}>
+                            {tx.type === 'recette' ? '+' : '-'}{new Intl.NumberFormat('fr-FR').format(tx.amount)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* 2. REVENUES & EXPENSES IN TIME PERIODS */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -926,66 +1372,89 @@ export const AccountantDashboard: React.FC<AccountantDashboardProps> = ({
             {/* Pie Chart par rubrique */}
             <div className="space-y-2 border border-gray-50 dark:border-gray-750 p-4 rounded-2xl">
               <p className="text-[10px] font-extrabold uppercase text-gray-400 text-center">Part des Recettes par Rubrique</p>
-              <div className="h-44 w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={chartDataCategories}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={45}
-                      outerRadius={65}
-                      paddingAngle={4}
-                      dataKey="value"
-                    >
-                      {chartDataCategories.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                      ))}
-                    </Pie>
-                    <Tooltip formatter={(value) => formatCurrency(Number(value))} />
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
-              <div className="flex flex-wrap gap-x-3 gap-y-1 justify-center text-[9.5px] font-bold uppercase text-gray-500">
-                {chartDataCategories.map((entry, index) => (
-                  <span key={index} className="flex items-center gap-1">
-                    <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: COLORS[index % COLORS.length] }} />
-                    {entry.name}
-                  </span>
-                ))}
-              </div>
+              {!hasCategoriesData ? (
+                <div className="h-44 flex flex-col items-center justify-center text-center p-4">
+                  <AlertCircle className="text-gray-300 dark:text-gray-600 mb-2" size={32} />
+                  <p className="text-xs text-gray-400 font-bold uppercase">Aucune recette enregistrée</p>
+                </div>
+              ) : (
+                <>
+                  <div className="h-44 w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={chartDataCategories}
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={45}
+                          outerRadius={65}
+                          paddingAngle={4}
+                          dataKey="value"
+                        >
+                          {chartDataCategories.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                          ))}
+                        </Pie>
+                        <Tooltip formatter={(value) => formatCurrency(Number(value))} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                  <div className="flex flex-wrap gap-x-3 gap-y-1 justify-center text-[9.5px] font-bold uppercase text-gray-500">
+                    {chartDataCategories.map((entry, index) => (
+                      <span key={index} className="flex items-center gap-1">
+                        <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: COLORS[index % COLORS.length] }} />
+                        {entry.name}
+                      </span>
+                    ))}
+                  </div>
+                </>
+              )}
             </div>
 
             {/* Bar Chart par classe */}
             <div className="space-y-2 border border-gray-50 dark:border-gray-750 p-4 rounded-2xl">
               <p className="text-[10px] font-extrabold uppercase text-gray-400 text-center">Top 5 des Classes (Paiements)</p>
-              <div className="h-44 w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={chartDataClasses} margin={{ left: -10, right: 10, top: 10, bottom: 5 }}>
-                    <XAxis dataKey="class" tick={{ fontSize: 9, fontWeight: 'bold' }} />
-                    <YAxis tick={{ fontSize: 9 }} width={45} tickFormatter={(tick) => `${(tick / 1000).toFixed(0)}k`} />
-                    <Tooltip formatter={(value) => formatCurrency(Number(value))} />
-                    <Bar dataKey="montant" fill="#6366f1" radius={[4, 4, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
+              {chartDataClasses.length === 0 ? (
+                <div className="h-44 flex flex-col items-center justify-center text-center p-4">
+                  <AlertCircle className="text-gray-300 dark:text-gray-600 mb-2" size={32} />
+                  <p className="text-xs text-gray-400 font-bold uppercase">Aucun paiement trouvé</p>
+                </div>
+              ) : (
+                <div className="h-44 w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={chartDataClasses} margin={{ left: -10, right: 10, top: 10, bottom: 5 }}>
+                      <XAxis dataKey="class" tick={{ fontSize: 9, fontWeight: 'bold' }} />
+                      <YAxis tick={{ fontSize: 9 }} width={45} tickFormatter={(tick) => `${(tick / 1000).toFixed(0)}k`} />
+                      <Tooltip formatter={(value) => formatCurrency(Number(value))} />
+                      <Bar dataKey="montant" fill="#6366f1" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
             </div>
           </div>
 
           {/* Line Chart par période temporelle */}
           <div className="border border-gray-50 dark:border-gray-750 p-4 rounded-2xl space-y-2">
             <p className="text-[10px] font-extrabold uppercase text-gray-400 text-center">Évolution Mensuelle des Recettes (FCFA)</p>
-            <div className="h-48 w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={chartDataPeriods} margin={{ left: -10, right: 10, top: 10, bottom: 5 }}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                  <XAxis dataKey="name" tick={{ fontSize: 9, fontWeight: 'bold' }} />
-                  <YAxis tick={{ fontSize: 9 }} width={45} tickFormatter={(tick) => `${(tick / 1000000).toFixed(1)}M`} />
-                  <Tooltip formatter={(value) => formatCurrency(Number(value))} />
-                  <Line type="monotone" dataKey="recettes" stroke="#10b981" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 6 }} />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
+            {!hasPeriodsData ? (
+              <div className="h-48 flex flex-col items-center justify-center text-center p-4">
+                <AlertCircle className="text-gray-300 dark:text-gray-600 mb-2" size={32} />
+                <p className="text-xs text-gray-400 font-bold uppercase">Aucune évolution temporelle</p>
+              </div>
+            ) : (
+              <div className="h-48 w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={chartDataPeriods} margin={{ left: -10, right: 10, top: 10, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                    <XAxis dataKey="name" tick={{ fontSize: 9, fontWeight: 'bold' }} />
+                    <YAxis tick={{ fontSize: 9 }} width={45} tickFormatter={(tick) => `${(tick / 1000000).toFixed(1)}M`} />
+                    <Tooltip formatter={(value) => formatCurrency(Number(value))} />
+                    <Line type="monotone" dataKey="recettes" stroke="#10b981" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 6 }} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            )}
           </div>
         </div>
 
@@ -1004,16 +1473,23 @@ export const AccountantDashboard: React.FC<AccountantDashboardProps> = ({
           {/* Dépenses bar chart */}
           <div className="border border-gray-50 dark:border-gray-750 p-4 rounded-2xl space-y-2">
             <p className="text-[10px] font-extrabold uppercase text-gray-400 text-center">Dépenses par Catégorie Principale</p>
-            <div className="h-52 w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={chartDataExpenses} layout="vertical" margin={{ left: 10, right: 10, top: 10, bottom: 5 }}>
-                  <XAxis type="number" tick={{ fontSize: 9 }} tickFormatter={(tick) => `${(tick / 1000).toFixed(0)}k`} />
-                  <YAxis dataKey="name" type="category" tick={{ fontSize: 9, fontWeight: 'bold' }} width={90} />
-                  <Tooltip formatter={(value) => formatCurrency(Number(value))} />
-                  <Bar dataKey="montant" fill="#ef4444" radius={[0, 4, 4, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
+            {!hasExpensesData ? (
+              <div className="h-52 flex flex-col items-center justify-center text-center p-4">
+                <AlertCircle className="text-gray-300 dark:text-gray-600 mb-2" size={32} />
+                <p className="text-xs text-gray-400 font-bold uppercase">Aucune dépense enregistrée</p>
+              </div>
+            ) : (
+              <div className="h-52 w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={chartDataExpenses} layout="vertical" margin={{ left: 10, right: 10, top: 10, bottom: 5 }}>
+                    <XAxis type="number" tick={{ fontSize: 9 }} tickFormatter={(tick) => `${(tick / 1000).toFixed(0)}k`} />
+                    <YAxis dataKey="name" type="category" tick={{ fontSize: 9, fontWeight: 'bold' }} width={90} />
+                    <Tooltip formatter={(value) => formatCurrency(Number(value))} />
+                    <Bar dataKey="montant" fill="#ef4444" radius={[0, 4, 4, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            )}
           </div>
 
           {/* Classement automatique des plus grosses dépenses */}

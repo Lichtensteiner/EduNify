@@ -539,6 +539,21 @@
         "signatureResponsable": { "type": "string" },
         "format": { "type": "string" }
       }
+    },
+    "finance_settings": {
+      "title": "Finance Settings",
+      "description": "Financial configuration and starting balances for establishments",
+      "type": "object",
+      "properties": {
+        "establishmentId": { "type": "string" },
+        "initialCash": { "type": "number" },
+        "initialBank": { "type": "number" },
+        "initialMomo": { "type": "number" },
+        "defaultRequiredFee": { "type": "number" },
+        "lastUpdated": { "type": "string", "format": "date-time" },
+        "updatedBy": { "type": "string" }
+      },
+      "required": ["establishmentId"]
     }
   },
   "firestore": {
@@ -579,6 +594,7 @@
     "/bulletins/{bulletinId}": { "schema": "bulletins", "description": "Structured quarterly report cards." },
     "/rh_staff/{id}": { "schema": "rh_staff", "description": "Staff RH Profiles" },
     "/rh_advances/{id}": { "schema": "rh_advances", "description": "Salary Advances" },
-    "/rh_bulletin_config/{id}": { "schema": "rh_bulletin_config", "description": "School Bulletin Config" }
+    "/rh_bulletin_config/{id}": { "schema": "rh_bulletin_config", "description": "School Bulletin Config" },
+    "/finance_settings/{settingId}": { "schema": "finance_settings", "description": "Starting/initial balances and financial parameters per establishment" }
   }
 }

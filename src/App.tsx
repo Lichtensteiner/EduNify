@@ -96,6 +96,12 @@ function AppContent() {
       setActiveTab('student_dashboard');
     }
 
+    const role = (currentUser?.role || '') as string;
+    const isComptable = role === 'comptable' || role === 'gestionnaire_comptable' || (role === 'personnel administratif' && currentUser?.position === 'comptable');
+    if (isComptable && activeTab === 'dashboard') {
+      setActiveTab('finance');
+    }
+
     // Run maintenance if admin
     if (currentUser?.role === 'admin') {
       runMaintenance(currentUser.role);

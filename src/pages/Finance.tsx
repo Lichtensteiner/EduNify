@@ -1361,7 +1361,7 @@ Sceau de sécurité : CS-GAB-${payment.id.substring(0,8).toUpperCase()}-2026
       {/* Tabs list inside accounting module */}
       <div className="flex flex-wrap gap-2.5 border-b border-gray-100 dark:border-gray-750 pb-2">
         {[
-          { id: 'comptable_dashboard', label: '📊 Tableau de Bord Global' },
+          { id: 'comptable_dashboard', label: '📊 Tableau de Bord Comptable' },
           { id: 'journal', label: 'Journal des Recettes' },
           { id: 'expenses', label: 'Saisie de Dépenses' },
           { id: 'caisse', label: 'Caisse Journalière' },
