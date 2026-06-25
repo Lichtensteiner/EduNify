@@ -17,9 +17,12 @@ import { motion, AnimatePresence } from 'motion/react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useNotification } from '../contexts/NotificationContext';
+import { useEstablishment } from '../contexts/EstablishmentContext';
+import { generateAIContent } from '../services/aiService';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import QRCode from 'qrcode';
+import { Palette, Sparkles, AlertCircle, RefreshCw, Layers } from 'lucide-react';
 
 interface Student {
   id: string;
@@ -46,6 +49,101 @@ export default function DocumentGenerator() {
   const { t } = useLanguage();
   const { currentUser } = useAuth();
   const { notifyError } = useNotification();
+
+  // Establishment Context Integration
+  const { currentEstablishment, establishments } = useEstablishment();
+  const [selectedEstablishmentId, setSelectedEstablishmentId] = useState<string>(currentEstablishment?.id || '');
+
+  const activeEst = establishments.find(e => e.id === selectedEstablishmentId) || currentEstablishment;
+
+  // Helpers for custom branding & graphic design charter
+  const getInitials = (name: string) => {
+    if (!name) return 'EDU';
+    const parts = name.trim().split(/\s+/).filter(p => p.length > 0);
+    if (parts.length === 1) return parts[0].substring(0, 3).toUpperCase();
+    return (parts[0][0] + (parts[1]?.[0] || '') + (parts[2]?.[0] || '')).toUpperCase();
+  };
+
+  const hexToRgb = (hex: string): [number, number, number] => {
+    if (!hex) return [79, 70, 229]; // Indigo default
+    hex = hex.replace('#', '');
+    if (hex.length === 3) {
+      hex = hex[0] + hex[0] + hex[1] + hex[1] + hex[2] + hex[2];
+    }
+    const num = parseInt(hex, 16);
+    if (isNaN(num)) return [79, 70, 229];
+    return [
+      (num >> 16) & 255,
+      (num >> 8) & 255,
+      num & 255
+    ];
+  };
+
+  // AI-Powered Real-Time Graphic Charter designed on demand
+  const [aiGraphicCharter, setAiGraphicCharter] = useState<any>({
+    themeName: "Identité Classique Académique",
+    headerLayout: "academic_crest",
+    borderColor: activeEst?.primaryColor || "#4f46e5",
+    borderWidth: 1.2,
+    showWatermark: true,
+    watermarkText: (activeEst?.nom || "CAMPUS").toUpperCase(),
+    cardStyle: "premium_gradient",
+    titleFont: "helvetica",
+    designerAdvice: "Une charte institutionnelle classique avec des lignes sobres de couleur or et indigo."
+  });
+
+  const [isGeneratingCharter, setIsGeneratingCharter] = useState(false);
+
+  const handleGenerateAICharter = async () => {
+    setIsGeneratingCharter(true);
+    try {
+      const prompt = `Tu es un designer graphique professionnel et expert en chartes graphiques pour les écoles d'excellence. 
+L'établissement s'appelle : "${activeEst?.nom || 'Mon École'}", sa devise est : "${activeEst?.devise || 'Savoir, Rigueur, Excellence'}", ses couleurs de marque sont le Primaire: "${activeEst?.primaryColor || '#4f46e5'}" et le Secondaire: "${activeEst?.secondaryColor || '#ea580c'}".
+
+Suggère une charte graphique élégante et moderne pour ses documents officiels (carte d'étudiant, certificat de scolarité, bulletin scolaire).
+Génère une réponse sous forme d'un objet JSON pur et valide (sans aucun blabla, sans balise markdown de code, juste l'objet brut) contenant strictement ces clés :
+{
+  "themeName": "Un nom poétique en français pour ce thème de design",
+  "headerLayout": "Un des styles suivants : 'classic_centered', 'modern_minimalist', 'academic_crest', 'luxury_ribbon'",
+  "borderColor": "Code couleur hexadécimal complémentaire à associer aux bordures (ex: '#cccccc')",
+  "borderWidth": "Une épaisseur de bordure esthétique en mm (ex: 1.5)",
+  "showWatermark": true ou false,
+  "watermarkText": "Un court texte en capitales à afficher en fond (ex: '${(activeEst?.nom || 'CAMPUS').toUpperCase()}')",
+  "cardStyle": "Un des styles suivants : 'premium_gradient', 'minimalist_dark', 'school_house_spirit'",
+  "titleFont": "Un style de police : 'helvetica' ou 'times'",
+  "designerAdvice": "Un court conseil d'expert en graphisme (en français) sur pourquoi cette charte correspond parfaitement à cet établissement"
+}`;
+
+      const res = await generateAIContent({
+        contents: prompt
+      });
+
+      if (res && res.text) {
+        let cleaned = res.text.trim();
+        if (cleaned.startsWith('```')) {
+          cleaned = cleaned.replace(/```json|```/g, '').trim();
+        }
+        const parsed = JSON.parse(cleaned);
+        setAiGraphicCharter(parsed);
+      }
+    } catch (e) {
+      console.error("AI Charter Generation failed, using customized defaults", e);
+      setAiGraphicCharter({
+        themeName: "Charte de Prestige",
+        headerLayout: "academic_crest",
+        borderColor: activeEst?.primaryColor || "#4f46e5",
+        borderWidth: 1.2,
+        showWatermark: true,
+        watermarkText: (activeEst?.nom || "CAMPUS").toUpperCase(),
+        cardStyle: "premium_gradient",
+        titleFont: "times",
+        designerAdvice: "Adaptation dynamique basée sur les caractéristiques de l'établissement."
+      });
+    } finally {
+      setIsGeneratingCharter(false);
+    }
+  };
+
   const [students, setStudents] = useState<Student[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -68,6 +166,22 @@ export default function DocumentGenerator() {
     student: Student;
     config: any;
   } | null>(null);
+
+  useEffect(() => {
+    if (activeEst) {
+      setAiGraphicCharter({
+        themeName: "Identité Classique Académique",
+        headerLayout: "academic_crest",
+        borderColor: activeEst.primaryColor || "#4f46e5",
+        borderWidth: 1.2,
+        showWatermark: true,
+        watermarkText: (activeEst.nom || "CAMPUS").toUpperCase(),
+        cardStyle: "premium_gradient",
+        titleFont: "helvetica",
+        designerAdvice: "Une charte institutionnelle classique avec des lignes sobres."
+      });
+    }
+  }, [selectedEstablishmentId, currentEstablishment]);
 
   useEffect(() => {
     // Pre-load logo
@@ -175,17 +289,69 @@ export default function DocumentGenerator() {
 
   const drawLogo = async (doc: jsPDF, x: number, y: number, size: number = 15) => {
     try {
-      const imgData = logoDataUrl || await getImageDataUrl('/logo.png');
+      const activeLogo = activeEst?.logo || '/logo.png';
+      let imgData = '';
+      if (activeLogo.startsWith('data:')) {
+        imgData = activeLogo;
+      } else {
+        imgData = await getImageDataUrl(activeLogo);
+      }
       doc.addImage(imgData, 'PNG', x, y, size, size);
     } catch (e) {
       console.warn("Logo drawing failed, using fallback", e);
-      // Fallback stylized logo
-      doc.setFillColor(63, 81, 181);
-      doc.roundedRect(x, y, size, size, 2, 2, 'F');
+      // Fallback stylized logo based on initials
+      const initials = getInitials(activeEst?.nom || 'EDU');
+      const pColor = hexToRgb(activeEst?.primaryColor || '#4f46e5');
+      doc.setFillColor(pColor[0], pColor[1], pColor[2]);
+      doc.roundedRect(x, y, size, size, 1.5, 1.5, 'F');
       doc.setTextColor(255);
-      doc.setFontSize(size * 0.4);
+      doc.setFontSize(size * 0.38);
       doc.setFont("helvetica", "bold");
-      doc.text("SHOP", x + size/2, y + size/2 + 1, { align: 'center', baseline: 'middle' });
+      doc.text(initials, x + size/2, y + size/2 + 0.5, { align: 'center', baseline: 'middle' });
+    }
+  };
+
+  const drawPageBorder = (doc: jsPDF, width: number, height: number) => {
+    const margin = 8;
+    const bColor = hexToRgb(aiGraphicCharter.borderColor || activeEst?.primaryColor || '#4f46e5');
+    doc.setDrawColor(bColor[0], bColor[1], bColor[2]);
+    doc.setLineWidth(aiGraphicCharter.borderWidth || 1);
+    doc.rect(margin, margin, width - margin * 2, height - margin * 2);
+    
+    // Micro thin double line inside for expert styling
+    doc.setLineWidth(0.25);
+    doc.rect(margin + 1.2, margin + 1.2, width - (margin + 1.2) * 2, height - (margin + 1.2) * 2);
+  };
+
+  const drawWatermark = (doc: jsPDF, width: number, height: number) => {
+    if (!aiGraphicCharter.showWatermark) return;
+    const anyDoc = doc as any;
+    anyDoc.saveState();
+    anyDoc.setTextColor(245, 245, 245); // Soft, ultra faint watermark
+    anyDoc.setFontSize(32);
+    anyDoc.setFont("helvetica", "bold");
+    anyDoc.rotate(-40, width / 2, height / 2);
+    anyDoc.text(aiGraphicCharter.watermarkText || "CAMPUS EXCELLENCE", width / 2, height / 2, { align: 'center' });
+    anyDoc.restoreState();
+  };
+
+  const drawHeaderDecoration = (doc: jsPDF, width: number) => {
+    const pColor = hexToRgb(activeEst?.primaryColor || '#4f46e5');
+    const sColor = hexToRgb(activeEst?.secondaryColor || '#ea580c');
+    
+    if (aiGraphicCharter.headerLayout === 'academic_crest') {
+      doc.setFillColor(pColor[0], pColor[1], pColor[2]);
+      doc.rect(8, 8, width - 16, 2.5, 'F');
+      doc.setFillColor(sColor[0], sColor[1], sColor[2]);
+      doc.rect(8, 10.5, width - 16, 1, 'F');
+    } else if (aiGraphicCharter.headerLayout === 'luxury_ribbon') {
+      doc.setFillColor(pColor[0], pColor[1], pColor[2]);
+      doc.rect(8, 8, 4, 30, 'F');
+      doc.setFillColor(sColor[0], sColor[1], sColor[2]);
+      doc.rect(12, 8, 1, 30, 'F');
+    } else if (aiGraphicCharter.headerLayout === 'modern_minimalist') {
+      doc.setFillColor(pColor[0], pColor[1], pColor[2]);
+      doc.rect(8, 8, 30, 2, 'F');
     }
   };
 
@@ -200,30 +366,34 @@ export default function DocumentGenerator() {
       });
 
       // --- FRONT SIDE ---
+      const primaryColorRGB = hexToRgb(activeEst?.primaryColor || '#4f46e5');
+      const secondaryColorRGB = hexToRgb(activeEst?.secondaryColor || '#ea580c');
+
+      // Card Background with dual brand accents
       doc.setFillColor(15, 23, 42); 
       doc.rect(0, 0, 85.6, 53.98, 'F');
       
-      doc.setFillColor(30, 41, 59);
-      doc.triangle(40, 0, 85.6, 0, 85.6, 53.98, 'F');
+      doc.setFillColor(secondaryColorRGB[0], secondaryColorRGB[1], secondaryColorRGB[2]);
+      doc.triangle(38, 0, 85.6, 0, 85.6, 53.98, 'F');
       
-      doc.setFillColor(99, 102, 241); 
+      doc.setFillColor(primaryColorRGB[0], primaryColorRGB[1], primaryColorRGB[2]); 
       doc.rect(0, 0, 85.6, 1.5, 'F');
 
       await drawLogo(doc, 5, 5, 12);
       
       doc.setTextColor(255, 255, 255);
-      doc.setFontSize(8);
+      doc.setFontSize(activeEst?.nom && activeEst.nom.length > 25 ? 6.5 : 8);
       doc.setFont("helvetica", "bold");
-      doc.text("CENTRE PÉDAGOGIQUE SHOPUNIVERSITIES", 19, 10);
+      doc.text((activeEst?.nom || "CENTRE PÉDAGOGIQUE").toUpperCase(), 19, 10);
       
       doc.setFontSize(4);
       doc.setFont("helvetica", "normal");
-      doc.setCharSpace(0.5);
-      doc.text("ECOLE INTERNATIONALE - CARTE D'IDENTITÉ", 19, 14);
+      doc.setCharSpace(0.3);
+      doc.text((activeEst?.devise || "Savoir - Rigueur - Excellence").toUpperCase(), 19, 14);
       doc.setCharSpace(0);
 
-      // Photo Section
-      doc.setDrawColor(99, 102, 241);
+      // Photo Section styled with brand border
+      doc.setDrawColor(primaryColorRGB[0], primaryColorRGB[1], primaryColorRGB[2]);
       doc.setLineWidth(0.3);
       const photoX = 5;
       const photoY = 20;
@@ -299,49 +469,61 @@ export default function DocumentGenerator() {
       console.log("Generating certificate for:", student.nom);
       const doc = new jsPDF();
       
+      const primaryColorRGB = hexToRgb(activeEst?.primaryColor || '#4f46e5');
+      const secondaryColorRGB = hexToRgb(activeEst?.secondaryColor || '#ea580c');
+
+      // AI-Adapted structural decorations
+      drawPageBorder(doc, 210, 297);
+      drawWatermark(doc, 210, 297);
+      drawHeaderDecoration(doc, 210);
+
       await drawLogo(doc, 20, 15, 22);
       
-      doc.setFontSize(16);
+      doc.setFontSize(14);
       doc.setTextColor(30, 41, 59);
       doc.setFont("helvetica", "bold");
-      doc.text("ECOLE INTERNATIONALE DU CENTRE PÉDAGOGIQUE", 48, 22);
-      doc.text("SHOPUNIVERSITIES", 48, 28);
+      doc.text((activeEst?.nom || "CENTRE PÉDAGOGIQUE SHOPUNIVERSITIES").toUpperCase(), 48, 22);
       
       doc.setFontSize(8);
       doc.setFont("helvetica", "normal");
-      doc.text("529 Avenue Félix HOUPHOUËT-BOIGNY, Trois Quartier, Libreville GABON", 48, 33);
-      doc.text("E-mail: ludo.consulting3@gmail.com", 48, 37);
-      doc.text("Tél: +241 011 44 9292 / 062 24 8425 / 077022307 / 062641120", 48, 41);
+      doc.setTextColor(71, 85, 105);
+      doc.text(activeEst?.adresse || "Libreville, Gabon", 48, 28);
+      doc.text(`E-mail: ${activeEst?.email || "contact@school.com"} | Site: ${activeEst?.siteWeb || "www.school.com"}`, 48, 33);
+      doc.text(`Tél: ${activeEst?.telephone || "+241 011 44 9292"}`, 48, 38);
 
       doc.setDrawColor(226, 232, 240);
-      doc.line(20, 45, 190, 45);
+      doc.setLineWidth(0.4);
+      doc.line(20, 43, 190, 43);
 
-      doc.setFontSize(26);
-      doc.setFont("times", "bold");
-      doc.text("CERTIFICAT DE SCOLARITÉ", 105, 65, { align: 'center' });
-      
-      doc.setFontSize(12);
-      doc.setFont("helvetica", "normal");
-      doc.setLineHeightFactor(1.4);
-      
-      const bodyText = `Le Chef d'établissement soussigné de Shop Universities, certifie par la présente que l'étudiant(e) identifié(e) ci-dessous est régulièrement inscrit(e) au sein de notre institution et suit assidument son cursus pour l'année académique en cours.`;
-      
-      const splitText = doc.splitTextToSize(bodyText, 160);
-      doc.text(splitText, 25, 80);
-
-      // Student Frame
-      doc.setFillColor(248, 250, 252);
-      doc.roundedRect(25, 105, 160, 70, 3, 3, 'F');
-      
-      doc.setFont("helvetica", "bold");
-      doc.setTextColor(51, 65, 85);
-      doc.setFontSize(10);
-      doc.text("DÉTAILS DE L'ÉTUDIANT(E)", 35, 115);
+      doc.setFontSize(24);
+      doc.setFont(aiGraphicCharter.titleFont || "times", "bold");
+      doc.setTextColor(primaryColorRGB[0], primaryColorRGB[1], primaryColorRGB[2]);
+      doc.text("CERTIFICAT DE SCOLARITÉ", 105, 62, { align: 'center' });
       
       doc.setFontSize(11);
-      const rowY = 125;
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(51, 65, 85);
+      doc.setLineHeightFactor(1.45);
+      
+      const bodyText = `Le Chef d'établissement soussigné de "${activeEst?.nom || 'l\'établissement'} ${activeEst?.devise ? '- ' + activeEst.devise : ''}", certifie par la présente que l'étudiant(e) identifié(e) ci-dessous est régulièrement inscrit(e) au sein de notre institution et suit assidument son cursus pour l'année académique en cours.`;
+      
+      const splitText = doc.splitTextToSize(bodyText, 160);
+      doc.text(splitText, 25, 76);
+
+      // Student Frame styled with brand colors
+      doc.setFillColor(248, 250, 252);
+      doc.roundedRect(25, 102, 160, 72, 3, 3, 'F');
+      
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(primaryColorRGB[0], primaryColorRGB[1], primaryColorRGB[2]);
+      doc.setFontSize(10);
+      doc.text("DÉTAILS DE L'ÉTUDIANT(E)", 35, 112);
+      
+      doc.setFontSize(10.5);
+      const rowY = 122;
       const spacing = 9;
       
+      doc.setTextColor(100, 116, 139);
       doc.text(`NOM ET PRÉNOM :`, 35, rowY);
       doc.text(`MATRICULE :`, 35, rowY + spacing);
       doc.text(`NÉ(E) LE :`, 35, rowY + spacing * 2);
@@ -349,30 +531,38 @@ export default function DocumentGenerator() {
       doc.text(`CLASSE :`, 35, rowY + spacing * 3);
       doc.text(`PROF. PRINCIPAL :`, 35, rowY + spacing * 4);
       
-      doc.setFont("helvetica", "normal");
+      doc.setTextColor(30, 41, 59);
+      doc.setFont("helvetica", "bold");
       doc.text(`${String(student.nom || '').toUpperCase()} ${String(student.prenom || '')}`, 80, rowY);
+      doc.setFont("helvetica", "normal");
       doc.text(String(student.matricule || student.id.substring(0, 12)).toUpperCase(), 80, rowY + spacing);
       doc.text(`${String(student.dateNaissance || 'N/A')} à ${String(student.lieuNaissance || 'N/A')}`, 80, rowY + spacing * 2);
       doc.text(student.gender === 'male' ? 'Masculin' : student.gender === 'female' ? 'Féminin' : 'N/A', 135, rowY + spacing * 2);
       doc.text(String(config.className || student.className || 'NON DÉFINIE').toUpperCase(), 80, rowY + spacing * 3);
       doc.text(String(config.mainTeacher || student.mainTeacher || 'NON ASSIGNÉ').toUpperCase(), 80, rowY + spacing * 4);
 
-      doc.setFontSize(12);
-      doc.text(`Année Académique : ${config.academicYear || "2026-2027"}`, 25, 190);
+      doc.setFontSize(11);
+      doc.setTextColor(51, 65, 85);
+      doc.text(`Année Académique : ${config.academicYear || "2026-2027"}`, 25, 188);
       
       const closingText = `En foi de quoi, ce certificat lui est délivré pour servir et valoir ce que de droit.`;
-      doc.text(closingText, 25, 200);
+      doc.text(closingText, 25, 198);
       
       doc.setFont("helvetica", "italic");
-      doc.text(`Fait à Libreville, le ${new Date().toLocaleDateString('fr-FR')}`, 25, 215);
+      doc.setFontSize(10);
+      doc.text(`Fait à ${activeEst?.adresse ? activeEst.adresse.split(',')[0] : "Libreville"}, le ${new Date().toLocaleDateString('fr-FR')}`, 25, 212);
       
       doc.setFont("helvetica", "bold");
-      doc.setFontSize(14);
-      doc.text(config.principalName || "LE DIRECTEUR GÉNÉRAL", 140, 235);
+      doc.setFontSize(12);
+      doc.setTextColor(primaryColorRGB[0], primaryColorRGB[1], primaryColorRGB[2]);
+      
+      const pName = config.principalName || (activeEst?.responsableCivility ? activeEst.responsableCivility + " " : "") + (activeEst?.responsablePrenom || "") + " " + (activeEst?.responsableNom || "") || "LE DIRECTEUR GÉNÉRAL";
+      doc.text(pName.toUpperCase(), 140, 230);
       
       doc.setFontSize(8);
       doc.setFont("helvetica", "normal");
-      doc.text("(Cachet et Signature de l'Établissement)", 140, 270);
+      doc.setTextColor(100, 116, 139);
+      doc.text("(Cachet et Signature autorisés)", 140, 260);
 
       doc.save(`Certificat_${student.prenom}_${student.nom}.pdf`);
       console.log("Certificate saved successfully");
@@ -482,32 +672,42 @@ export default function DocumentGenerator() {
 
       const doc = new jsPDF();
       
+      const primaryColorRGB = hexToRgb(activeEst?.primaryColor || '#4f46e5');
+      const secondaryColorRGB = hexToRgb(activeEst?.secondaryColor || '#ea580c');
+
+      // AI-Adapted structural decorations
+      drawPageBorder(doc, 210, 297);
+      drawWatermark(doc, 210, 297);
+      
       // Header Section
-      doc.setFillColor(15, 23, 42); 
-      doc.rect(0, 0, 210, 50, 'F');
+      doc.setFillColor(primaryColorRGB[0], primaryColorRGB[1], primaryColorRGB[2]); 
+      doc.rect(8, 8, 194, 42, 'F');
+
+      doc.setFillColor(secondaryColorRGB[0], secondaryColorRGB[1], secondaryColorRGB[2]);
+      doc.rect(8, 48, 194, 2, 'F');
       
       try {
-        await drawLogo(doc, 15, 10, 25);
+        await drawLogo(doc, 15, 12, 22);
       } catch (e) {
         console.warn("Skipping logo in PDF due to error");
       }
       
       doc.setTextColor(255);
-      doc.setFontSize(18);
-      doc.setFont("helvetica", "bold");
-      doc.text("BULLETIN DE NOTES", 105, 20, { align: 'center' });
+      doc.setFontSize(16);
+      doc.setFont(aiGraphicCharter.titleFont || "times", "bold");
+      doc.text("BULLETIN TRIMESTRIEL DE NOTES", 115, 22, { align: 'center' });
       
       doc.setFontSize(9);
       doc.setFont("helvetica", "bold");
       doc.setTextColor(255, 255, 255);
-      doc.text("ECOLE INTERNATIONALE DU CENTRE PÉDAGOGIQUE SHOPUNIVERSITIES", 105, 28, { align: 'center' });
+      doc.text((activeEst?.nom || "CENTRE PÉDAGOGIQUE").toUpperCase(), 115, 29, { align: 'center' });
       
-      doc.setFontSize(7);
+      doc.setFontSize(7.5);
       doc.setFont("helvetica", "normal");
-      doc.setTextColor(148, 163, 184);
-      doc.text("529 Avenue Félix HOUPHOUËT-BOIGNY, TROIS QUARTIER, LIBREVILLE GABON", 105, 34, { align: 'center' });
-      doc.text("Email: ludo.consulting3@gmail.com | Tél: +241 011 44 9292 / 062 24 8425", 105, 38, { align: 'center' });
-      doc.text(`${config.academicYear || "ANNÉE ACADÉMIQUE 2026-2027"} | ${config.period?.toUpperCase() || "TRIMESTRE 1"}`, 105, 43, { align: 'center' });
+      doc.setTextColor(241, 245, 249);
+      doc.text((activeEst?.adresse || "Libreville, Gabon").toUpperCase(), 115, 34, { align: 'center' });
+      doc.text(`Email: ${activeEst?.email || "contact@school.com"} | Tél: ${activeEst?.telephone || "+241 011 44 9292"}`, 115, 38, { align: 'center' });
+      doc.text(`${config.academicYear || "ANNÉE ACADÉMIQUE 2026-2027"} | ${config.period?.toUpperCase() || "TRIMESTRE 1"}`, 115, 43, { align: 'center' });
 
       // Student Summary Info - WELL STRUCTURED
       doc.setFillColor(248, 250, 252);
@@ -562,7 +762,7 @@ export default function DocumentGenerator() {
         head: [['DISCIPLINE', 'COEFF', 'MOY /20', '%', 'APPRÉCIATIONS DÉTAILLÉES']],
         body: tableData,
         theme: 'striped',
-        headStyles: { fillColor: [15, 23, 42], textColor: 255, halign: 'center', fontSize: 9, fontStyle: 'bold' },
+        headStyles: { fillColor: [primaryColorRGB[0], primaryColorRGB[1], primaryColorRGB[2]], textColor: 255, halign: 'center', fontSize: 9, fontStyle: 'bold' },
         styles: { fontSize: 8, cellPadding: 4, overflow: 'linebreak' },
         columnStyles: {
           0: { fontStyle: 'bold', cellWidth: 40 },
@@ -580,7 +780,7 @@ export default function DocumentGenerator() {
       const sumWeightedAvgs = validSubjects.reduce((acc, s) => acc + (s.weightedSum / s.totalCoef), 0);
       const generalAvg = validSubjects.length > 0 ? sumWeightedAvgs / validSubjects.length : 0;
 
-      doc.setFillColor(30, 41, 59);
+      doc.setFillColor(primaryColorRGB[0], primaryColorRGB[1], primaryColorRGB[2]);
       doc.rect(20, finalY, 170, 15, 'F');
       doc.setTextColor(255);
       doc.setFontSize(13);
@@ -630,6 +830,126 @@ export default function DocumentGenerator() {
             Générez des documents officiels (PDF) certifiés par l'établissement.
           </p>
         </div>
+      </div>
+
+      {/* SELECTION ETABLISSEMENT & CONFIGURATION EXPERTE DE CHARTE GRAPHIQUE AVEC IA */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        
+        {/* PANEL 1: SELECTION ETABLISSEMENT DIRECTE */}
+        <div className="bg-white dark:bg-gray-800 rounded-3xl p-6 border border-gray-100 dark:border-gray-700 shadow-sm flex flex-col gap-4">
+          <div className="flex items-center gap-2">
+            <Layers className="text-blue-600 dark:text-blue-400" size={20} />
+            <h2 className="text-sm font-bold text-gray-900 dark:text-white uppercase tracking-wider">Établissement Actif</h2>
+          </div>
+          <p className="text-xs text-gray-500 dark:text-gray-400">
+            Sélectionnez l'établissement pour charger son logo, ses couleurs de marque et ses informations de signature officielle.
+          </p>
+          <div className="space-y-2 max-h-[140px] overflow-y-auto pr-1">
+            {establishments.map((est) => (
+              <button
+                key={est.id}
+                onClick={() => setSelectedEstablishmentId(est.id)}
+                className={`w-full flex items-center gap-3 p-2.5 rounded-xl border text-left transition-all ${
+                  selectedEstablishmentId === est.id
+                    ? 'border-indigo-600 bg-indigo-50/40 dark:bg-indigo-950/20'
+                    : 'border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-750'
+                }`}
+              >
+                <div 
+                  className="w-8 h-8 rounded-lg flex items-center justify-center font-bold text-xs text-white"
+                  style={{ backgroundColor: est.primaryColor || '#4f46e5' }}
+                >
+                  {getInitials(est.nom)}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-bold text-gray-900 dark:text-white truncate">{est.nom}</p>
+                  <p className="text-[10px] text-gray-400 dark:text-gray-500 truncate">{est.adresse || 'Gabon'}</p>
+                </div>
+                {selectedEstablishmentId === est.id && (
+                  <div className="w-2 h-2 rounded-full bg-indigo-600"></div>
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* PANEL 2: CHARTE GRAPHIQUE COURANTE */}
+        <div className="bg-white dark:bg-gray-800 rounded-3xl p-6 border border-gray-100 dark:border-gray-700 shadow-sm flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between gap-2 mb-2">
+              <div className="flex items-center gap-2">
+                <Palette className="text-indigo-600 dark:text-indigo-400" size={20} />
+                <h2 className="text-sm font-bold text-gray-900 dark:text-white uppercase tracking-wider">Charte de Design Actuelle</h2>
+              </div>
+              <span className="px-2 py-0.5 bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 rounded-full text-[9px] font-black uppercase">
+                {aiGraphicCharter.themeName ? 'IA DESIGN' : 'STANDARD'}
+              </span>
+            </div>
+            
+            <div className="space-y-2 mt-3 text-xs text-gray-600 dark:text-gray-300">
+              <div className="flex justify-between">
+                <span className="text-gray-400">Thème :</span>
+                <span className="font-bold text-gray-800 dark:text-gray-100">{aiGraphicCharter.themeName}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-400">Disposition Entête :</span>
+                <span className="font-mono bg-gray-50 dark:bg-gray-900 px-1.5 rounded text-[10px] text-indigo-600">{aiGraphicCharter.headerLayout}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-400">Couleur Bordure :</span>
+                <div className="flex items-center gap-1.5">
+                  <div className="w-2.5 h-2.5 rounded-full border border-gray-300" style={{ backgroundColor: aiGraphicCharter.borderColor }}></div>
+                  <span className="font-mono text-[10px]">{aiGraphicCharter.borderColor}</span>
+                </div>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-400">Filigrane :</span>
+                <span className="font-bold text-gray-800 dark:text-gray-100">{aiGraphicCharter.showWatermark ? `OUI (${aiGraphicCharter.watermarkText})` : 'NON'}</span>
+              </div>
+            </div>
+          </div>
+          
+          <div className="pt-2 border-t border-gray-100 dark:border-gray-750 mt-2 text-[10px] text-gray-400 italic">
+            Couleurs de marque : Primaire {activeEst?.primaryColor || '#4f46e5'} | Secondaire {activeEst?.secondaryColor || '#ea580c'}
+          </div>
+        </div>
+
+        {/* PANEL 3: EXPERT GRAPHISTE IA */}
+        <div className="bg-gradient-to-br from-indigo-900 to-slate-900 rounded-3xl p-6 text-white shadow-lg flex flex-col justify-between">
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <Sparkles className="text-amber-400 animate-pulse" size={20} />
+              <h2 className="text-sm font-black uppercase tracking-wider">Expert Graphique IA</h2>
+            </div>
+            <p className="text-xs text-indigo-200 leading-relaxed">
+              L'IA analyse le nom, la devise et les couleurs de l'établissement pour concevoir instantanément une charte graphique sur-mesure (Watermarks, polices, bordures, dispositions).
+            </p>
+            {aiGraphicCharter.designerAdvice && (
+              <div className="bg-white/10 p-2.5 rounded-xl border border-white/5 text-[10px] italic text-indigo-100 mt-2">
+                "{aiGraphicCharter.designerAdvice}"
+              </div>
+            )}
+          </div>
+
+          <button
+            onClick={handleGenerateAICharter}
+            disabled={isGeneratingCharter}
+            className="w-full mt-4 py-2.5 bg-gradient-to-r from-amber-400 to-orange-500 hover:from-amber-500 hover:to-orange-600 disabled:from-gray-700 disabled:to-gray-800 text-slate-900 font-bold uppercase text-[10px] tracking-wider rounded-xl transition-all flex items-center justify-center gap-2 shadow-md cursor-pointer disabled:cursor-not-allowed"
+          >
+            {isGeneratingCharter ? (
+              <>
+                <RefreshCw size={13} className="animate-spin" />
+                Conception en cours...
+              </>
+            ) : (
+              <>
+                <Sparkles size={13} className="text-slate-900" />
+                Personnaliser avec l'IA en temps réel
+              </>
+            )}
+          </button>
+        </div>
+
       </div>
       
       {/* GLOBAL SETTINGS */}

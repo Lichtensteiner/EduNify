@@ -37,7 +37,8 @@ import {
   Check,
   TrendingUp,
   Download,
-  Notebook
+  Notebook,
+  Edit2
 } from 'lucide-react';
 
 interface FeeConfig {
@@ -95,6 +96,17 @@ export const StudentFeesMgmt: React.FC<StudentFeesMgmtProps> = ({
 
   // New Fee Configuration Form State
   const [showConfigModal, setShowConfigModal] = useState(false);
+  const [editingConfigId, setEditingConfigId] = useState<string | null>(null);
+
+  const canModifyTariffs = 
+    (currentUser?.role as any) === 'admin' || 
+    (currentUser?.role as any) === 'comptable' || 
+    (currentUser?.role as any) === 'gestionnaire_comptable' ||
+    (currentUser?.role as any) === 'Super Admin' ||
+    (currentUser?.role as any) === 'Administrateur' ||
+    (currentUser?.role as any) === 'Responsable Comptable' ||
+    ((currentUser?.role as any) === 'personnel administratif' && currentUser?.position === 'comptable');
+
   const [newConfig, setNewConfig] = useState({
     name: '',
     category: 'tuition' as FeeConfig['category'],
@@ -300,32 +312,58 @@ export const StudentFeesMgmt: React.FC<StudentFeesMgmtProps> = ({
         ...(newConfig.houseId && newConfig.houseId !== 'Toutes' ? { houseId: newConfig.houseId } : {}),
       };
 
-      // Add to Firestore
-      const docRef = await addDoc(collection(db, 'fee_configurations'), confData);
-      
-      const updated = [...feeConfigs, { id: docRef.id, ...confData }];
-      setFeeConfigs(updated);
-      localStorage.setItem(`fee_configs_${currentEstId}`, JSON.stringify(updated));
+      if (editingConfigId) {
+        // Update in Firestore
+        await updateDoc(doc(db, 'fee_configurations', editingConfigId), confData as any);
+        
+        const updated = feeConfigs.map(f => f.id === editingConfigId ? { id: editingConfigId, ...confData } : f);
+        setFeeConfigs(updated);
+        localStorage.setItem(`fee_configs_${currentEstId}`, JSON.stringify(updated));
+        
+        // Reset state
+        setEditingConfigId(null);
+        setNewConfig({
+          name: '',
+          category: 'tuition',
+          amount: '',
+          periodType: 'annual',
+          periodValue: '2026-2027',
+          classe: 'Toutes',
+          niveau: 'Toutes',
+          filiere: 'Toutes',
+          studentId: '',
+          houseId: 'Toutes',
+        });
+        setShowConfigModal(false);
+        alert("Tarif modifié et mis à jour avec succès !");
+      } else {
+        // Add to Firestore
+        const docRef = await addDoc(collection(db, 'fee_configurations'), confData);
+        
+        const updated = [...feeConfigs, { id: docRef.id, ...confData }];
+        setFeeConfigs(updated);
+        localStorage.setItem(`fee_configs_${currentEstId}`, JSON.stringify(updated));
 
-      // Reset form Form
-      setNewConfig({
-        name: '',
-        category: 'tuition',
-        amount: '',
-        periodType: 'annual',
-        periodValue: '2026-2027',
-        classe: 'Toutes',
-        niveau: 'Toutes',
-        filiere: 'Toutes',
-        studentId: '',
-        houseId: 'Toutes',
-      });
-      setShowConfigModal(false);
-      alert("Configuration de frais créée et imputée avec succès !");
+        // Reset form Form
+        setNewConfig({
+          name: '',
+          category: 'tuition',
+          amount: '',
+          periodType: 'annual',
+          periodValue: '2026-2027',
+          classe: 'Toutes',
+          niveau: 'Toutes',
+          filiere: 'Toutes',
+          studentId: '',
+          houseId: 'Toutes',
+        });
+        setShowConfigModal(false);
+        alert("Configuration de frais créée et imputée avec succès !");
+      }
     } catch (err: any) {
-      console.error("Error creating fee config in Firestore:", err);
+      console.error("Error creating/editing fee config in Firestore:", err);
       // Fallback local save
-      const localId = `local-${Date.now()}`;
+      const localId = editingConfigId || `local-${Date.now()}`;
       const confDataLocal: any = {
         name: newConfig.name,
         category: newConfig.category,
@@ -340,9 +378,17 @@ export const StudentFeesMgmt: React.FC<StudentFeesMgmtProps> = ({
         ...(newConfig.studentId ? { studentId: newConfig.studentId } : {}),
         ...(newConfig.houseId && newConfig.houseId !== 'Toutes' ? { houseId: newConfig.houseId } : {}),
       };
-      const updated = [...feeConfigs, { id: localId, ...confDataLocal }];
+      
+      let updated;
+      if (editingConfigId) {
+        updated = feeConfigs.map(f => f.id === editingConfigId ? { id: editingConfigId, ...confDataLocal } : f);
+      } else {
+        updated = [...feeConfigs, { id: localId, ...confDataLocal }];
+      }
+      
       setFeeConfigs(updated);
       localStorage.setItem(`fee_configs_${currentEstId}`, JSON.stringify(updated));
+      setEditingConfigId(null);
       setShowConfigModal(false);
     } finally {
       setLoading(false);
@@ -999,14 +1045,52 @@ export const StudentFeesMgmt: React.FC<StudentFeesMgmtProps> = ({
                   </div>
                 </div>
 
-                <div className="mt-4 pt-3 border-t border-gray-50 dark:border-gray-800 flex justify-end">
-                  <button
-                    onClick={() => handleDeleteConfig(fee.id)}
-                    className="p-1.5 text-rose-500 hover:bg-rose-50 hover:text-rose-600 rounded-lg dark:hover:bg-rose-950/20 transition-colors flex items-center gap-1 text-[10px] uppercase font-black"
-                  >
-                    <Trash2 size={13} />
-                    Retirer
-                  </button>
+                <div className="mt-4 pt-3 border-t border-gray-50 dark:border-gray-800 flex justify-end gap-1.5">
+                  {canModifyTariffs ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingConfigId(fee.id);
+                          setNewConfig({
+                            name: fee.name || '',
+                            category: fee.category || 'tuition',
+                            amount: String(fee.amount || ''),
+                            periodType: fee.periodType || 'annual',
+                            periodValue: fee.periodValue || '2026-2027',
+                            classe: fee.classe || 'Toutes',
+                            niveau: fee.niveau || 'Toutes',
+                            filiere: fee.filiere || 'Toutes',
+                            studentId: fee.studentId || '',
+                            houseId: fee.houseId || 'Toutes',
+                          });
+                          if (fee.deadlines) {
+                            setCustomDeadlines(fee.deadlines);
+                          } else {
+                            setCustomDeadlines([
+                              { label: 'Tranche 1 (Acompte)', dueDate: '2026-10-15', amount: 0 },
+                              { label: 'Tranche 2', dueDate: '2027-01-15', amount: 0 },
+                            ]);
+                          }
+                          setShowConfigModal(true);
+                        }}
+                        className="p-1.5 text-indigo-600 hover:bg-indigo-55/40 dark:hover:bg-indigo-950/20 hover:text-indigo-700 rounded-lg transition-colors flex items-center gap-1 text-[10px] uppercase font-black"
+                      >
+                        <Edit2 size={13} />
+                        Modifier
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteConfig(fee.id)}
+                        className="p-1.5 text-rose-500 hover:bg-rose-50 hover:text-rose-600 rounded-lg dark:hover:bg-rose-950/20 transition-colors flex items-center gap-1 text-[10px] uppercase font-black"
+                      >
+                        <Trash2 size={13} />
+                        Retirer
+                      </button>
+                    </>
+                  ) : (
+                    <span className="text-[9px] text-gray-400 font-bold uppercase tracking-wider">Lecture seule</span>
+                  )}
                 </div>
               </div>
             ))}
@@ -1219,10 +1303,25 @@ export const StudentFeesMgmt: React.FC<StudentFeesMgmtProps> = ({
             <div className="p-4 border-b border-gray-100 dark:border-gray-750 flex items-center justify-between bg-gray-50/50 dark:bg-gray-850">
               <h3 className="text-xs font-black text-slate-800 dark:text-white uppercase tracking-widest flex items-center gap-1.5">
                 <Layers size={14} className="text-indigo-600" />
-                Définition de Tarif de Scolarité
+                {editingConfigId ? "Modification de Tarif de Scolarité" : "Définition de Tarif de Scolarité"}
               </h3>
               <button 
-                onClick={() => setShowConfigModal(false)}
+                onClick={() => {
+                  setEditingConfigId(null);
+                  setNewConfig({
+                    name: '',
+                    category: 'tuition',
+                    amount: '',
+                    periodType: 'annual',
+                    periodValue: '2026-2027',
+                    classe: 'Toutes',
+                    niveau: 'Toutes',
+                    filiere: 'Toutes',
+                    studentId: '',
+                    houseId: 'Toutes',
+                  });
+                  setShowConfigModal(false);
+                }}
                 className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-full text-gray-500"
               >
                 <X size={18} />
@@ -1471,7 +1570,22 @@ export const StudentFeesMgmt: React.FC<StudentFeesMgmtProps> = ({
               <div className="pt-4 flex gap-3 text-xs">
                 <button
                   type="button"
-                  onClick={() => setShowConfigModal(false)}
+                  onClick={() => {
+                    setEditingConfigId(null);
+                    setNewConfig({
+                      name: '',
+                      category: 'tuition',
+                      amount: '',
+                      periodType: 'annual',
+                      periodValue: '2026-2027',
+                      classe: 'Toutes',
+                      niveau: 'Toutes',
+                      filiere: 'Toutes',
+                      studentId: '',
+                      houseId: 'Toutes',
+                    });
+                    setShowConfigModal(false);
+                  }}
                   className="flex-1 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl font-bold uppercase tracking-wider text-[10px]"
                 >
                   Annuler
@@ -1481,7 +1595,7 @@ export const StudentFeesMgmt: React.FC<StudentFeesMgmtProps> = ({
                   disabled={loading}
                   className="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-750 text-white rounded-xl font-black uppercase tracking-wider text-[10px] disabled:opacity-50"
                 >
-                  {loading ? 'Imputation en cours...' : 'Enregistrer le Tarif'}
+                  {loading ? 'Traitement...' : (editingConfigId ? 'Mettre à jour le Tarif' : 'Enregistrer le Tarif')}
                 </button>
               </div>
             </form>

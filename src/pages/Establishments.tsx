@@ -70,6 +70,116 @@ export default function Establishments() {
   const [isUploadingLogo, setIsUploadingLogo] = useState(false);
   const [isUploadingBanner, setIsUploadingBanner] = useState(false);
 
+  // States for instant vector logo generation (No-load / No-charge)
+  const [logoTheme, setLogoTheme] = useState<'shield' | 'circle' | 'book'>('shield');
+
+  const getInitials = (name: string) => {
+    if (!name) return 'EDU';
+    const parts = name.split(/\s+/).filter(p => p.length > 0);
+    if (parts.length === 1) return parts[0].substring(0, 3).toUpperCase();
+    return (parts[0][0] + (parts[1]?.[0] || '') + (parts[2]?.[0] || '')).toUpperCase();
+  };
+
+  const adjustColorBrightness = (col: string, amt: number) => {
+    let usePound = false;
+    if (!col) return '#4f46e5';
+    if (col[0] === "#") {
+      col = col.slice(1);
+      usePound = true;
+    }
+    let num = parseInt(col, 16);
+    if (isNaN(num)) num = 0x4f46e5;
+    let r = (num >> 16) + amt;
+    if (r > 255) r = 255;
+    else if (r < 0) r = 0;
+    let b = ((num >> 8) & 0x00FF) + amt;
+    if (b > 255) b = 255;
+    else if (b < 0) b = 0;
+    let g = (num & 0x0000FF) + amt;
+    if (g > 255) g = 255;
+    else if (g < 0) g = 0;
+    return (usePound ? "#" : "") + ((g | (b << 8) | (r << 16)).toString(16).padStart(6, '0'));
+  };
+
+  const handleGenerateInstantLogo = () => {
+    const name = formNom || 'Établissement';
+    const primary = formPrimaryColor || '#4f46e5';
+    const secondary = formSecondaryColor || '#ea580c';
+    const initials = getInitials(name);
+    
+    let svgContent = '';
+    
+    if (logoTheme === 'shield') {
+      svgContent = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="100%" height="100%">
+        <defs>
+          <linearGradient id="shieldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="${primary}" />
+            <stop offset="100%" stop-color="${adjustColorBrightness(primary, -20)}" />
+          </linearGradient>
+          <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="${secondary}" />
+            <stop offset="100%" stop-color="${adjustColorBrightness(secondary, -15)}" />
+          </linearGradient>
+        </defs>
+        <path d="M 30,30 L 170,30 C 170,30 170,120 100,180 C 30,120 30,30 30,30 Z" fill="url(#shieldGrad)" stroke="${secondary}" stroke-width="4" stroke-linejoin="round" />
+        <path d="M 40,40 L 160,40 C 160,40 160,115 100,165 C 40,115 40,40 40,40 Z" fill="none" stroke="${secondary}88" stroke-width="1.5" />
+        <g fill="#FFFFFF" opacity="0.9">
+          <path d="M100,48 L102,53 L107,53 L103,56 L105,61 L100,58 L95,61 L97,56 L93,53 L98,53 Z" fill="url(#goldGrad)" />
+          <path d="M75,54 L76.5,58 L80.5,58 L77.5,60.5 L79,64.5 L75,62 L71,64.5 L72.5,60.5 L69.5,58 L73.5,58 Z" />
+          <path d="M125,54 L126.5,58 L130.5,58 L127.5,60.5 L129,64.5 L125,62 L121,64.5 L122.5,60.5 L119.5,58 L123.5,58 Z" />
+        </g>
+        <text x="100" y="115" fill="#FFFFFF" font-family="'Times New Roman', Georgia, serif" font-size="44" font-weight="bold" text-anchor="middle" letter-spacing="1">
+          ${initials}
+        </text>
+        <path d="M 50,135 Q 100,155 150,135" fill="none" stroke="url(#goldGrad)" stroke-width="3" stroke-linecap="round" />
+        <circle cx="100" cy="142" r="6" fill="#FFFFFF" />
+        <polygon points="100,139 104,142 100,145 96,142" fill="${primary}" />
+      </svg>`;
+    } else if (logoTheme === 'circle') {
+      svgContent = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="100%" height="100%">
+        <defs>
+          <linearGradient id="circleGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="${primary}" />
+            <stop offset="100%" stop-color="${adjustColorBrightness(primary, -25)}" />
+          </linearGradient>
+          <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="${secondary}" />
+            <stop offset="100%" stop-color="${adjustColorBrightness(secondary, -15)}" />
+          </linearGradient>
+        </defs>
+        <circle cx="100" cy="100" r="85" fill="url(#circleGrad)" stroke="url(#goldGrad)" stroke-width="5" />
+        <circle cx="100" cy="100" r="72" fill="none" stroke="#FFFFFF" stroke-width="1.5" stroke-dasharray="4,4" opacity="0.6" />
+        <path d="M 50,140 A 60,60 0 0,1 50,60" fill="none" stroke="url(#goldGrad)" stroke-width="2.5" />
+        <path d="M 150,140 A 60,60 0 0,0 150,60" fill="none" stroke="url(#goldGrad)" stroke-width="2.5" />
+        <text x="100" y="112" fill="#FFFFFF" font-family="'Inter', system-ui, sans-serif" font-size="38" font-weight="900" text-anchor="middle" letter-spacing="2">
+          ${initials}
+        </text>
+        <g fill="url(#goldGrad)">
+          <polygon points="100,45 102,49 107,49 103,51 105,55 100,53 95,55 97,51 93,49 98,49" />
+          <polygon points="100,145 102,149 107,149 103,151 105,155 100,153 95,155 97,151 93,149 98,149" />
+        </g>
+      </svg>`;
+    } else {
+      svgContent = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="100%" height="100%">
+        <defs>
+          <linearGradient id="bookGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="${primary}" />
+            <stop offset="100%" stop-color="${adjustColorBrightness(primary, -20)}" />
+          </linearGradient>
+        </defs>
+        <rect x="25" y="25" width="150" height="150" rx="20" ry="20" fill="url(#bookGrad)" stroke="${secondary}" stroke-width="4" />
+        <path d="M60,110 C75,100 90,100 100,110 C110,100 125,100 140,110 L140,65 C125,55 110,55 100,65 C90,55 75,55 60,65 Z" fill="#FFFFFF" stroke="${secondary}" stroke-width="2" />
+        <line x1="100" y1="65" x2="100" y2="110" stroke="${secondary}" stroke-width="2" />
+        <text x="100" y="145" fill="#FFFFFF" font-family="'Inter', sans-serif" font-size="28" font-weight="900" text-anchor="middle">
+          ${initials}
+        </text>
+      </svg>`;
+    }
+
+    const base64Url = `data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(svgContent)))}`;
+    setFormLogo(base64Url);
+  };
+
   const handleLogoFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -1186,6 +1296,33 @@ Veuillez conserver et remettre ces données de manière sécurisée uniquement a
                       />
                       <p className="text-[9px] text-gray-400 font-medium mt-1">PNG, JPG ou SVG. Max 2Mo.</p>
                     </div>
+                  </div>
+
+                  <div className="pt-2 border-t border-gray-150 dark:border-gray-800 space-y-2">
+                    <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest font-mono">
+                      Générateur de Logo Vectoriel (Instantané & Sans Charge)
+                    </label>
+                    <div className="flex gap-1.5">
+                      <select
+                        value={logoTheme}
+                        onChange={(e: any) => setLogoTheme(e.target.value)}
+                        className="flex-1 px-2.5 py-1.5 bg-white dark:bg-gray-950 border border-gray-200 dark:border-gray-850 rounded-lg outline-none text-xs font-bold text-gray-750 dark:text-white"
+                      >
+                        <option value="shield">🛡️ Écusson Académique</option>
+                        <option value="circle">🎯 Cercle Moderne</option>
+                        <option value="book">📖 Livre de la Sagesse</option>
+                      </select>
+                      <button
+                        type="button"
+                        onClick={handleGenerateInstantLogo}
+                        className="px-3.5 py-1.5 bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white rounded-lg text-xs font-black uppercase tracking-wider shadow-sm transition-all flex items-center gap-1 shrink-0 cursor-pointer"
+                      >
+                        Créer
+                      </button>
+                    </div>
+                    <p className="text-[8.5px] text-gray-400">
+                      Génère instantanément un logo vectoriel haute-définition adapté aux initiales du campus et à ses couleurs de charte graphique, sans aucun délai ni frais !
+                    </p>
                   </div>
 
                   <div className="pt-2 border-t border-gray-150 dark:border-gray-800">
