@@ -96,12 +96,6 @@ function AppContent() {
       setActiveTab('student_dashboard');
     }
 
-    const role = (currentUser?.role || '') as string;
-    const isComptable = role === 'comptable' || role === 'gestionnaire_comptable' || (role === 'personnel administratif' && currentUser?.position === 'comptable');
-    if (isComptable && activeTab === 'dashboard') {
-      setActiveTab('finance');
-    }
-
     // Run maintenance if admin
     if (currentUser?.role === 'admin') {
       runMaintenance(currentUser.role);
@@ -169,6 +163,7 @@ function AppContent() {
       case 'kiosk':
         return isAdmin ? <KioskMode onExit={() => setActiveTab('users')} /> : <Dashboard onNavigate={handleNavigate} />;
       case 'dashboard': 
+        if (isComptable) return <Finance initialActiveTab="comptable_dashboard" hideSidebarNavigationTabs={true} />;
         if (role === 'parent') return <ParentDashboard onNavigate={handleNavigate} />;
         if (role === 'cuisinier') return <CanteenDashboard onNavigate={handleNavigate} />;
         return (isAdmin || ['enseignant', 'personnel administratif'].includes(role)) ? <Dashboard onNavigate={handleNavigate} /> : <StudentDashboard onNavigate={handleNavigate} />;
@@ -214,7 +209,7 @@ function AppContent() {
       case 'homework': return <Homework />;
       case 'ludo_ai_plus': return <LudoAIPlus />;
       case 'clubs': return <Clubs />;
-      case 'finance': return (isAdmin || (role as string) === 'comptable' || (role as string) === 'gestionnaire_comptable' || (role === 'personnel administratif' && currentUser?.position === 'comptable')) ? <Finance /> : <Dashboard onNavigate={handleNavigate} />;
+      case 'finance': return (isAdmin || isComptable) ? <Finance initialActiveTab="journal" /> : <Dashboard onNavigate={handleNavigate} />;
       case 'discipline': return (isAdmin || ['enseignant', 'personnel administratif'].includes(role)) ? <Discipline /> : <Dashboard onNavigate={handleNavigate} />;
       case 'audit_logs': return isAdmin ? <AuditLogs /> : <Dashboard onNavigate={handleNavigate} />;
       case 'recent_connections': 

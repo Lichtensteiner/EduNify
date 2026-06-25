@@ -172,7 +172,15 @@ const DEFAULT_PLAN_COMPTABLE: SYSCOHADAAccount[] = [
   { code: '708200', name: 'Produits Services Transports Élèves', category: 'Produit', type: 'Prestations' },
 ];
 
-const Finance: React.FC = () => {
+interface FinanceProps {
+  initialActiveTab?: 'comptable_dashboard' | 'journal' | 'caisse' | 'expenses' | 'accounting_plan' | 'double_entries' | 'balance_sheet' | 'sage_sync' | 'parent_invoice' | 'registered_members' | 'payroll' | 'assets' | 'suppliers' | 'discounts' | 'fees_mgmt';
+  hideSidebarNavigationTabs?: boolean;
+}
+
+const Finance: React.FC<FinanceProps> = ({
+  initialActiveTab = 'comptable_dashboard',
+  hideSidebarNavigationTabs = false
+}) => {
   const { currentUser } = useAuth();
   const { t, language, tData } = useLanguage();
   const { currentEstablishment, isSuperAdmin, establishments } = useEstablishment();
@@ -182,7 +190,11 @@ const Finance: React.FC = () => {
   const [showPwaInstallModal, setShowPwaInstallModal] = useState(false);
 
   // ERP Tab State
-  const [activeTab, setActiveTab2] = useState<'comptable_dashboard' | 'journal' | 'caisse' | 'expenses' | 'accounting_plan' | 'double_entries' | 'balance_sheet' | 'sage_sync' | 'parent_invoice' | 'registered_members' | 'payroll' | 'assets' | 'suppliers' | 'discounts' | 'fees_mgmt'>('comptable_dashboard');
+  const [activeTab, setActiveTab2] = useState<'comptable_dashboard' | 'journal' | 'caisse' | 'expenses' | 'accounting_plan' | 'double_entries' | 'balance_sheet' | 'sage_sync' | 'parent_invoice' | 'registered_members' | 'payroll' | 'assets' | 'suppliers' | 'discounts' | 'fees_mgmt'>(initialActiveTab);
+  
+  useEffect(() => {
+    setActiveTab2(initialActiveTab);
+  }, [initialActiveTab]);
   
   // Storage states
   const [payments, setPayments] = useState<Payment[]>([]);
@@ -1190,6 +1202,29 @@ Sceau de sécurité : CS-GAB-${payment.id.substring(0,8).toUpperCase()}-2026
       <div className="flex flex-col items-center justify-center p-24 text-gray-400 space-y-4">
         <RefreshCw className="animate-spin text-indigo-600" size={32} />
         <span className="font-mono text-sm tracking-widest uppercase font-bold">Edu-Nify Ledger Engine Loading...</span>
+      </div>
+    );
+  }
+
+  if (hideSidebarNavigationTabs) {
+    return (
+      <div className="space-y-6">
+        <AccountantDashboard
+          payments={payments}
+          expenses={expenses}
+          accountingEntries={accountingEntries}
+          students={students}
+          teachers={teachers}
+          staff={staff}
+          allClasses={allClasses}
+          paySlips={paySlips}
+          feeConfigs={feeConfigs}
+          currentEstablishment={currentEstablishment}
+          isSuperAdmin={isSuperAdmin}
+          establishments={establishments}
+          currentUser={currentUser}
+          setActiveTab={setActiveTab2}
+        />
       </div>
     );
   }
