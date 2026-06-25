@@ -100,7 +100,7 @@ export default function Sidebar({ activeTab, setActiveTab, isMobileOpen, setIsMo
         { id: 'staff', labelKey: 'admin_staff', icon: Scale, roles: ['admin', 'personnel administratif', 'enseignant'] },
         { id: 'responsibility_zones', labelKey: 'responsibility_zones', icon: ShieldCheck, roles: ['admin', 'personnel administratif', 'enseignant'] },
         { id: 'document_generator', labelKey: 'document_generator', icon: FileBadge, roles: ['admin', 'personnel administratif'] },
-        { id: 'finance', labelKey: 'finance', icon: Wallet, roles: ['admin'] },
+        { id: 'finance', labelKey: 'finance', icon: Wallet, roles: ['admin', 'comptable', 'gestionnaire_comptable'] },
         { id: 'discipline', labelKey: 'discipline', icon: ShieldAlert, roles: ['admin', 'enseignant', 'personnel administratif'] },
         { id: 'strategic_optimizations', labelKey: 'strategic_optimizations', icon: Sparkles, roles: ['admin', 'enseignant'] },
         { id: 'recent_connections', labelKey: 'recent_connections', icon: Activity, roles: ['admin'] },

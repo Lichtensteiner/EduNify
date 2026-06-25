@@ -3,8 +3,10 @@ import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useEstablishment } from '../contexts/EstablishmentContext';
 import { usePWA } from '../hooks/usePWA';
+import { AccountantDashboard } from '../components/AccountantDashboard';
 import { db } from '../lib/firebase';
 import { recordAuditLog } from '../services/auditService';
+import { generateAIContent } from '../services/aiService';
 import { 
   collection, 
   query, 
@@ -180,10 +182,15 @@ const Finance: React.FC = () => {
   const [showPwaInstallModal, setShowPwaInstallModal] = useState(false);
 
   // ERP Tab State
-  const [activeTab, setActiveTab2] = useState<'journal' | 'caisse' | 'expenses' | 'accounting_plan' | 'double_entries' | 'balance_sheet' | 'sage_sync' | 'parent_invoice' | 'registered_members' | 'payroll' | 'assets' | 'suppliers' | 'discounts' | 'fees_mgmt'>('journal');
+  const [activeTab, setActiveTab2] = useState<'comptable_dashboard' | 'journal' | 'caisse' | 'expenses' | 'accounting_plan' | 'double_entries' | 'balance_sheet' | 'sage_sync' | 'parent_invoice' | 'registered_members' | 'payroll' | 'assets' | 'suppliers' | 'discounts' | 'fees_mgmt'>('comptable_dashboard');
   
   // Storage states
   const [payments, setPayments] = useState<Payment[]>([]);
+  const [paySlips, setPaySlips] = useState<any[]>([]);
+  const [feeConfigs, setFeeConfigs] = useState<any[]>([]);
+  const [consolidateAll, setConsolidateAll] = useState(false);
+  const [isGeneratingPredictions, setIsGeneratingPredictions] = useState(false);
+  const [aiPredictions, setAiPredictions] = useState<any>(null);
   const [canteenTransactions, setCanteenTransactions] = useState<any[]>([]);
   const [students, setStudents] = useState<any[]>([]);
   const [teachers, setTeachers] = useState<any[]>([]);
@@ -431,6 +438,22 @@ const Finance: React.FC = () => {
       setCurrentCaisse(active || null);
     });
 
+    // Load payroll slips in real-time
+    const unsubPayroll = onSnapshot(collection(db, 'payroll_slips'), (snap) => {
+      const slips = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setPaySlips(slips);
+    }, (err) => {
+      console.warn("Error subscribing payroll: ", err);
+    });
+
+    // Load fee configurations in real-time
+    const unsubFeeConfigs = onSnapshot(collection(db, 'fee_configurations'), (snap) => {
+      const configs = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setFeeConfigs(configs);
+    }, (err) => {
+      console.warn("Error subscribing fee configs: ", err);
+    });
+
     return () => {
       unsubPayments();
       unsubCompte();
@@ -438,6 +461,8 @@ const Finance: React.FC = () => {
       unsubExpenses();
       unsubCanteen();
       unsubCaisse();
+      unsubPayroll();
+      unsubFeeConfigs();
     };
   }, [currentUser]);
 
@@ -1336,6 +1361,7 @@ Sceau de sécurité : CS-GAB-${payment.id.substring(0,8).toUpperCase()}-2026
       {/* Tabs list inside accounting module */}
       <div className="flex flex-wrap gap-2.5 border-b border-gray-100 dark:border-gray-750 pb-2">
         {[
+          { id: 'comptable_dashboard', label: '📊 Tableau de Bord Global' },
           { id: 'journal', label: 'Journal des Recettes' },
           { id: 'expenses', label: 'Saisie de Dépenses' },
           { id: 'caisse', label: 'Caisse Journalière' },
@@ -1363,6 +1389,25 @@ Sceau de sécurité : CS-GAB-${payment.id.substring(0,8).toUpperCase()}-2026
           </button>
         ))}
       </div>
+
+      {activeTab === 'comptable_dashboard' && (
+        <AccountantDashboard
+          payments={payments}
+          expenses={expenses}
+          accountingEntries={accountingEntries}
+          students={students}
+          teachers={teachers}
+          staff={staff}
+          allClasses={allClasses}
+          paySlips={paySlips}
+          feeConfigs={feeConfigs}
+          currentEstablishment={currentEstablishment}
+          isSuperAdmin={isSuperAdmin}
+          establishments={establishments}
+          currentUser={currentUser}
+          setActiveTab={setActiveTab2}
+        />
+      )}
 
       {/* 1. JOURNAL TAB (PAYMENTS ENCAISSEMENT LIST) */}
       {activeTab === 'journal' && (
