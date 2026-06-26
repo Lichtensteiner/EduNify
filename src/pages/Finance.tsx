@@ -175,11 +175,13 @@ const DEFAULT_PLAN_COMPTABLE: SYSCOHADAAccount[] = [
 interface FinanceProps {
   initialActiveTab?: 'comptable_dashboard' | 'journal' | 'caisse' | 'expenses' | 'accounting_plan' | 'double_entries' | 'balance_sheet' | 'sage_sync' | 'parent_invoice' | 'registered_members' | 'payroll' | 'assets' | 'suppliers' | 'discounts' | 'fees_mgmt';
   hideSidebarNavigationTabs?: boolean;
+  onParentNavigate?: (tab: string, params?: any) => void;
 }
 
 const Finance: React.FC<FinanceProps> = ({
   initialActiveTab = 'comptable_dashboard',
-  hideSidebarNavigationTabs = false
+  hideSidebarNavigationTabs = false,
+  onParentNavigate
 }) => {
   const { currentUser } = useAuth();
   const { t, language, tData } = useLanguage();
@@ -1223,7 +1225,13 @@ Sceau de sécurité : CS-GAB-${payment.id.substring(0,8).toUpperCase()}-2026
           isSuperAdmin={isSuperAdmin}
           establishments={establishments}
           currentUser={currentUser}
-          setActiveTab={setActiveTab2}
+          setActiveTab={(targetTab) => {
+            if (onParentNavigate) {
+              onParentNavigate('finance', { tab: targetTab });
+            } else {
+              setActiveTab2(targetTab as any);
+            }
+          }}
         />
       </div>
     );
