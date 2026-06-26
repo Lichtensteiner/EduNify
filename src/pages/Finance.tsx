@@ -194,9 +194,22 @@ const Finance: React.FC<FinanceProps> = ({
   // ERP Tab State
   const [activeTab, setActiveTab2] = useState<'comptable_dashboard' | 'journal' | 'caisse' | 'expenses' | 'accounting_plan' | 'double_entries' | 'balance_sheet' | 'sage_sync' | 'parent_invoice' | 'registered_members' | 'payroll' | 'assets' | 'suppliers' | 'discounts' | 'fees_mgmt'>(initialActiveTab);
   
+  const isComptableUser = currentUser && (
+    (currentUser.role as string) === 'comptable' ||
+    (currentUser.role as string) === 'gestionnaire_comptable' ||
+    currentUser.position === 'comptable' ||
+    currentUser.position === 'gestionnaire_comptable' ||
+    (currentUser.role === 'personnel administratif' && currentUser.position === 'comptable')
+  );
+  const isSchoolAdmin = currentUser && (currentUser.role === 'admin' || isSuperAdmin);
+
   useEffect(() => {
-    setActiveTab2(initialActiveTab);
-  }, [initialActiveTab]);
+    if (initialActiveTab === 'comptable_dashboard' && isComptableUser && !isSchoolAdmin && !hideSidebarNavigationTabs) {
+      setActiveTab2('journal');
+    } else {
+      setActiveTab2(initialActiveTab);
+    }
+  }, [initialActiveTab, isComptableUser, isSchoolAdmin, hideSidebarNavigationTabs]);
   
   // Storage states
   const [payments, setPayments] = useState<Payment[]>([]);
@@ -1418,7 +1431,14 @@ Sceau de sécurité : CS-GAB-${payment.id.substring(0,8).toUpperCase()}-2026
           { id: 'suppliers', label: '🤝 Tiers & Fournisseurs' },
           { id: 'discounts', label: '🎓 Bourses & Remises' },
           { id: 'sage_sync', label: 'Sage Sinc & Export ERP' },
-        ].map(tab => (
+        ].filter(tab => {
+          if (tab.id === 'comptable_dashboard') {
+            if (isComptableUser && !isSchoolAdmin) {
+              return false; // Hide from Comptable
+            }
+          }
+          return true;
+        }).map(tab => (
           <button
             key={tab.id}
             onClick={() => setActiveTab2(tab.id as any)}

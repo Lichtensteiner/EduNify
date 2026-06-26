@@ -88,7 +88,12 @@ export default function Users() {
     }
     
     setLoading(true);
-    const unsubscribe = onSnapshot(collection(db, 'users'), (snapshot) => {
+    const activeEstId = currentEstablishment?.id || currentUser?.etablissement || 'EDU-001';
+    const usersQuery = isSuperAdmin
+      ? collection(db, 'users')
+      : query(collection(db, 'users'), where('etablissement', '==', activeEstId));
+
+    const unsubscribe = onSnapshot(usersQuery, (snapshot) => {
       const usersData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       setUsers(usersData);
       setLoading(false);

@@ -117,16 +117,16 @@ export const AccountantDashboard: React.FC<AccountantDashboardProps> = ({
   // Real-time parameters configurable by accountant, persisted to Firestore
   const [finSettings, setFinSettings] = useState({
     id: '',
-    initialCash: 1250000,
-    initialBank: 18450000,
-    initialMomo: 950000,
+    initialCash: 0,
+    initialBank: 0,
+    initialMomo: 0,
     defaultRequiredFee: 320000
   });
   const [isEditingSettings, setIsEditingSettings] = useState(false);
   const [settingsForm, setSettingsForm] = useState({
-    initialCash: '1250000',
-    initialBank: '18450000',
-    initialMomo: '950000',
+    initialCash: '0',
+    initialBank: '0',
+    initialMomo: '0',
     defaultRequiredFee: '320000'
   });
   const [isSavingSettings, setIsSavingSettings] = useState(false);
@@ -156,16 +156,16 @@ export const AccountantDashboard: React.FC<AccountantDashboardProps> = ({
         } else {
           const def = {
             id: '',
-            initialCash: 1250000,
-            initialBank: 18450000,
-            initialMomo: 950000,
+            initialCash: 0,
+            initialBank: 0,
+            initialMomo: 0,
             defaultRequiredFee: 320000
           };
           setFinSettings(def);
           setSettingsForm({
-            initialCash: '1250000',
-            initialBank: '18450000',
-            initialMomo: '950000',
+            initialCash: '0',
+            initialBank: '0',
+            initialMomo: '0',
             defaultRequiredFee: '320000'
           });
         }

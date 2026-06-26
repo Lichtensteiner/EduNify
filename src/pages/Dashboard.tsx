@@ -53,6 +53,7 @@ import { useAuth, mapPositionToResponsibility } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { useNotification } from '../contexts/NotificationContext';
+import { useEstablishment } from '../contexts/EstablishmentContext';
 import NewUserAnnouncement from '../components/NewUserAnnouncement';
 import ResponsibilityZones from './ResponsibilityZones';
 
@@ -1209,6 +1210,8 @@ const ChevronRightIcon = ({ className, size = 18 }: any) => (
 export default function Dashboard({ onNavigate }: any) {
   const { currentUser } = useAuth();
   const { t, tData } = useLanguage();
+  const { currentEstablishment, isSuperAdmin } = useEstablishment();
+  const activeEstId = currentEstablishment?.id || currentUser?.etablissement || 'EDU-001';
   
   const configuredResps = currentUser?.responsibilities || [];
   const fromPositionResps = currentUser?.position ? mapPositionToResponsibility(currentUser.position) : [];
@@ -1230,6 +1233,7 @@ export default function Dashboard({ onNavigate }: any) {
   // Raw inputs from flat, non-nested subscribers
   const [rawUsers, setRawUsers] = useState<any[] | null>(null);
   const [rawTodayAttendance, setRawTodayAttendance] = useState<any[] | null>(null);
+  const [rawWeeklyAttendance, setRawWeeklyAttendance] = useState<any[] | null>(null);
 
   useEffect(() => {
     if (!currentUser || !isFirebaseConfigured) {
@@ -1240,7 +1244,11 @@ export default function Dashboard({ onNavigate }: any) {
     const today = new Date().toISOString().split('T')[0];
 
     // Shared listeners (Eco, Wellbeing, Competition) - Only if Admin/Staff for full data
-    const unsubEco = onSnapshot(collection(db, 'users'), (snapshot) => {
+    const ecoUsersQuery = isSuperAdmin
+      ? collection(db, 'users')
+      : query(collection(db, 'users'), where('etablissement', '==', activeEstId));
+
+    const unsubEco = onSnapshot(ecoUsersQuery, (snapshot) => {
       const totalPaper = snapshot.size * 250;
       setEcoStats({ trees: parseFloat((totalPaper / 8333).toFixed(1)), paper: totalPaper, water: totalPaper * 10 });
     });
@@ -1269,34 +1277,18 @@ export default function Dashboard({ onNavigate }: any) {
       unsubWeeklyAtt = onSnapshot(
         query(collection(db, 'attendance'), where('date', 'in', last5Days)),
         (snapshot) => {
-          const countsByDay: { [key: string]: { presents: number, retards: number, absents: number } } = {};
-          last5Days.forEach(day => countsByDay[day] = { presents: 0, retards: 0, absents: 0 });
-          
-          snapshot.docs.forEach(doc => {
-            const data = doc.data();
-            if (countsByDay[data.date]) {
-              if (data.statut === 'Présent') countsByDay[data.date].presents++;
-              else if (data.statut === 'Retard') countsByDay[data.date].retards++;
-            }
-          });
-
-          const dayLabels = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'];
-          const history = last5Days.map(day => {
-            const dateObj = new Date(day);
-            return {
-              name: dayLabels[dateObj.getDay()],
-              presents: countsByDay[day].presents,
-              retards: countsByDay[day].retards,
-              date: day
-            };
-          });
-          setWeeklyData(history);
+          const atts = snapshot.docs.map(doc => doc.data());
+          setRawWeeklyAttendance(atts);
         },
         (error) => handleFirestoreError(error, OperationType.GET, 'attendance')
       );
 
+      const dashboardUsersQuery = isSuperAdmin
+        ? collection(db, 'users')
+        : query(collection(db, 'users'), where('etablissement', '==', activeEstId));
+
       // Listen to users flat list
-      unsubDashboardUsers = onSnapshot(collection(db, 'users'), (userSnapshot) => {
+      unsubDashboardUsers = onSnapshot(dashboardUsersQuery, (userSnapshot) => {
         const usersList = userSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         setRawUsers(usersList);
       }, (error) => handleFirestoreError(error, OperationType.GET, 'users'));
@@ -1319,7 +1311,7 @@ export default function Dashboard({ onNavigate }: any) {
       if (unsubDashboardUsers) unsubDashboardUsers();
       if (unsubTodayAttendance) unsubTodayAttendance();
     };
-  }, [currentUser]);
+  }, [currentUser, isSuperAdmin, activeEstId]);
 
   // Process raw users and raw attendance lists into statistical charts & stats variables
   useEffect(() => {
@@ -1401,7 +1393,41 @@ export default function Dashboard({ onNavigate }: any) {
       });
       setLoading(false);
     }
-  }, [rawUsers, rawTodayAttendance, currentUser]);
+
+    // Process weekly data safely
+    if (rawWeeklyAttendance) {
+      const countsByDay: { [key: string]: { presents: number, retards: number, absents: number } } = {};
+      const last5Days = Array.from({length: 5}, (_, i) => {
+        const d = new Date();
+        d.setDate(d.getDate() - (4 - i));
+        return d.toISOString().split('T')[0];
+      });
+      last5Days.forEach(day => countsByDay[day] = { presents: 0, retards: 0, absents: 0 });
+
+      rawWeeklyAttendance.forEach(data => {
+        const userObj = usersMap.get(data.user_id);
+        if (!isSuperAdmin && (!userObj || userObj.etablissement !== activeEstId)) {
+          return;
+        }
+        if (countsByDay[data.date]) {
+          if (data.statut === 'Présent') countsByDay[data.date].presents++;
+          else if (data.statut === 'Retard') countsByDay[data.date].retards++;
+        }
+      });
+
+      const dayLabels = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'];
+      const history = last5Days.map(day => {
+        const dateObj = new Date(day);
+        return {
+          name: dayLabels[dateObj.getDay()],
+          presents: countsByDay[day].presents,
+          retards: countsByDay[day].retards,
+          date: day
+        };
+      });
+      setWeeklyData(history);
+    }
+  }, [rawUsers, rawTodayAttendance, rawWeeklyAttendance, currentUser, isSuperAdmin, activeEstId]);
 
   const handleMoodSelect = async (selectedMood: string) => {
     setMood(selectedMood);
